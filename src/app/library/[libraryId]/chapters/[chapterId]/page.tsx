@@ -63,13 +63,27 @@ export default function ChapterPage() {
     return <div className="library-loading">Chapter not found.</div>;
   }
 
+  const pendingChangeSets = (lib.changeSets["__active__"] ?? []).filter(
+    (cs) => cs.status === "pending"
+  );
+
+  // workingContents holds the AI-patched text; fall back to saved content when
+  // no AI edits are pending so the editor stays in sync after accept/reject.
+  // Only pass liveContent while there are actually pending hunks — once all are
+  // settled, hand full control back to the user (avoid stomping user keystrokes).
+  const liveContent = pendingChangeSets.length > 0 ? lib.workingContents[chapterId] : undefined;
+
   return (
     <EditorArea
       key={chapterId}
       initialContent={currentDoc.content}
+      content={liveContent}
       documentTitle={currentDoc.title}
       onContentChange={(content) => lib.handleContentChange(chapterId, content)}
       onTitleChange={(title) => lib.handleTitleChange(chapterId, title)}
+      pendingChangeSets={pendingChangeSets}
+      onAcceptHunk={(id) => lib.acceptChange(id)}
+      onRejectHunk={(id) => lib.rejectChange(id)}
     />
   );
 }

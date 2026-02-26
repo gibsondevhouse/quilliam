@@ -22,6 +22,9 @@ import type { RagWorkerRequest, RagWorkerResponse } from "@/lib/rag/messages";
 import { embedNode } from "@/lib/rag/embedder";
 import { buildRAGContext } from "@/lib/rag/retrieval";
 import { chunkScene, needsChunking, staleFragmentIds } from "@/lib/rag/chunker";
+import type { ChangeSet } from "@/lib/changeSets";
+import { applyEdits, fileTargetKey } from "@/lib/changeSets";
+import type { EditBlockEvent } from "@/lib/editParser";
 
 function generateId() { return crypto.randomUUID(); }
 
@@ -108,6 +111,8 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   /* ---- Document contents (chapter content cache) ---- */
   const [docContents, setDocContents] = useState<Record<string, { title: string; content: string }>>({});
   const [savedContents, setSavedContents] = useState<Record<string, string>>({});
+  /** Working copies modified by AI edits but not yet accepted. */
+  const [workingContents, setWorkingContents] = useState<Record<string, string>>({});
   const docContentsRef = useRef(docContents);
   useEffect(() => { docContentsRef.current = docContents; }, [docContents]);
 
@@ -450,6 +455,218 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     if (node) putRagNode({ ...node, title, updatedAt: Date.now() });
   }, [putRagNode]);
 
+  /* ---- AI ChangeSets ---- */
+
+  /**
+   * All change sets keyed by fileTargetKey.
+   * e.g. "__active__", "character:Elena", "location:Harbortown"
+   */
+  const [changeSets, setChangeSets] = useState<Record<string, ChangeSet[]>>({});
+
+  /**
+   * Map fileTargetKey → the document/entity id it corresponds to.
+   * "character:Elena" → character.id for Elena in `characters`.
+   */
+  const resolveTargetDocId = useCallback(
+    (key: string): string | null => {
+      if (key === "__active__") return activeTabId;
+      if (key.startsWith("character:")) {
+        const name = key.slice("character:".length);
+        return characters.find((c) => c.name === name)?.id ?? null;
+      }
+      if (key.startsWith("location:")) {
+        const name = key.slice("location:".length);
+        return locations.find((l) => l.name === name)?.id ?? null;
+      }
+      if (key.startsWith("world:")) {
+        const k = key.slice("world:".length);
+        return worldEntries.find((w) => w.title === k)?.id ?? null;
+      }
+      return null;
+    },
+    [activeTabId, characters, locations, worldEntries]
+  );
+
+  /**
+   * Handle an edit block emitted by the AI stream.
+   * Applies it to the appropriate working copy and records a pending ChangeSet.
+   */
+  const applyIncomingEdit = useCallback(
+    (csOrEvent: ChangeSet) => {
+      const cs = csOrEvent;
+      const key = fileTargetKey(cs.fileTarget);
+
+      // Update changeSets registry
+      setChangeSets((prev) => {
+        const list = prev[key] ?? [];
+        return { ...prev, [key]: [...list, cs] };
+      });
+
+      // Apply the edits to the working copy
+      if (key === "__active__" && activeTabId) {
+        setWorkingContents((prev) => {
+          const base = prev[activeTabId] ?? docContents[activeTabId]?.content ?? "";
+          return { ...prev, [activeTabId]: applyEdits(base, cs.edits) };
+        });
+      } else if (key.startsWith("character:")) {
+        const name = key.slice("character:".length);
+        setCharacters((prev) =>
+          prev.map((c) => {
+            if (c.name !== name) return c;
+            const base = c.notes ?? "";
+            const patched = applyEdits(base, cs.edits);
+            const updated = { ...c, notes: patched };
+            void storeRef.current?.putCharacter({ ...updated, updatedAt: Date.now() });
+            return updated;
+          })
+        );
+      } else if (key.startsWith("location:")) {
+        const name = key.slice("location:".length);
+        setLocations((prev) =>
+          prev.map((l) => {
+            if (l.name !== name) return l;
+            const base = l.description ?? "";
+            const patched = applyEdits(base, cs.edits);
+            const updated = { ...l, description: patched };
+            void storeRef.current?.putLocation({ ...updated, updatedAt: Date.now() });
+            return updated;
+          })
+        );
+      } else if (key.startsWith("world:")) {
+        const k = key.slice("world:".length);
+        setWorldEntries((prev) =>
+          prev.map((w) => {
+            if (w.title !== k) return w;
+            const base = w.notes ?? "";
+            const patched = applyEdits(base, cs.edits);
+            const updated = { ...w, notes: patched };
+            void storeRef.current?.putWorldEntry({ ...updated, updatedAt: Date.now() });
+            return updated;
+          })
+        );
+      }
+    },
+    [activeTabId, docContents, characters, locations, worldEntries, storeRef]
+  );
+
+  const acceptChange = useCallback(
+    (changeSetId: string) => {
+      setChangeSets((prev) => {
+        const next: Record<string, ChangeSet[]> = {};
+        for (const [key, list] of Object.entries(prev)) {
+          const cs = list.find((c) => c.id === changeSetId);
+          if (cs) {
+            // Commit working copy to docContents for chapter targets
+            if (key === "__active__" && activeTabId) {
+              setWorkingContents((wc) => {
+                const committed = wc[activeTabId];
+                if (committed !== undefined) {
+                  setDocContents((dc) => ({
+                    ...dc,
+                    [activeTabId]: { ...dc[activeTabId], content: committed },
+                  }));
+                }
+                return wc;
+              });
+            }
+            next[key] = list.map((c) =>
+              c.id === changeSetId ? { ...c, status: "accepted" as const } : c
+            );
+          } else {
+            next[key] = list;
+          }
+        }
+        return next;
+      });
+    },
+    [activeTabId]
+  );
+
+  const rejectChange = useCallback(
+    (changeSetId: string) => {
+      setChangeSets((prev) => {
+        const next: Record<string, ChangeSet[]> = {};
+        for (const [key, list] of Object.entries(prev)) {
+          if (list.some((c) => c.id === changeSetId)) {
+            const updated = list.map((c) =>
+              c.id === changeSetId ? { ...c, status: "rejected" as const } : c
+            );
+            // Rebuild working copy from remaining pending sets
+            if (key === "__active__" && activeTabId) {
+              const base = docContents[activeTabId]?.content ?? "";
+              const remaining = updated.filter((c) => c.status === "pending");
+              const rebuilt = remaining.reduce(
+                (acc, cs) => applyEdits(acc, cs.edits),
+                base
+              );
+              setWorkingContents((wc) => ({ ...wc, [activeTabId]: rebuilt }));
+            }
+            next[key] = updated;
+          } else {
+            next[key] = list;
+          }
+        }
+        return next;
+      });
+    },
+    [activeTabId, docContents]
+  );
+
+  const acceptAllChanges = useCallback(
+    (key: string) => {
+      setChangeSets((prev) => ({
+        ...prev,
+        [key]: (prev[key] ?? []).map((c) =>
+          c.status === "pending" ? { ...c, status: "accepted" as const } : c
+        ),
+      }));
+      if (key === "__active__" && activeTabId) {
+        setWorkingContents((wc) => {
+          const committed = wc[activeTabId];
+          if (committed !== undefined) {
+            setDocContents((dc) => ({
+              ...dc,
+              [activeTabId]: { ...dc[activeTabId], content: committed },
+            }));
+          }
+          return wc;
+        });
+      }
+    },
+    [activeTabId]
+  );
+
+  const rejectAllChanges = useCallback(
+    (key: string) => {
+      setChangeSets((prev) => ({
+        ...prev,
+        [key]: (prev[key] ?? []).map((c) =>
+          c.status === "pending" ? { ...c, status: "rejected" as const } : c
+        ),
+      }));
+      if (key === "__active__" && activeTabId) {
+        setWorkingContents((wc) => ({ ...wc, [activeTabId]: docContents[activeTabId]?.content ?? "" }));
+      }
+    },
+    [activeTabId, docContents]
+  );
+
+  /** Handles a raw EditBlockEvent from Chat's parseEditStream. Constructs a ChangeSet and calls applyIncomingEdit. */
+  const handleEditBlock = useCallback(
+    (event: EditBlockEvent) => {
+      const id = crypto.randomUUID();
+      const cs: ChangeSet = {
+        id,
+        edits: [event.edit],
+        fileTarget: event.fileTarget,
+        status: "pending",
+        commentary: event.commentary,
+      };
+      applyIncomingEdit(cs);
+    },
+    [applyIncomingEdit]
+  );
+
   /* ---- Resize chat panel ---- */
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -486,8 +703,22 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   const chatContext = useMemo(() => {
     const lines: string[] = [];
     lines.push(`### Library: ${libraryTitle}`);
+
+    // Active document context
+    if (activeTabId && docContents[activeTabId]) {
+      const doc = docContents[activeTabId];
+      lines.push(`\n### Active Document: ${doc.title}`);
+      const content = workingContents[activeTabId] ?? doc.content;
+      if (content) {
+        lines.push("```");
+        lines.push(content.slice(0, 3000));
+        if (content.length > 3000) lines.push("… (truncated)");
+        lines.push("```");
+      }
+    }
+
     if (characters.length > 0) {
-      lines.push(`\n### Characters`);
+      lines.push(`\n### Characters (editable via file=character:<name>)`);
       characters.slice(0, 15).forEach((c) => {
         const parts = [c.name || "Unnamed"];
         if (c.role) parts.push(`(${c.role})`);
@@ -496,19 +727,19 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       });
     }
     if (locations.length > 0) {
-      lines.push(`\n### Locations`);
+      lines.push(`\n### Locations (editable via file=location:<name>)`);
       locations.slice(0, 10).forEach((l) => {
         lines.push(`- ${l.name || "Unnamed"}${l.description ? ` — ${l.description.slice(0, 120)}` : ""}`.trimEnd());
       });
     }
     if (worldEntries.length > 0) {
-      lines.push(`\n### World`);
+      lines.push(`\n### World (editable via file=world:<title>)`);
       worldEntries.slice(0, 10).forEach((w) => {
         lines.push(`- ${w.title || "Untitled"}${w.category ? ` (${w.category})` : ""}${w.notes ? ` — ${w.notes.slice(0, 120)}` : ""}`.trimEnd());
       });
     }
     return lines.join("\n");
-  }, [libraryTitle, characters, locations, worldEntries]);
+  }, [libraryTitle, activeTabId, docContents, workingContents, characters, locations, worldEntries]);
 
   /* ---- Persist library ID in localStorage ---- */
   useEffect(() => {
@@ -566,10 +797,17 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     setActiveTabId,
     updateTabTitle,
     docContents,
+    workingContents,
     dirtyIds,
     initDoc,
     handleContentChange,
     handleTitleChange,
+    changeSets,
+    applyIncomingEdit,
+    acceptChange,
+    rejectChange,
+    acceptAllChanges,
+    rejectAllChanges,
     buildContext,
     storeRef,
     workerRef,
@@ -668,6 +906,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
                     initialMessages={activeChatMessages}
                     onMessagesChange={(msgs) => updateChatMessages(activeChatId, msgs)}
                     onBuildContext={buildContext}
+                    onEditBlock={handleEditBlock}
                   />
                 )}
               </div>

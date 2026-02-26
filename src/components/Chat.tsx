@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { parseEditStream, type EditBlockEvent } from "@/lib/editParser";
 
 /* ================================================================
    Types
@@ -38,6 +39,11 @@ interface ChatProps {
    * Return "" to signal no additional context.
    */
   onBuildContext?: (query: string) => Promise<string>;
+  /**
+   * Called whenever the AI stream contains an edit block.
+   * The parent (library layout) picks it up and applies it to the appropriate document.
+   */
+  onEditBlock?: (event: EditBlockEvent) => void;
   initialMessages?: { role: "user" | "assistant"; content: string }[];
   onMessagesChange?: (messages: { role: "user" | "assistant"; content: string }[]) => void;
 }
@@ -72,7 +78,42 @@ Love the noir direction — a rain-soaked coastal town with a disappearing light
 - NEVER group multiple questions into one [Q] line.
 - NEVER number the questions — just use [Q] prefix.
 - Keep the vibe SHORT. The workspace does the heavy lifting.
-- If the user's request is clear and complete, just respond with the vibe — no workspace needed.`;
+- If the user's request is clear and complete, just respond with the vibe — no workspace needed.
+
+## DOCUMENT EDITING
+
+When asked to edit or improve text, propose changes using fenced edit blocks. Lines are 1-based.
+
+Replace lines 3–5:
+\`\`\`edit line=3-5
+new line 3
+new line 4
+\`\`\`
+
+Insert after line 2:
+\`\`\`edit line=2+
+inserted line
+\`\`\`
+
+Delete lines 4–6:
+\`\`\`edit line=4-6 delete
+\`\`\`
+
+To edit a world-building entity instead of the active document, add a \`file=\` qualifier:
+\`\`\`edit line=1 file=character:Elena
+Updated character description
+\`\`\`
+
+\`\`\`edit line=1-3 file=location:Harbortown
+Updated location notes
+\`\`\`
+
+\`\`\`edit line=1 file=world:MagicSystem
+Updated world entry
+\`\`\`
+
+Outside edit fences, write plain commentary. Never nest fence markers.`;
+
 
 /* ================================================================
    Parser — splits assistant content into vibe + question cards
@@ -212,7 +253,7 @@ function AssistantMessage({
 
   return (
     <>
-      <div className="chat-msg-content">{parsed.vibe}</div>
+      <div className="chat-msg-content">{parsed.vibe || content}</div>
       {parsed.questions.length > 0 && (
         <QuestionWorkspace
           questions={cards}
@@ -229,7 +270,7 @@ function AssistantMessage({
    Chat component
    ================================================================ */
 
-export function Chat({ model, mode, chatId, variant = "panel", context, onBuildContext, initialMessages, onMessagesChange }: ChatProps) {
+export function Chat({ model, mode, chatId, variant = "panel", context, onBuildContext, onEditBlock, initialMessages, onMessagesChange }: ChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (initialMessages && initialMessages.length > 0) {
       return initialMessages.map((m) => ({ role: m.role, content: m.content }));
@@ -389,28 +430,17 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
         throw new Error(err.error || response.statusText);
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response stream");
+      if (!response.body) throw new Error("No response stream");
 
-      const decoder = new TextDecoder();
       let fullContent = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n").filter(Boolean);
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.message?.content) {
-              fullContent += parsed.message.content;
-              setStreamingContent(fullContent);
-            }
-          } catch {
-            // ignore malformed chunks
-          }
+      for await (const event of parseEditStream(response.body)) {
+        if (event.type === "token") {
+          fullContent += event.text;
+          setStreamingContent(fullContent);
+        } else if (event.type === "editBlock") {
+          // Lift edit block to parent (library layout) for application
+          onEditBlock?.(event);
         }
       }
 
@@ -551,7 +581,7 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
             <div className="chat-msg-avatar">Q</div>
             <div className="chat-msg-body">
               <div className="chat-msg-content">
-                {parseAssistantMessage(streamingContent).vibe}
+                {parseAssistantMessage(streamingContent).vibe || streamingContent}
                 <span className="chat-cursor" />
               </div>
             </div>

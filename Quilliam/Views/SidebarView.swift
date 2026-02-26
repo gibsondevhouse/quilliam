@@ -14,7 +14,9 @@ struct SidebarView: View {
                 if let id, let doc = documents.first(where: { $0.id == id }) {
                     viewModel.currentDocument = doc
                     viewModel.clearHistory()
-                    viewModel.changeSets = []
+                    viewModel.changeSets = [:]
+                    viewModel.entityDocuments = [:]
+                    viewModel.activeEntityKey = nil
                 }
             }
         )) {
@@ -63,7 +65,9 @@ struct SidebarView: View {
         modelContext.insert(doc)
         viewModel.currentDocument = doc
         viewModel.clearHistory()
-        viewModel.changeSets = []
+        viewModel.changeSets = [:]
+        viewModel.entityDocuments = [:]
+        viewModel.activeEntityKey = nil
     }
 
     private func renameDocument(_ doc: Document) {
@@ -76,7 +80,9 @@ struct SidebarView: View {
         if viewModel.currentDocument?.id == doc.id {
             viewModel.currentDocument = documents.first(where: { $0.id != doc.id })
             viewModel.clearHistory()
-            viewModel.changeSets = []
+            viewModel.changeSets = [:]
+            viewModel.entityDocuments = [:]
+            viewModel.activeEntityKey = nil
         }
         modelContext.delete(doc)
     }

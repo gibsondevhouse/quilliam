@@ -4,6 +4,7 @@ import { createContext, useContext, type RefObject } from "react";
 import type { CharacterEntry, LocationEntry, WorldEntry, ChatSession, ChatMessageEntry, Story } from "@/lib/types";
 import type { EditorTab } from "@/components/Editor/TabBar";
 import type { RAGStore } from "@/lib/rag/store";
+import type { ChangeSet } from "@/lib/changeSets";
 
 export interface LibraryContextValue {
   libraryId: string;
@@ -69,10 +70,25 @@ export interface LibraryContextValue {
 
   // Document contents (chapter content cache)
   docContents: Record<string, { title: string; content: string }>;
+  /** Working copies — modified by AI edits before accept/reject */
+  workingContents: Record<string, string>;
   dirtyIds: Set<string>;
   initDoc: (id: string, title: string, content: string) => void;
   handleContentChange: (chapterId: string, content: string) => void;
   handleTitleChange: (chapterId: string, title: string) => void;
+
+  // AI change sets — keyed by fileTargetKey (see changeSets.ts)
+  changeSets: Record<string, ChangeSet[]>;
+  /** Apply a remote edit to the appropriate working copy, creating a pending ChangeSet. */
+  applyIncomingEdit: (changeSet: ChangeSet) => void;
+  /** Accept a pending hunk by changeSet id, committing changes to docContents. */
+  acceptChange: (changeSetId: string) => void;
+  /** Reject a pending hunk by changeSet id, discarding changes to workingContents. */
+  rejectChange: (changeSetId: string) => void;
+  /** Accept all pending hunks for a given fileTargetKey. */
+  acceptAllChanges: (key: string) => void;
+  /** Reject all pending hunks for a given fileTargetKey. */
+  rejectAllChanges: (key: string) => void;
 
   // RAG
   buildContext: (query: string) => Promise<string>;
