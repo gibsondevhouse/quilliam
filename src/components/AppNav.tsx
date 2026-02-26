@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { NodeType, RAGNode } from "@/lib/rag/hierarchy";
 import { VALID_CHILDREN } from "@/lib/rag/hierarchy";
-import type { SidebarNode } from "@/components/Editor/Sidebar";
+import type { SidebarNode } from "@/lib/navigation";
 
 /* ================================================================
    Types
@@ -246,6 +246,7 @@ function TreeNode({
 
 export function AppNav({
   tree,
+  ragNodes,
   activeNodeId,
   onNodeSelect,
   onAddChild,
@@ -262,6 +263,16 @@ export function AppNav({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
+
+  const isDescendant = useCallback((ancestorId: string, candidateId: string) => {
+    let current = ragNodes[candidateId];
+    while (current) {
+      if (current.parentId === ancestorId) return true;
+      if (!current.parentId) return false;
+      current = ragNodes[current.parentId];
+    }
+    return false;
+  }, [ragNodes]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, nodeId: string, nodeType: NodeType) => {
@@ -296,20 +307,51 @@ export function AppNav({
 
   const cancelRename = useCallback(() => setRenamingId(null), []);
 
-  const handleDragStart = useCallback((_e: React.DragEvent, nodeId: string) => {
+  const handleDragStart = useCallback((e: React.DragEvent, nodeId: string) => {
+    e.dataTransfer.effectAllowed = "move";
     setDraggedId(nodeId);
   }, []);
 
-  const handleDragOver = useCallback((_e: React.DragEvent, _nodeId: string) => {}, []);
+  const handleDragOver = useCallback((e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) {
+      e.dataTransfer.dropEffect = "none";
+      return;
+    }
+    const dragNode = ragNodes[draggedId];
+    const targetNode = ragNodes[targetId];
+    if (!dragNode || !targetNode) {
+      e.dataTransfer.dropEffect = "none";
+      return;
+    }
+    const legalParentChild = VALID_CHILDREN[targetNode.type].includes(dragNode.type);
+    const createsCycle = isDescendant(draggedId, targetId);
+    e.dataTransfer.dropEffect = legalParentChild && !createsCycle ? "move" : "none";
+  }, [draggedId, isDescendant, ragNodes]);
 
   const handleDrop = useCallback(
-    (_e: React.DragEvent, targetId: string) => {
+    (e: React.DragEvent, targetId: string) => {
+      e.preventDefault();
       if (draggedId && draggedId !== targetId) {
+        const dragNode = ragNodes[draggedId];
+        const targetNode = ragNodes[targetId];
+        if (!dragNode || !targetNode) {
+          setDraggedId(null);
+          return;
+        }
+        if (!VALID_CHILDREN[targetNode.type].includes(dragNode.type)) {
+          setDraggedId(null);
+          return;
+        }
+        if (isDescendant(draggedId, targetId)) {
+          setDraggedId(null);
+          return;
+        }
         onMoveNode(draggedId, targetId);
       }
       setDraggedId(null);
     },
-    [draggedId, onMoveNode]
+    [draggedId, isDescendant, onMoveNode, ragNodes]
   );
 
   if (collapsed) {

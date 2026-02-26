@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useLibraryContext } from "@/lib/context/LibraryContext";
 import { useRAGContext } from "@/lib/context/RAGContext";
-import type { SidebarNode } from "@/components/Editor/Sidebar";
+import type { SidebarNode } from "@/lib/navigation";
 import type { NodeType } from "@/lib/rag/hierarchy";
 
 export default function ChaptersPage() {

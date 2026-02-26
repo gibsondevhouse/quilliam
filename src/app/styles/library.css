@@ -598,6 +598,15 @@
   color: var(--text-primary);
 }
 
+.library-item-pending-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.25);
+  flex-shrink: 0;
+}
+
 .library-item-icon {
   flex-shrink: 0;
   font-size: 13px;
@@ -775,5 +784,4 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-
 

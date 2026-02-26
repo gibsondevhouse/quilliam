@@ -1,11 +1,19 @@
 "use client";
 
 import { useCallback, useState, useEffect } from "react";
-import type { WorldEntry } from "./Sidebar";
+import type { WorldEntry } from "@/lib/types";
+import type { ChangeSet } from "@/lib/changeSets";
+import { EntityChangePanel } from "@/components/Editor/EntityChangePanel";
 
 interface WorldEditorProps {
   entry: WorldEntry;
   onChange: (updated: WorldEntry) => void;
+  draftText?: string;
+  pendingChangeSets?: ChangeSet[];
+  onAcceptHunk?: (id: string) => void;
+  onRejectHunk?: (id: string) => void;
+  onAcceptAll?: () => void;
+  onRejectAll?: () => void;
 }
 
 const CATEGORY_OPTIONS = [
@@ -21,10 +29,22 @@ const CATEGORY_OPTIONS = [
   "Other",
 ];
 
-export function WorldEditor({ entry, onChange }: WorldEditorProps) {
+export function WorldEditor({
+  entry,
+  onChange,
+  draftText,
+  pendingChangeSets = [],
+  onAcceptHunk,
+  onRejectHunk,
+  onAcceptAll,
+  onRejectAll,
+}: WorldEditorProps) {
   const [title, setTitle] = useState(entry.title);
   const [category, setCategory] = useState(entry.category);
   const [notes, setNotes] = useState(entry.notes);
+  const pending = pendingChangeSets.filter((cs) => cs.status === "pending");
+  const hasPending = pending.length > 0;
+  const visibleNotes = hasPending ? draftText ?? notes : notes;
 
   useEffect(() => {
     setTitle(entry.title);
@@ -45,11 +65,22 @@ export function WorldEditor({ entry, onChange }: WorldEditorProps) {
         <span className="detail-editor-badge world">World</span>
       </div>
 
+      <EntityChangePanel
+        entityLabel={title || "Untitled Entry"}
+        pendingChangeSets={pending}
+        draftText={draftText ?? notes}
+        onAcceptHunk={onAcceptHunk}
+        onRejectHunk={onRejectHunk}
+        onAcceptAll={onAcceptAll}
+        onRejectAll={onRejectAll}
+      />
+
       <div className="detail-field">
         <label className="detail-label">Title</label>
         <input
           className="detail-input"
           value={title}
+          disabled={hasPending}
           onChange={(e) => {
             setTitle(e.target.value);
             update({ title: e.target.value });
@@ -65,6 +96,7 @@ export function WorldEditor({ entry, onChange }: WorldEditorProps) {
             <button
               key={c}
               className={`detail-chip ${category === c ? "active" : ""}`}
+              disabled={hasPending}
               onClick={() => {
                 setCategory(c);
                 update({ category: c });
@@ -80,7 +112,8 @@ export function WorldEditor({ entry, onChange }: WorldEditorProps) {
         <label className="detail-label">Notes</label>
         <textarea
           className="detail-textarea"
-          value={notes}
+          value={visibleNotes}
+          disabled={hasPending}
           onChange={(e) => {
             setNotes(e.target.value);
             update({ notes: e.target.value });

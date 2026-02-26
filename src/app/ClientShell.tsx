@@ -10,11 +10,11 @@ import {
 import { useRouter, usePathname } from "next/navigation";
 import { SystemStatus, type StartupStatus } from "@/components/SystemStatus";
 import { AppNav } from "@/components/AppNav";
-import type { SidebarNode } from "@/components/Editor/Sidebar";
+import type { SidebarNode } from "@/lib/navigation";
 import { SystemContext } from "@/lib/context/SystemContext";
 import { RAGContext } from "@/lib/context/RAGContext";
 import type { NodeType, RAGNode } from "@/lib/rag/hierarchy";
-import { EDITABLE_TYPES, createRAGNode } from "@/lib/rag/hierarchy";
+import { EDITABLE_TYPES, createRAGNode, isValidChild } from "@/lib/rag/hierarchy";
 import { createRAGStore } from "@/lib/rag/db";
 import type { RAGStore } from "@/lib/rag/store";
 
@@ -109,15 +109,6 @@ function buildSidebarTreeFromRAG(nodes: RAGNode[]): SidebarNode[] {
   return roots;
 }
 
-function findParentId(nodes: SidebarNode[], id: string, parentId: string | null = null): string | null {
-  for (const node of nodes) {
-    if (node.id === id) return parentId;
-    const found = findParentId(node.children, id, node.id);
-    if (found !== null) return found;
-  }
-  return null;
-}
-
 function rebuildRagNodesFromTree(
   nodes: SidebarNode[],
   existing: Record<string, RAGNode>,
@@ -159,6 +150,38 @@ function findLibraryIdForNode(ragNodes: Record<string, RAGNode>, nodeId: string)
     current = ragNodes[current.parentId];
   }
   return null;
+}
+
+function containsNode(nodes: SidebarNode[], nodeId: string): boolean {
+  return findNode(nodes, nodeId) !== null;
+}
+
+function findAncestorOfType(
+  ragNodes: Record<string, RAGNode>,
+  nodeId: string,
+  targetType: NodeType,
+): RAGNode | null {
+  let current = ragNodes[nodeId];
+  while (current) {
+    if (current.type === targetType) return current;
+    if (!current.parentId) return null;
+    current = ragNodes[current.parentId];
+  }
+  return null;
+}
+
+function isDescendantNode(
+  ragNodes: Record<string, RAGNode>,
+  ancestorId: string,
+  candidateId: string,
+): boolean {
+  let current = ragNodes[candidateId];
+  while (current) {
+    if (current.parentId === ancestorId) return true;
+    if (!current.parentId) return false;
+    current = ragNodes[current.parentId];
+  }
+  return false;
 }
 
 /* ------------------------------------------------------------------
@@ -206,6 +229,14 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
   /* ---- Tree operations (exposed via RAGContext) ---- */
 
+  const persistRagMap = useCallback((next: Record<string, RAGNode>) => {
+    const store = storeRef.current;
+    if (!store) return;
+    Object.values(next).forEach((node) => {
+      void store.putNode(node);
+    });
+  }, []);
+
   const addNode = useCallback((parentId: string | null, type: NodeType): string => {
     const id = generateId();
     const newSidebarNode: SidebarNode = { id, title: DEFAULT_TITLES[type], type, children: [], isExpanded: true };
@@ -228,6 +259,28 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
       const updatedParent = { ...ragNodesRef.current[parent.id], childrenIds: [...ragNodesRef.current[parent.id].childrenIds, id], updatedAt: Date.now() };
       void storeRef.current?.putNode(updatedParent);
     }
+
+    // Book nodes back Story entities. Ensure direct tree-created books stay routable.
+    if (type === "book") {
+      const source = parentId ? ragNodesRef.current[parentId] : null;
+      const libraryId = source?.type === "library"
+        ? source.id
+        : (parentId ? findLibraryIdForNode(ragNodesRef.current, parentId) : null);
+      if (libraryId) {
+        const now = Date.now();
+        void storeRef.current?.putStory({
+          id,
+          libraryId,
+          title: DEFAULT_TITLES.book,
+          synopsis: "",
+          genre: "",
+          status: "drafting",
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+
     return id;
   }, []);
 
@@ -238,22 +291,57 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
       if (!existing) return prev;
       const updated = { ...existing, title, updatedAt: Date.now() };
       void storeRef.current?.putNode(updated);
+      if (updated.type === "book") {
+        const now = Date.now();
+        const libraryId = findLibraryIdForNode(prev, id);
+        if (libraryId) {
+          void storeRef.current?.getStory(id).then((story) => {
+            const nextStory = story ?? {
+              id,
+              libraryId,
+              title,
+              synopsis: "",
+              genre: "",
+              status: "drafting" as const,
+              createdAt: now,
+              updatedAt: now,
+            };
+            void storeRef.current?.putStory({ ...nextStory, title, updatedAt: Date.now() });
+          });
+        }
+      }
       return { ...prev, [id]: updated };
     });
   }, []);
 
   const deleteNode = useCallback((id: string) => {
-    const node = findNode(treeRef.current, id);
-    if (node) {
-      const ids = new Set(collectIds(node));
-      setRagNodes((prev) => {
-        const next = { ...prev };
-        ids.forEach((rid) => { delete next[rid]; void storeRef.current?.deleteNode(rid); });
-        return next;
+    setTree((prevTree) => {
+      const removedNode = findNode(prevTree, id);
+      if (!removedNode) return prevTree;
+
+      const removedIds = new Set(collectIds(removedNode));
+      const nextTree = deleteFromTree(prevTree, id);
+      const removedRoot = ragNodesRef.current[id];
+
+      setRagNodes((current) => {
+        const rebuilt = rebuildRagNodesFromTree(nextTree, current);
+        persistRagMap(rebuilt);
+        return rebuilt;
       });
-    }
-    setTree((prev) => deleteFromTree(prev, id));
-  }, []);
+
+      if (removedRoot?.type === "library") {
+        void storeRef.current?.deleteLibraryCascade(id);
+      } else if (removedRoot?.type === "book") {
+        void storeRef.current?.deleteStoryCascade(id);
+      } else {
+        removedIds.forEach((rid) => {
+          void storeRef.current?.deleteNode(rid);
+        });
+      }
+
+      return nextTree;
+    });
+  }, [persistRagMap]);
 
   const toggleExpand = useCallback((id: string) => {
     setTree((prev) => toggleExpandInTree(prev, id));
@@ -261,13 +349,25 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
   const moveNode = useCallback((dragId: string, targetId: string) => {
     setTree((prev) => {
+      const dragNode = ragNodesRef.current[dragId];
+      const targetNode = ragNodesRef.current[targetId];
+      if (!dragNode || !targetNode) return prev;
+      if (!isValidChild(targetNode.type, dragNode.type)) return prev;
+      if (isDescendantNode(ragNodesRef.current, dragId, targetId)) return prev;
+
       const { remaining, removed } = removeFromTree(prev, dragId);
       if (!removed) return prev;
       const nextTree = addChildToNode(remaining, targetId, removed);
-      setRagNodes((current) => rebuildRagNodesFromTree(nextTree, current));
+      if (!containsNode(nextTree, dragId)) return prev;
+
+      setRagNodes((current) => {
+        const rebuilt = rebuildRagNodesFromTree(nextTree, current);
+        persistRagMap(rebuilt);
+        return rebuilt;
+      });
       return nextTree;
     });
-  }, []);
+  }, [persistRagMap]);
 
   const putRagNode = useCallback((node: RAGNode) => {
     setRagNodes((prev) => ({ ...prev, [node.id]: node }));
@@ -283,13 +383,28 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
       router.push(`/library/${id}/dashboard`);
       return;
     }
-    // For chapter/scene nodes, find their parent library and navigate
-    if ((EDITABLE_TYPES as string[]).includes(node.type)) {
-      const libId = findLibraryIdForNode(ragNodesRef.current, id);
-      if (libId) {
-        localStorage.setItem("quilliam_last_library", libId);
-        router.push(`/library/${libId}/chapters/${id}`);
+
+    const libId = findLibraryIdForNode(ragNodesRef.current, id);
+    if (!libId) return;
+    localStorage.setItem("quilliam_last_library", libId);
+
+    if (node.type === "book") {
+      router.push(`/library/${libId}/stories/${id}`);
+      return;
+    }
+
+    if (node.type === "part") {
+      const book = findAncestorOfType(ragNodesRef.current, id, "book");
+      if (book) {
+        router.push(`/library/${libId}/stories/${book.id}/chapters`);
+      } else {
+        router.push(`/library/${libId}/chapters`);
       }
+      return;
+    }
+
+    if ((EDITABLE_TYPES as string[]).includes(node.type)) {
+      router.push(`/library/${libId}/chapters/${id}`);
     }
   }, [router]);
 
@@ -304,7 +419,24 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
       const libId = parentId
         ? findLibraryIdForNode(ragNodesRef.current, parentId) ?? parentId
         : null;
-      if (libId && (EDITABLE_TYPES as string[]).includes(childType)) {
+      if (!libId) return;
+
+      if (childType === "book") {
+        router.push(`/library/${libId}/stories/${newId}`);
+        return;
+      }
+
+      if (childType === "part") {
+        const book = parentId ? findAncestorOfType(ragNodesRef.current, parentId, "book") : null;
+        if (book) {
+          router.push(`/library/${libId}/stories/${book.id}/chapters`);
+        } else {
+          router.push(`/library/${libId}/chapters`);
+        }
+        return;
+      }
+
+      if ((EDITABLE_TYPES as string[]).includes(childType)) {
         router.push(`/library/${libId}/chapters/${newId}`);
       }
     }

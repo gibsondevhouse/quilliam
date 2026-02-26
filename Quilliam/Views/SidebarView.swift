@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import SwiftData
 
@@ -6,6 +7,9 @@ struct SidebarView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Document.createdAt, order: .reverse) private var documents: [Document]
+    @State private var isRenamePromptPresented = false
+    @State private var renameValue = ""
+    @State private var renameTargetId: UUID?
 
     var body: some View {
         List(selection: Binding(
@@ -15,8 +19,7 @@ struct SidebarView: View {
                     viewModel.currentDocument = doc
                     viewModel.clearHistory()
                     viewModel.changeSets = [:]
-                    viewModel.entityDocuments = [:]
-                    viewModel.activeEntityKey = nil
+                    viewModel.clearEntityEditingState()
                 }
             }
         )) {
@@ -56,6 +59,18 @@ struct SidebarView: View {
                 .help("Create a new document")
             }
         }
+        .alert("Rename Document", isPresented: $isRenamePromptPresented) {
+            TextField("Title", text: $renameValue)
+            Button("Cancel", role: .cancel) {
+                renameTargetId = nil
+                renameValue = ""
+            }
+            Button("Save") {
+                commitRename()
+            }
+        } message: {
+            Text("Enter a new title.")
+        }
     }
 
     // MARK: - Actions
@@ -66,14 +81,27 @@ struct SidebarView: View {
         viewModel.currentDocument = doc
         viewModel.clearHistory()
         viewModel.changeSets = [:]
-        viewModel.entityDocuments = [:]
-        viewModel.activeEntityKey = nil
+        viewModel.clearEntityEditingState()
     }
 
     private func renameDocument(_ doc: Document) {
-        // Simple rename via alert — SwiftUI .alert with TextField requires iOS 16+/macOS 13+
-        // Using a basic approach: set a placeholder title that the user can edit in the editor
-        doc.title = "Renamed Document"
+        renameTargetId = doc.id
+        renameValue = doc.title
+        isRenamePromptPresented = true
+    }
+
+    private func commitRename() {
+        let title = renameValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let targetId = renameTargetId,
+              !title.isEmpty,
+              let target = documents.first(where: { $0.id == targetId }) else {
+            renameTargetId = nil
+            renameValue = ""
+            return
+        }
+        target.title = title
+        renameTargetId = nil
+        renameValue = ""
     }
 
     private func deleteDocument(_ doc: Document) {
@@ -81,8 +109,7 @@ struct SidebarView: View {
             viewModel.currentDocument = documents.first(where: { $0.id != doc.id })
             viewModel.clearHistory()
             viewModel.changeSets = [:]
-            viewModel.entityDocuments = [:]
-            viewModel.activeEntityKey = nil
+            viewModel.clearEntityEditingState()
         }
         modelContext.delete(doc)
     }

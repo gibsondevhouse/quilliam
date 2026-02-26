@@ -12,6 +12,7 @@ import {
   type PersistedChatMessage,
   type PersistedChatSession,
   type PersistedCharacter,
+  type PersistedLibraryMeta,
   type PersistedLocation,
   type PersistedWorldEntry,
   type PersistedStory,
@@ -74,6 +75,10 @@ interface RAGDBSchema extends DBSchema {
 interface PersistedEmbedding extends StoredEmbedding {
   key: string; // fragmentId
   hashModel: string; // `${hash}::${model}` for fast lookup
+}
+
+function libraryMetaKey(libraryId: string): string {
+  return `library-meta:${libraryId}`;
 }
 
 const DB_NAME = "quilliam-rag";
@@ -157,6 +162,47 @@ function toPersistedEmbedding(record: StoredEmbedding): PersistedEmbedding {
   };
 }
 
+async function collectCascadeNodeIds(db: IDBPDatabase<RAGDBSchema>, rootId: string): Promise<string[]> {
+  const allNodes = (await db.getAll("nodes")).map(materializeNode);
+  const childrenByParent = new Map<string, string[]>();
+
+  for (const node of allNodes) {
+    if (!node.parentId) continue;
+    const list = childrenByParent.get(node.parentId) ?? [];
+    list.push(node.id);
+    childrenByParent.set(node.parentId, list);
+  }
+
+  const queue: string[] = [rootId];
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    ids.push(current);
+    const children = childrenByParent.get(current);
+    if (children) queue.push(...children);
+  }
+
+  return ids;
+}
+
+async function deleteEmbeddingForFragment(
+  tx: ReturnType<IDBPDatabase<RAGDBSchema>["transaction"]>,
+  fragmentId: string,
+): Promise<void> {
+  const embeddingIndex = tx.objectStore("embeddings").index("by_fragment");
+  let cursor = await embeddingIndex.openCursor(fragmentId);
+  while (cursor) {
+    if (cursor.delete) {
+      await cursor.delete();
+    }
+    cursor = await cursor.continue();
+  }
+}
+
 export async function putNode(node: RAGNode): Promise<void> {
   const db = await getDb();
   await db.put("nodes", serializeNode(node));
@@ -172,13 +218,7 @@ export async function deleteNode(id: string): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(["nodes", "embeddings"], "readwrite");
   await tx.objectStore("nodes").delete(id);
-
-  const embeddingIndex = tx.objectStore("embeddings").index("by_fragment");
-  let cursor = await embeddingIndex.openCursor(id);
-  while (cursor) {
-    await cursor.delete();
-    cursor = await cursor.continue();
-  }
+  await deleteEmbeddingForFragment(tx, id);
 
   await tx.done;
 }
@@ -368,6 +408,84 @@ export async function deleteStory(id: string): Promise<void> {
   await db.delete("stories", id);
 }
 
+export async function deleteStoryCascade(id: string): Promise<void> {
+  const db = await getDb();
+  const nodeIds = await collectCascadeNodeIds(db, id);
+  const tx = db.transaction(["stories", "nodes", "embeddings"], "readwrite");
+
+  await tx.objectStore("stories").delete(id);
+  for (const nodeId of nodeIds) {
+    await tx.objectStore("nodes").delete(nodeId);
+    await deleteEmbeddingForFragment(tx, nodeId);
+  }
+
+  await tx.done;
+}
+
+export async function deleteLibraryCascade(libraryId: string): Promise<void> {
+  const db = await getDb();
+  const nodeIds = await collectCascadeNodeIds(db, libraryId);
+  const tx = db.transaction(
+    ["nodes", "embeddings", "metadata", "chatSessions", "chatMessages", "characters", "locations", "worldEntries", "stories"],
+    "readwrite",
+  );
+
+  for (const nodeId of nodeIds) {
+    await tx.objectStore("nodes").delete(nodeId);
+    await deleteEmbeddingForFragment(tx, nodeId);
+  }
+
+  await tx.objectStore("metadata").delete(libraryMetaKey(libraryId));
+
+  const sessionsByLibrary = tx.objectStore("chatSessions").index("by_library");
+  let sessionCursor = await sessionsByLibrary.openCursor(libraryId);
+  while (sessionCursor) {
+    const sessionId = sessionCursor.value.id;
+    await sessionCursor.delete();
+    let messageCursor = await tx.objectStore("chatMessages").index("by_session").openCursor(sessionId);
+    while (messageCursor) {
+      await messageCursor.delete();
+      messageCursor = await messageCursor.continue();
+    }
+    sessionCursor = await sessionCursor.continue();
+  }
+
+  const deleteByLibrary = async (
+    storeName: "characters" | "locations" | "worldEntries" | "stories",
+  ): Promise<void> => {
+    const index = tx.objectStore(storeName).index("by_library");
+    let cursor = await index.openCursor(libraryId);
+    while (cursor) {
+      await cursor.delete();
+      cursor = await cursor.continue();
+    }
+  };
+
+  await deleteByLibrary("characters");
+  await deleteByLibrary("locations");
+  await deleteByLibrary("worldEntries");
+  await deleteByLibrary("stories");
+
+  await tx.done;
+}
+
+export async function putLibraryMeta(entry: PersistedLibraryMeta): Promise<void> {
+  await setMetadata({
+    key: libraryMetaKey(entry.libraryId),
+    value: entry,
+    updatedAt: entry.updatedAt,
+  });
+}
+
+export async function getLibraryMeta(libraryId: string): Promise<PersistedLibraryMeta | null> {
+  return getMetadata<PersistedLibraryMeta>(libraryMetaKey(libraryId));
+}
+
+export async function deleteLibraryMeta(libraryId: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("metadata", libraryMetaKey(libraryId));
+}
+
 /**
  * Factory to obtain a RAGStore backed by IndexedDB.
  */
@@ -402,5 +520,10 @@ export async function createRAGStore(): Promise<RAGStore> {
     getStoriesByLibrary,
     getStory,
     deleteStory,
+    deleteStoryCascade,
+    deleteLibraryCascade,
+    putLibraryMeta,
+    getLibraryMeta,
+    deleteLibraryMeta,
   };
 }

@@ -465,7 +465,7 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
     } finally {
       setStreaming(false);
     }
-  }, [input, messages, streaming, context, onBuildContext, initQuestionStates]);
+  }, [input, messages, streaming, context, onBuildContext, onEditBlock, initQuestionStates]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -493,6 +493,7 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
       ]
         .filter(Boolean)
         .join(" ")}
+      data-chat-id={chatId ?? ""}
     >
       {/* Messages area */}
       <div className="chat-messages">

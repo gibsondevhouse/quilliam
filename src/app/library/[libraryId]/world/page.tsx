@@ -6,6 +6,11 @@ import { WorldEditor } from "@/components/Editor/WorldEditor";
 export default function WorldPage() {
   const lib = useLibraryContext();
   const active = lib.worldEntries.find((w) => w.id === lib.activeWorldEntryId);
+  const activeKey = active ? `world:${active.title}` : null;
+  const activePending = activeKey
+    ? (lib.changeSets[activeKey] ?? []).filter((cs) => cs.status === "pending")
+    : [];
+  const activeDraft = activeKey ? lib.entityDrafts[activeKey] : undefined;
 
   return (
     <div className="library-page world-page split-page">
@@ -23,27 +28,32 @@ export default function WorldPage() {
           </div>
         ) : (
           <ul className="library-item-list">
-            {lib.worldEntries.map((w) => (
-              <li key={w.id} className="library-item-row">
-                <button
-                  className={`library-item-btn ${lib.activeWorldEntryId === w.id ? "active" : ""}`}
-                  onClick={() => lib.selectWorldEntry(w.id)}
-                >
-                  <span className="library-item-icon">🌍</span>
-                  <div className="library-item-info">
-                    <span className="library-item-title">{w.title || "Untitled"}</span>
-                    {w.category && <span className="library-item-preview">{w.category}</span>}
-                  </div>
-                </button>
-                <button
-                  className="library-item-delete"
-                  onClick={(e) => { e.stopPropagation(); lib.deleteWorldEntry(w.id); }}
-                  title="Delete"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
+            {lib.worldEntries.map((w) => {
+              const key = `world:${w.title}`;
+              const hasPending = (lib.changeSets[key] ?? []).some((cs) => cs.status === "pending");
+              return (
+                <li key={w.id} className="library-item-row">
+                  <button
+                    className={`library-item-btn ${lib.activeWorldEntryId === w.id ? "active" : ""}`}
+                    onClick={() => lib.selectWorldEntry(w.id)}
+                  >
+                    <span className="library-item-icon">🌍</span>
+                    <div className="library-item-info">
+                      <span className="library-item-title">{w.title || "Untitled"}</span>
+                      {w.category && <span className="library-item-preview">{w.category}</span>}
+                    </div>
+                    {hasPending && <span className="library-item-pending-dot" title="AI draft pending" />}
+                  </button>
+                  <button
+                    className="library-item-delete"
+                    onClick={(e) => { e.stopPropagation(); lib.deleteWorldEntry(w.id); }}
+                    title="Delete"
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -53,6 +63,12 @@ export default function WorldPage() {
             key={active.id}
             entry={active}
             onChange={lib.updateWorldEntry}
+            draftText={activeDraft}
+            pendingChangeSets={activePending}
+            onAcceptHunk={lib.acceptChange}
+            onRejectHunk={lib.rejectChange}
+            onAcceptAll={activeKey ? () => lib.acceptAllChanges(activeKey) : undefined}
+            onRejectAll={activeKey ? () => lib.rejectAllChanges(activeKey) : undefined}
           />
         ) : (
           <div className="library-page-empty">

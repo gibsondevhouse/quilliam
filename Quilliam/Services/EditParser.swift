@@ -70,7 +70,7 @@ enum EditParser {
 
                 func processLine(_ line: String) {
                     if inEditBlock {
-                        if line == "```" {
+                        if line.trimmingCharacters(in: .whitespaces) == "```" {
                             // Closing fence — emit the parsed edit
                             inEditBlock = false
                             if let mode = editMode {
@@ -84,8 +84,8 @@ enum EditParser {
                             editLines.append(line)
                         }
                     } else {
-                        if line.hasPrefix("```edit ") {
-                            let spec = String(line.dropFirst("```edit ".count))
+                        if line.hasPrefix("```edit") {
+                            let spec = String(line.dropFirst("```edit".count)).trimmingCharacters(in: .whitespaces)
                             if let parsed = parseHeader(spec) {
                                 inEditBlock = true
                                 editMode = parsed.mode
@@ -114,12 +114,21 @@ enum EditParser {
                     // Flush any trailing partial line
                     if !lineBuffer.isEmpty {
                         if inEditBlock {
-                            // Stream ended mid-block — treat remaining content as deleted
                             editLines.append(lineBuffer)
                         } else {
                             continuation.yield(.token(lineBuffer))
                         }
                         lineBuffer = ""
+                    }
+
+                    // Recover from unclosed fences by emitting the collected edit.
+                    if inEditBlock, let mode = editMode, !editLines.isEmpty {
+                        continuation.yield(.editBlock(buildLineEdit(mode: mode, lines: editLines), fileTarget: currentFileTarget))
+                    } else if inEditBlock {
+                        let recovered = editLines.joined(separator: "\n")
+                        if !recovered.isEmpty {
+                            continuation.yield(.token(recovered))
+                        }
                     }
                     continuation.finish()
                 } catch {

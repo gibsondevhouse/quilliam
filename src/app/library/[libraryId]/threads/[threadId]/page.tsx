@@ -7,13 +7,15 @@ import { useLibraryContext } from "@/lib/context/LibraryContext";
 export default function ThreadPage() {
   const params = useParams<{ threadId: string }>();
   const lib = useLibraryContext();
+  const { chats, selectChat } = lib;
 
   // Activate this thread and open the chat panel
   useEffect(() => {
-    if (lib.chats.find((c) => c.id === params.threadId)) {
-      lib.selectChat(params.threadId);
+    if (lib.activeChatId === params.threadId) return;
+    if (chats.some((c) => c.id === params.threadId)) {
+      selectChat(params.threadId);
     }
-  }, [params.threadId, lib]);
+  }, [params.threadId, chats, lib.activeChatId, selectChat]);
 
   return (
     <div className="library-page thread-page">

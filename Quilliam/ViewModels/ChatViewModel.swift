@@ -32,6 +32,9 @@ final class ChatViewModel {
     /// Keyed by `FileTarget.key`.
     var changeSets: [String: [ChangeSet]] = [:]
 
+    /// Accepted baseline text for entity targets. Mirrors `Document.text` semantics.
+    private var entityCommittedText: [String: String] = [:]
+
     /// Pending change sets for the active document / entity.
     var pendingChangeSets: [ChangeSet] {
         let key = activeEntityKey ?? FileTarget.activeDocument.key
@@ -128,6 +131,9 @@ final class ChatViewModel {
                     default:
                         if let entity = entityDocuments[key] {
                             var updated = entity
+                            if entityCommittedText[key] == nil {
+                                entityCommittedText[key] = entity.editableText
+                            }
                             let patched = patchText(entity.editableText, with: edit)
                             updated.editableText = patched
                             entityDocuments[key] = updated
@@ -181,10 +187,8 @@ final class ChatViewModel {
             changeSets[key]![idx].status = .accepted
             if key == FileTarget.activeDocument.key, let doc = currentDocument {
                 doc.text = doc.workingText
-            } else if var entity = entityDocuments[key] {
-                // Working text is already applied; mark entity as accepted
-                _ = entity // no extra work needed, live preview is the accepted state
-                entityDocuments[key] = entity
+            } else if let entity = entityDocuments[key] {
+                entityCommittedText[key] = entity.editableText
             }
             break
         }
@@ -202,6 +206,16 @@ final class ChatViewModel {
                     rebuilt = doc.apply(lineEdits: cs.edits, to: rebuilt)
                 }
                 doc.workingText = rebuilt
+            } else if var entity = entityDocuments[key] {
+                let base = entityCommittedText[key] ?? entity.editableText
+                var rebuilt = base
+                for cs in (changeSets[key] ?? []) where cs.status == .pending {
+                    for edit in cs.edits {
+                        rebuilt = patchText(rebuilt, with: edit)
+                    }
+                }
+                entity.editableText = rebuilt
+                entityDocuments[key] = entity
             }
             break
         }
@@ -215,6 +229,8 @@ final class ChatViewModel {
         }
         if k == FileTarget.activeDocument.key, let doc = currentDocument {
             doc.text = doc.workingText
+        } else if let entity = entityDocuments[k] {
+            entityCommittedText[k] = entity.editableText
         }
     }
 
@@ -226,6 +242,9 @@ final class ChatViewModel {
         }
         if k == FileTarget.activeDocument.key, let doc = currentDocument {
             doc.workingText = doc.text
+        } else if var entity = entityDocuments[k] {
+            entity.editableText = entityCommittedText[k] ?? entity.editableText
+            entityDocuments[k] = entity
         }
     }
 
@@ -298,6 +317,12 @@ final class ChatViewModel {
         messages = []
         errorMessage = nil
         isLoading = false
+    }
+
+    func clearEntityEditingState() {
+        entityDocuments = [:]
+        activeEntityKey = nil
+        entityCommittedText = [:]
     }
 
     // MARK: - Private helpers

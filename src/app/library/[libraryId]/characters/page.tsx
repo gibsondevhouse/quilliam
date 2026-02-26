@@ -7,6 +7,11 @@ export default function CharactersPage() {
   const lib = useLibraryContext();
 
   const active = lib.characters.find((c) => c.id === lib.activeCharacterId);
+  const activeKey = active ? `character:${active.name}` : null;
+  const activePending = activeKey
+    ? (lib.changeSets[activeKey] ?? []).filter((cs) => cs.status === "pending")
+    : [];
+  const activeDraft = activeKey ? lib.entityDrafts[activeKey] : undefined;
 
   return (
     <div className="library-page characters-page split-page">
@@ -25,27 +30,32 @@ export default function CharactersPage() {
           </div>
         ) : (
           <ul className="library-item-list">
-            {lib.characters.map((c) => (
-              <li key={c.id} className="library-item-row">
-                <button
-                  className={`library-item-btn ${lib.activeCharacterId === c.id ? "active" : ""}`}
-                  onClick={() => lib.selectCharacter(c.id)}
-                >
-                  <span className="library-item-avatar">{(c.name || "?")[0].toUpperCase()}</span>
-                  <div className="library-item-info">
-                    <span className="library-item-title">{c.name || "Unnamed"}</span>
-                    {c.role && <span className="library-item-preview">{c.role}</span>}
-                  </div>
-                </button>
-                <button
-                  className="library-item-delete"
-                  onClick={(e) => { e.stopPropagation(); lib.deleteCharacter(c.id); }}
-                  title="Delete"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
+            {lib.characters.map((c) => {
+              const key = `character:${c.name}`;
+              const hasPending = (lib.changeSets[key] ?? []).some((cs) => cs.status === "pending");
+              return (
+                <li key={c.id} className="library-item-row">
+                  <button
+                    className={`library-item-btn ${lib.activeCharacterId === c.id ? "active" : ""}`}
+                    onClick={() => lib.selectCharacter(c.id)}
+                  >
+                    <span className="library-item-avatar">{(c.name || "?")[0].toUpperCase()}</span>
+                    <div className="library-item-info">
+                      <span className="library-item-title">{c.name || "Unnamed"}</span>
+                      {c.role && <span className="library-item-preview">{c.role}</span>}
+                    </div>
+                    {hasPending && <span className="library-item-pending-dot" title="AI draft pending" />}
+                  </button>
+                  <button
+                    className="library-item-delete"
+                    onClick={(e) => { e.stopPropagation(); lib.deleteCharacter(c.id); }}
+                    title="Delete"
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -57,6 +67,12 @@ export default function CharactersPage() {
             key={active.id}
             character={active}
             onChange={lib.updateCharacter}
+            draftText={activeDraft}
+            pendingChangeSets={activePending}
+            onAcceptHunk={lib.acceptChange}
+            onRejectHunk={lib.rejectChange}
+            onAcceptAll={activeKey ? () => lib.acceptAllChanges(activeKey) : undefined}
+            onRejectAll={activeKey ? () => lib.rejectAllChanges(activeKey) : undefined}
           />
         ) : (
           <div className="library-page-empty">

@@ -147,7 +147,7 @@
   font-size: 12px;
 }
 
-/* ---- Sidebar Tabs (removed — now in ActivityBar) ---- */
+/* ---- Sidebar Tabs (legacy section removed) ---- */
 
 /* ---- Sidebar Panels (Chats, Characters, Locations, World) ---- */
 
@@ -285,4 +285,3 @@
   color: var(--text-muted);
   font-size: 12px;
 }
-

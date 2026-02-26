@@ -19,6 +19,7 @@ import type { CharacterEntry, LocationEntry, WorldEntry, ChatSession, ChatMessag
 import type { RAGNode } from "@/lib/rag/hierarchy";
 import { createRAGNode } from "@/lib/rag/hierarchy";
 import type { RagWorkerRequest, RagWorkerResponse } from "@/lib/rag/messages";
+import type { PersistedLibraryMeta } from "@/lib/rag/store";
 import { embedNode } from "@/lib/rag/embedder";
 import { buildRAGContext } from "@/lib/rag/retrieval";
 import { chunkScene, needsChunking, staleFragmentIds } from "@/lib/rag/chunker";
@@ -50,35 +51,80 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
 
-  const { storeRef, storeReady, ragNodes, putRagNode, addNode } = useRAGContext();
+  const { storeRef, storeReady, ragNodes, putRagNode, addNode, deleteNode } = useRAGContext();
   const { status: systemStatus } = useSystemContext();
 
   /* ---- Library metadata ---- */
   const libraryRagNode = ragNodes[libraryId];
-  const [libraryTitle, setLibraryTitleState] = useState(libraryRagNode?.title ?? "Untitled Library");
-  const [libraryDescription, setLibraryDescriptionState] = useState<string>("");
-  const [libraryStatus, setLibraryStatusState] = useState<"drafting" | "editing" | "archived">("drafting");
+  const [libraryMeta, setLibraryMeta] = useState<PersistedLibraryMeta | null>(null);
+  const libraryTitle = libraryRagNode?.title ?? libraryMeta?.title ?? "Untitled Library";
+  const libraryDescription = libraryMeta?.description ?? "";
+  const libraryStatus = libraryMeta?.status ?? "drafting";
 
-  // Sync title from tree when it changes externally
+  const upsertLibraryMeta = useCallback((patch: Partial<PersistedLibraryMeta>) => {
+    setLibraryMeta((prev) => {
+      const base: PersistedLibraryMeta = prev ?? {
+        libraryId,
+        title: libraryRagNode?.title ?? "Untitled Library",
+        description: "",
+        status: "drafting",
+        updatedAt: Date.now(),
+      };
+      const next: PersistedLibraryMeta = {
+        ...base,
+        ...patch,
+        libraryId,
+        updatedAt: Date.now(),
+      };
+      void storeRef.current?.putLibraryMeta(next);
+      return next;
+    });
+  }, [libraryId, libraryRagNode?.title, storeRef]);
+
   useEffect(() => {
-    if (libraryRagNode?.title) setLibraryTitleState(libraryRagNode.title);
-  }, [libraryRagNode?.title]);
+    if (!storeReady) return;
+    const store = storeRef.current;
+    if (!store) return;
+    let cancelled = false;
+    void (async () => {
+      const stored = await store.getLibraryMeta(libraryId);
+      if (cancelled) return;
+      if (stored) {
+        setLibraryMeta(stored);
+      } else {
+        setLibraryMeta((prev) => {
+          // Avoid clobbering edits that landed while this async lookup was in flight.
+          if (prev && prev.libraryId === libraryId) return prev;
+          const fresh: PersistedLibraryMeta = {
+            libraryId,
+            title: libraryRagNode?.title ?? "Untitled Library",
+            description: "",
+            status: "drafting",
+            updatedAt: Date.now(),
+          };
+          void store.putLibraryMeta(fresh);
+          return fresh;
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [libraryId, libraryRagNode?.title, storeReady, storeRef]);
 
   const setLibraryTitle = useCallback((title: string) => {
-    setLibraryTitleState(title);
     const node = ragNodes[libraryId];
     if (node) putRagNode({ ...node, title, updatedAt: Date.now() });
-  }, [libraryId, ragNodes, putRagNode]);
+    upsertLibraryMeta({ title });
+  }, [libraryId, ragNodes, putRagNode, upsertLibraryMeta]);
 
   const setLibraryDescription = useCallback((desc: string) => {
-    setLibraryDescriptionState(desc);
-    // Store as metadata on the library node's voiceProfile field (re-purposed temporarily)
-    // TODO: add a dedicated metadata field to RAGNode
-  }, []);
+    upsertLibraryMeta({ description: desc });
+  }, [upsertLibraryMeta]);
 
   const setLibraryStatus = useCallback((s: "drafting" | "editing" | "archived") => {
-    setLibraryStatusState(s);
-  }, []);
+    upsertLibraryMeta({ status: s });
+  }, [upsertLibraryMeta]);
 
   /* ---- Tab state ---- */
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
@@ -231,10 +277,41 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   }, [storeRef, ragNodes, putRagNode]);
 
   const deleteStory = useCallback((id: string) => {
+    const removedNodeIds = new Set<string>();
+    const queue: string[] = [id];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (removedNodeIds.has(current)) continue;
+      removedNodeIds.add(current);
+      const node = ragNodes[current];
+      if (node) queue.push(...node.childrenIds);
+    }
+
     setStories((prev) => prev.filter((s) => s.id !== id));
     if (activeStoryId === id) setActiveStoryId(null);
-    void storeRef.current?.deleteStory(id);
-  }, [activeStoryId, storeRef]);
+    setOpenTabs((prev) => prev.filter((t) => !removedNodeIds.has(t.id)));
+    if (activeTabId && removedNodeIds.has(activeTabId)) setActiveTabId(null);
+    setDocContents((prev) => {
+      const next = { ...prev };
+      removedNodeIds.forEach((nodeId) => { delete next[nodeId]; });
+      return next;
+    });
+    setSavedContents((prev) => {
+      const next = { ...prev };
+      removedNodeIds.forEach((nodeId) => { delete next[nodeId]; });
+      return next;
+    });
+    setWorkingContents((prev) => {
+      const next = { ...prev };
+      removedNodeIds.forEach((nodeId) => { delete next[nodeId]; });
+      return next;
+    });
+    const storyNodeExists = Boolean(ragNodes[id]);
+    deleteNode(id);
+    if (!storyNodeExists) {
+      void storeRef.current?.deleteStoryCascade(id);
+    }
+  }, [activeStoryId, activeTabId, deleteNode, ragNodes, storeRef]);
 
   /* ---- Chat / Threads ---- */
   const initialChatId = useMemo(() => generateId(), []);
@@ -297,7 +374,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   }, [libraryId, storeRef]);
 
   /* ---- RAG Worker ---- */
-  const [storeReady2, setStoreReady2] = useState(false);
   const [indexingCount, setIndexingCount] = useState(0);
   const workerRef = useRef<Worker | null>(null);
   const ragNodesRef = useRef(ragNodes);
@@ -357,7 +433,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       }
     };
 
-    setStoreReady2(true);
     return () => {
       cancelled = true;
       worker.terminate();
@@ -462,30 +537,76 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
    * e.g. "__active__", "character:Elena", "location:Harbortown"
    */
   const [changeSets, setChangeSets] = useState<Record<string, ChangeSet[]>>({});
+  const [entityDrafts, setEntityDrafts] = useState<Record<string, string>>({});
 
-  /**
-   * Map fileTargetKey → the document/entity id it corresponds to.
-   * "character:Elena" → character.id for Elena in `characters`.
-   */
-  const resolveTargetDocId = useCallback(
-    (key: string): string | null => {
-      if (key === "__active__") return activeTabId;
-      if (key.startsWith("character:")) {
-        const name = key.slice("character:".length);
-        return characters.find((c) => c.name === name)?.id ?? null;
-      }
-      if (key.startsWith("location:")) {
-        const name = key.slice("location:".length);
-        return locations.find((l) => l.name === name)?.id ?? null;
-      }
-      if (key.startsWith("world:")) {
-        const k = key.slice("world:".length);
-        return worldEntries.find((w) => w.title === k)?.id ?? null;
-      }
-      return null;
-    },
-    [activeTabId, characters, locations, worldEntries]
-  );
+  const resolveEntityBaseText = useCallback((key: string): string => {
+    if (key.startsWith("character:")) {
+      const name = key.slice("character:".length);
+      return characters.find((c) => c.name === name)?.notes ?? "";
+    }
+    if (key.startsWith("location:")) {
+      const name = key.slice("location:".length);
+      return locations.find((l) => l.name === name)?.description ?? "";
+    }
+    if (key.startsWith("world:")) {
+      const title = key.slice("world:".length);
+      return worldEntries.find((w) => w.title === title)?.notes ?? "";
+    }
+    return "";
+  }, [characters, locations, worldEntries]);
+
+  const commitEntityDraft = useCallback((key: string) => {
+    const draft = entityDrafts[key];
+    if (draft === undefined) return;
+    const now = Date.now();
+
+    if (key.startsWith("character:")) {
+      const name = key.slice("character:".length);
+      setCharacters((prev) =>
+        prev.map((c) => {
+          if (c.name !== name) return c;
+          const updated = { ...c, notes: draft };
+          void storeRef.current?.putCharacter({ ...updated, updatedAt: now });
+          return updated;
+        }),
+      );
+    } else if (key.startsWith("location:")) {
+      const name = key.slice("location:".length);
+      setLocations((prev) =>
+        prev.map((l) => {
+          if (l.name !== name) return l;
+          const updated = { ...l, description: draft };
+          void storeRef.current?.putLocation({ ...updated, updatedAt: now });
+          return updated;
+        }),
+      );
+    } else if (key.startsWith("world:")) {
+      const title = key.slice("world:".length);
+      setWorldEntries((prev) =>
+        prev.map((w) => {
+          if (w.title !== title) return w;
+          const updated = { ...w, notes: draft };
+          void storeRef.current?.putWorldEntry({ ...updated, updatedAt: now });
+          return updated;
+        }),
+      );
+    }
+
+    setEntityDrafts((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, [entityDrafts, storeRef]);
+
+  const revertEntityDraft = useCallback((key: string) => {
+    setEntityDrafts((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
   /**
    * Handle an edit block emitted by the AI stream.
@@ -508,54 +629,25 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
           const base = prev[activeTabId] ?? docContents[activeTabId]?.content ?? "";
           return { ...prev, [activeTabId]: applyEdits(base, cs.edits) };
         });
-      } else if (key.startsWith("character:")) {
-        const name = key.slice("character:".length);
-        setCharacters((prev) =>
-          prev.map((c) => {
-            if (c.name !== name) return c;
-            const base = c.notes ?? "";
-            const patched = applyEdits(base, cs.edits);
-            const updated = { ...c, notes: patched };
-            void storeRef.current?.putCharacter({ ...updated, updatedAt: Date.now() });
-            return updated;
-          })
-        );
-      } else if (key.startsWith("location:")) {
-        const name = key.slice("location:".length);
-        setLocations((prev) =>
-          prev.map((l) => {
-            if (l.name !== name) return l;
-            const base = l.description ?? "";
-            const patched = applyEdits(base, cs.edits);
-            const updated = { ...l, description: patched };
-            void storeRef.current?.putLocation({ ...updated, updatedAt: Date.now() });
-            return updated;
-          })
-        );
-      } else if (key.startsWith("world:")) {
-        const k = key.slice("world:".length);
-        setWorldEntries((prev) =>
-          prev.map((w) => {
-            if (w.title !== k) return w;
-            const base = w.notes ?? "";
-            const patched = applyEdits(base, cs.edits);
-            const updated = { ...w, notes: patched };
-            void storeRef.current?.putWorldEntry({ ...updated, updatedAt: Date.now() });
-            return updated;
-          })
-        );
+      } else {
+        setEntityDrafts((prev) => {
+          const base = prev[key] ?? resolveEntityBaseText(key);
+          return { ...prev, [key]: applyEdits(base, cs.edits) };
+        });
       }
     },
-    [activeTabId, docContents, characters, locations, worldEntries, storeRef]
+    [activeTabId, docContents, resolveEntityBaseText]
   );
 
   const acceptChange = useCallback(
     (changeSetId: string) => {
+      let acceptedKey: string | null = null;
       setChangeSets((prev) => {
         const next: Record<string, ChangeSet[]> = {};
         for (const [key, list] of Object.entries(prev)) {
           const cs = list.find((c) => c.id === changeSetId);
           if (cs) {
+            acceptedKey = key;
             // Commit working copy to docContents for chapter targets
             if (key === "__active__" && activeTabId) {
               setWorkingContents((wc) => {
@@ -578,12 +670,17 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
         }
         return next;
       });
+      if (acceptedKey && acceptedKey !== "__active__") {
+        commitEntityDraft(acceptedKey);
+      }
     },
-    [activeTabId]
+    [activeTabId, commitEntityDraft]
   );
 
   const rejectChange = useCallback(
     (changeSetId: string) => {
+      let targetKey: string | null = null;
+      let updatedList: ChangeSet[] = [];
       setChangeSets((prev) => {
         const next: Record<string, ChangeSet[]> = {};
         for (const [key, list] of Object.entries(prev)) {
@@ -591,6 +688,8 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
             const updated = list.map((c) =>
               c.id === changeSetId ? { ...c, status: "rejected" as const } : c
             );
+            targetKey = key;
+            updatedList = updated;
             // Rebuild working copy from remaining pending sets
             if (key === "__active__" && activeTabId) {
               const base = docContents[activeTabId]?.content ?? "";
@@ -608,8 +707,18 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
         }
         return next;
       });
+      if (targetKey && targetKey !== "__active__") {
+        const remaining = updatedList.filter((c) => c.status === "pending");
+        if (remaining.length === 0) {
+          revertEntityDraft(targetKey);
+        } else {
+          const base = resolveEntityBaseText(targetKey);
+          const rebuilt = remaining.reduce((acc, cs) => applyEdits(acc, cs.edits), base);
+          setEntityDrafts((prev) => ({ ...prev, [targetKey!]: rebuilt }));
+        }
+      }
     },
-    [activeTabId, docContents]
+    [activeTabId, docContents, resolveEntityBaseText, revertEntityDraft]
   );
 
   const acceptAllChanges = useCallback(
@@ -632,8 +741,9 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
           return wc;
         });
       }
+      if (key !== "__active__") commitEntityDraft(key);
     },
-    [activeTabId]
+    [activeTabId, commitEntityDraft]
   );
 
   const rejectAllChanges = useCallback(
@@ -647,8 +757,9 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       if (key === "__active__" && activeTabId) {
         setWorkingContents((wc) => ({ ...wc, [activeTabId]: docContents[activeTabId]?.content ?? "" }));
       }
+      if (key !== "__active__") revertEntityDraft(key);
     },
-    [activeTabId, docContents]
+    [activeTabId, docContents, revertEntityDraft]
   );
 
   /** Handles a raw EditBlockEvent from Chat's parseEditStream. Constructs a ChangeSet and calls applyIncomingEdit. */
@@ -720,26 +831,29 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     if (characters.length > 0) {
       lines.push(`\n### Characters (editable via file=character:<name>)`);
       characters.slice(0, 15).forEach((c) => {
+        const notes = entityDrafts[`character:${c.name}`] ?? c.notes;
         const parts = [c.name || "Unnamed"];
         if (c.role) parts.push(`(${c.role})`);
-        if (c.notes) parts.push(`— ${c.notes.slice(0, 120)}`);
+        if (notes) parts.push(`— ${notes.slice(0, 120)}`);
         lines.push(`- ${parts.join(" ")}`);
       });
     }
     if (locations.length > 0) {
       lines.push(`\n### Locations (editable via file=location:<name>)`);
       locations.slice(0, 10).forEach((l) => {
-        lines.push(`- ${l.name || "Unnamed"}${l.description ? ` — ${l.description.slice(0, 120)}` : ""}`.trimEnd());
+        const description = entityDrafts[`location:${l.name}`] ?? l.description;
+        lines.push(`- ${l.name || "Unnamed"}${description ? ` — ${description.slice(0, 120)}` : ""}`.trimEnd());
       });
     }
     if (worldEntries.length > 0) {
       lines.push(`\n### World (editable via file=world:<title>)`);
       worldEntries.slice(0, 10).forEach((w) => {
-        lines.push(`- ${w.title || "Untitled"}${w.category ? ` (${w.category})` : ""}${w.notes ? ` — ${w.notes.slice(0, 120)}` : ""}`.trimEnd());
+        const notes = entityDrafts[`world:${w.title}`] ?? w.notes;
+        lines.push(`- ${w.title || "Untitled"}${w.category ? ` (${w.category})` : ""}${notes ? ` — ${notes.slice(0, 120)}` : ""}`.trimEnd());
       });
     }
     return lines.join("\n");
-  }, [libraryTitle, activeTabId, docContents, workingContents, characters, locations, worldEntries]);
+  }, [libraryTitle, activeTabId, docContents, workingContents, characters, locations, worldEntries, entityDrafts]);
 
   /* ---- Persist library ID in localStorage ---- */
   useEffect(() => {
@@ -798,6 +912,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     updateTabTitle,
     docContents,
     workingContents,
+    entityDrafts,
     dirtyIds,
     initDoc,
     handleContentChange,
@@ -808,10 +923,12 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     rejectChange,
     acceptAllChanges,
     rejectAllChanges,
+    commitEntityDraft,
+    revertEntityDraft,
     buildContext,
     storeRef,
     workerRef,
-    storeReady: storeReady2,
+    storeReady,
     indexingCount,
   };
 

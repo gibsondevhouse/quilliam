@@ -3,7 +3,7 @@
 import { createContext, useContext, type RefObject } from "react";
 import type { NodeType, RAGNode } from "@/lib/rag/hierarchy";
 import type { RAGStore } from "@/lib/rag/store";
-import type { SidebarNode } from "@/components/Editor/Sidebar";
+import type { SidebarNode } from "@/lib/navigation";
 
 export interface RAGContextValue {
   storeRef: RefObject<RAGStore | null>;

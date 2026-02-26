@@ -6,6 +6,11 @@ import { LocationEditor } from "@/components/Editor/LocationEditor";
 export default function LocationsPage() {
   const lib = useLibraryContext();
   const active = lib.locations.find((l) => l.id === lib.activeLocationId);
+  const activeKey = active ? `location:${active.name}` : null;
+  const activePending = activeKey
+    ? (lib.changeSets[activeKey] ?? []).filter((cs) => cs.status === "pending")
+    : [];
+  const activeDraft = activeKey ? lib.entityDrafts[activeKey] : undefined;
 
   return (
     <div className="library-page locations-page split-page">
@@ -23,26 +28,31 @@ export default function LocationsPage() {
           </div>
         ) : (
           <ul className="library-item-list">
-            {lib.locations.map((l) => (
-              <li key={l.id} className="library-item-row">
-                <button
-                  className={`library-item-btn ${lib.activeLocationId === l.id ? "active" : ""}`}
-                  onClick={() => lib.selectLocation(l.id)}
-                >
-                  <span className="library-item-icon">📍</span>
-                  <div className="library-item-info">
-                    <span className="library-item-title">{l.name || "Unnamed"}</span>
-                  </div>
-                </button>
-                <button
-                  className="library-item-delete"
-                  onClick={(e) => { e.stopPropagation(); lib.deleteLocation(l.id); }}
-                  title="Delete"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
+            {lib.locations.map((l) => {
+              const key = `location:${l.name}`;
+              const hasPending = (lib.changeSets[key] ?? []).some((cs) => cs.status === "pending");
+              return (
+                <li key={l.id} className="library-item-row">
+                  <button
+                    className={`library-item-btn ${lib.activeLocationId === l.id ? "active" : ""}`}
+                    onClick={() => lib.selectLocation(l.id)}
+                  >
+                    <span className="library-item-icon">📍</span>
+                    <div className="library-item-info">
+                      <span className="library-item-title">{l.name || "Unnamed"}</span>
+                    </div>
+                    {hasPending && <span className="library-item-pending-dot" title="AI draft pending" />}
+                  </button>
+                  <button
+                    className="library-item-delete"
+                    onClick={(e) => { e.stopPropagation(); lib.deleteLocation(l.id); }}
+                    title="Delete"
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -52,6 +62,12 @@ export default function LocationsPage() {
             key={active.id}
             location={active}
             onChange={lib.updateLocation}
+            draftText={activeDraft}
+            pendingChangeSets={activePending}
+            onAcceptHunk={lib.acceptChange}
+            onRejectHunk={lib.rejectChange}
+            onAcceptAll={activeKey ? () => lib.acceptAllChanges(activeKey) : undefined}
+            onRejectAll={activeKey ? () => lib.rejectAllChanges(activeKey) : undefined}
           />
         ) : (
           <div className="library-page-empty">

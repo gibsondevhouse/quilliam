@@ -1,10 +1,8 @@
 export { EditorArea } from "./EditorArea";
-export { Sidebar } from "./Sidebar";
-export type { SidebarNode, SidebarTab, ChatSession, CharacterEntry, LocationEntry, WorldEntry } from "./Sidebar";
 export { StatusBar } from "./StatusBar";
-export { ActivityBar } from "./ActivityBar";
 export { TabBar } from "./TabBar";
 export type { EditorTab } from "./TabBar";
 export { CharacterEditor } from "./CharacterEditor";
 export { LocationEditor } from "./LocationEditor";
 export { WorldEditor } from "./WorldEditor";
+export { EntityChangePanel } from "./EntityChangePanel";

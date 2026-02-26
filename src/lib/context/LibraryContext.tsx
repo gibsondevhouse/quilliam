@@ -72,6 +72,8 @@ export interface LibraryContextValue {
   docContents: Record<string, { title: string; content: string }>;
   /** Working copies — modified by AI edits before accept/reject */
   workingContents: Record<string, string>;
+  /** Pending AI draft text for non-document entities (character/location/world). */
+  entityDrafts: Record<string, string>;
   dirtyIds: Set<string>;
   initDoc: (id: string, title: string, content: string) => void;
   handleContentChange: (chapterId: string, content: string) => void;
@@ -89,6 +91,10 @@ export interface LibraryContextValue {
   acceptAllChanges: (key: string) => void;
   /** Reject all pending hunks for a given fileTargetKey. */
   rejectAllChanges: (key: string) => void;
+  /** Commit a draft entity change (used by accept flows for non-document targets). */
+  commitEntityDraft: (key: string) => void;
+  /** Revert an entity draft to persisted base content. */
+  revertEntityDraft: (key: string) => void;
 
   // RAG
   buildContext: (query: string) => Promise<string>;

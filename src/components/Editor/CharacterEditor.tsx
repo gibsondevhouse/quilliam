@@ -1,11 +1,19 @@
 "use client";
 
 import { useCallback, useState, useEffect } from "react";
-import type { CharacterEntry } from "./Sidebar";
+import type { CharacterEntry } from "@/lib/types";
+import type { ChangeSet } from "@/lib/changeSets";
+import { EntityChangePanel } from "@/components/Editor/EntityChangePanel";
 
 interface CharacterEditorProps {
   character: CharacterEntry;
   onChange: (updated: CharacterEntry) => void;
+  draftText?: string;
+  pendingChangeSets?: ChangeSet[];
+  onAcceptHunk?: (id: string) => void;
+  onRejectHunk?: (id: string) => void;
+  onAcceptAll?: () => void;
+  onRejectAll?: () => void;
 }
 
 const ROLE_OPTIONS = [
@@ -19,10 +27,22 @@ const ROLE_OPTIONS = [
   "Other",
 ];
 
-export function CharacterEditor({ character, onChange }: CharacterEditorProps) {
+export function CharacterEditor({
+  character,
+  onChange,
+  draftText,
+  pendingChangeSets = [],
+  onAcceptHunk,
+  onRejectHunk,
+  onAcceptAll,
+  onRejectAll,
+}: CharacterEditorProps) {
   const [name, setName] = useState(character.name);
   const [role, setRole] = useState(character.role);
   const [notes, setNotes] = useState(character.notes);
+  const pending = pendingChangeSets.filter((cs) => cs.status === "pending");
+  const hasPending = pending.length > 0;
+  const visibleNotes = hasPending ? draftText ?? notes : notes;
 
   useEffect(() => {
     setName(character.name);
@@ -43,11 +63,22 @@ export function CharacterEditor({ character, onChange }: CharacterEditorProps) {
         <span className="detail-editor-badge">Character</span>
       </div>
 
+      <EntityChangePanel
+        entityLabel={name || "Unnamed Character"}
+        pendingChangeSets={pending}
+        draftText={draftText ?? notes}
+        onAcceptHunk={onAcceptHunk}
+        onRejectHunk={onRejectHunk}
+        onAcceptAll={onAcceptAll}
+        onRejectAll={onRejectAll}
+      />
+
       <div className="detail-field">
         <label className="detail-label">Name</label>
         <input
           className="detail-input"
           value={name}
+          disabled={hasPending}
           onChange={(e) => {
             setName(e.target.value);
             update({ name: e.target.value });
@@ -63,6 +94,7 @@ export function CharacterEditor({ character, onChange }: CharacterEditorProps) {
             <button
               key={r}
               className={`detail-chip ${role === r ? "active" : ""}`}
+              disabled={hasPending}
               onClick={() => {
                 setRole(r);
                 update({ role: r });
@@ -78,7 +110,8 @@ export function CharacterEditor({ character, onChange }: CharacterEditorProps) {
         <label className="detail-label">Notes</label>
         <textarea
           className="detail-textarea"
-          value={notes}
+          value={visibleNotes}
+          disabled={hasPending}
           onChange={(e) => {
             setNotes(e.target.value);
             update({ notes: e.target.value });

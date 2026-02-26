@@ -1,16 +1,36 @@
 "use client";
 
 import { useCallback, useState, useEffect } from "react";
-import type { LocationEntry } from "./Sidebar";
+import type { LocationEntry } from "@/lib/types";
+import type { ChangeSet } from "@/lib/changeSets";
+import { EntityChangePanel } from "@/components/Editor/EntityChangePanel";
 
 interface LocationEditorProps {
   location: LocationEntry;
   onChange: (updated: LocationEntry) => void;
+  draftText?: string;
+  pendingChangeSets?: ChangeSet[];
+  onAcceptHunk?: (id: string) => void;
+  onRejectHunk?: (id: string) => void;
+  onAcceptAll?: () => void;
+  onRejectAll?: () => void;
 }
 
-export function LocationEditor({ location, onChange }: LocationEditorProps) {
+export function LocationEditor({
+  location,
+  onChange,
+  draftText,
+  pendingChangeSets = [],
+  onAcceptHunk,
+  onRejectHunk,
+  onAcceptAll,
+  onRejectAll,
+}: LocationEditorProps) {
   const [name, setName] = useState(location.name);
   const [description, setDescription] = useState(location.description);
+  const pending = pendingChangeSets.filter((cs) => cs.status === "pending");
+  const hasPending = pending.length > 0;
+  const visibleDescription = hasPending ? draftText ?? description : description;
 
   useEffect(() => {
     setName(location.name);
@@ -30,11 +50,22 @@ export function LocationEditor({ location, onChange }: LocationEditorProps) {
         <span className="detail-editor-badge location">Location</span>
       </div>
 
+      <EntityChangePanel
+        entityLabel={name || "Unnamed Location"}
+        pendingChangeSets={pending}
+        draftText={draftText ?? description}
+        onAcceptHunk={onAcceptHunk}
+        onRejectHunk={onRejectHunk}
+        onAcceptAll={onAcceptAll}
+        onRejectAll={onRejectAll}
+      />
+
       <div className="detail-field">
         <label className="detail-label">Name</label>
         <input
           className="detail-input"
           value={name}
+          disabled={hasPending}
           onChange={(e) => {
             setName(e.target.value);
             update({ name: e.target.value });
@@ -47,7 +78,8 @@ export function LocationEditor({ location, onChange }: LocationEditorProps) {
         <label className="detail-label">Description</label>
         <textarea
           className="detail-textarea"
-          value={description}
+          value={visibleDescription}
+          disabled={hasPending}
           onChange={(e) => {
             setDescription(e.target.value);
             update({ description: e.target.value });

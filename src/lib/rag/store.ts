@@ -3,7 +3,7 @@
  * These types are shared by the IndexedDB layer and worker messages.
  */
 
-import type { NodeType, RAGNode } from "@/lib/rag/hierarchy";
+import type { RAGNode } from "@/lib/rag/hierarchy";
 
 /**
  * Persisted RAG node representation suitable for IndexedDB storage.
@@ -88,6 +88,15 @@ export interface PersistedStory {
   updatedAt: number;
 }
 
+/** Persisted library metadata separate from the core RAG node shape. */
+export interface PersistedLibraryMeta {
+  libraryId: string;
+  title: string;
+  description: string;
+  status: "drafting" | "editing" | "archived";
+  updatedAt: number;
+}
+
 /**
  * Individual chat message keyed by session.
  */
@@ -139,6 +148,12 @@ export interface RAGStore {
   getStoriesByLibrary(libraryId: string): Promise<PersistedStory[]>;
   getStory(id: string): Promise<PersistedStory | null>;
   deleteStory(id: string): Promise<void>;
+  deleteStoryCascade(storyId: string): Promise<void>;
+  deleteLibraryCascade(libraryId: string): Promise<void>;
+  // Library metadata
+  putLibraryMeta(entry: PersistedLibraryMeta): Promise<void>;
+  getLibraryMeta(libraryId: string): Promise<PersistedLibraryMeta | null>;
+  deleteLibraryMeta(libraryId: string): Promise<void>;
 }
 
 /**
