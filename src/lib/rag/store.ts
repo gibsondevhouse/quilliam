@@ -35,6 +35,30 @@ export interface StoredMetadata {
 }
 
 /**
+ * Persisted chat session header (no messages — stored separately for fast listing).
+ */
+export interface PersistedChatSession {
+  id: string;
+  title: string;
+  preview: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Individual chat message keyed by session.
+ */
+export interface PersistedChatMessage {
+  /** Composite key: `${sessionId}::${index}` */
+  key: string;
+  sessionId: string;
+  index: number;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: number;
+}
+
+/**
  * High-level storage interface to keep persistence concerns isolated.
  */
 export interface RAGStore {
@@ -48,6 +72,12 @@ export interface RAGStore {
   getEmbeddingByHash(hash: string, model: string): Promise<StoredEmbedding | null>;
   setMetadata(entry: StoredMetadata): Promise<void>;
   getMetadata<T = unknown>(key: string): Promise<T | null>;
+  // Chat persistence
+  putChatSession(session: PersistedChatSession): Promise<void>;
+  listChatSessions(): Promise<PersistedChatSession[]>;
+  deleteChatSession(id: string): Promise<void>;
+  putChatMessages(sessionId: string, messages: { role: "user" | "assistant"; content: string }[]): Promise<void>;
+  listChatMessages(sessionId: string): Promise<PersistedChatMessage[]>;
 }
 
 /**

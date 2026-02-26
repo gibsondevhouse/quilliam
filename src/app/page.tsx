@@ -244,6 +244,65 @@ export default function Home() {
     return ids;
   }, [docContents, savedContents]);
 
+  /* ============ RAG context for AI chat ============ */
+
+  const chatContext = useMemo(() => {
+    if (!activeTabId) return undefined;
+    const doc = docContents[activeTabId];
+    if (!doc) return undefined;
+
+    const lines: string[] = [];
+
+    // Build hierarchy path
+    const buildPath = (nodes: SidebarNode[], id: string, acc: string[] = []): string[] => {
+      for (const n of nodes) {
+        if (n.id === id) return [...acc, n.title];
+        const found = buildPath(n.children, id, [...acc, n.title]);
+        if (found.length > acc.length + 1) return found;
+      }
+      return acc;
+    };
+    const path = buildPath(tree, activeTabId);
+    lines.push(`### Document`);
+    if (path.length > 0) lines.push(`**Path:** ${path.join(" > ")}`);
+    lines.push(`**Title:** ${doc.title}`);
+    if (doc.content.trim()) {
+      lines.push(`**Content (excerpt):**`);
+      lines.push(doc.content.slice(0, 3000) + (doc.content.length > 3000 ? "\n[...truncated]" : ""));
+    } else {
+      lines.push(`*Document is empty — nothing written yet.*`);
+    }
+
+    if (characters.length > 0) {
+      lines.push(`\n### Characters`);
+      characters.slice(0, 15).forEach((c) => {
+        const parts = [c.name || "Unnamed"];
+        if (c.role) parts.push(`(${c.role})`);
+        if (c.notes) parts.push(`— ${c.notes.slice(0, 120)}`);
+        lines.push(`- ${parts.join(" ")}`);
+      });
+    }
+
+    if (locations.length > 0) {
+      lines.push(`\n### Locations`);
+      locations.slice(0, 10).forEach((l) => {
+        const desc = l.description ? `— ${l.description.slice(0, 120)}` : "";
+        lines.push(`- ${l.name || "Unnamed"} ${desc}`.trimEnd());
+      });
+    }
+
+    if (worldEntries.length > 0) {
+      lines.push(`\n### World`);
+      worldEntries.slice(0, 10).forEach((w) => {
+        const cat = w.category ? ` (${w.category})` : "";
+        const notes = w.notes ? `— ${w.notes.slice(0, 120)}` : "";
+        lines.push(`- ${w.title || "Untitled"}${cat} ${notes}`.trimEnd());
+      });
+    }
+
+    return lines.join("\n");
+  }, [activeTabId, docContents, tree, characters, locations, worldEntries]);
+
   useEffect(() => {
     docContentsRef.current = docContents;
   }, [docContents]);
@@ -289,6 +348,32 @@ export default function Home() {
     });
 
     setTree(buildSidebarTreeFromRAG(storedNodes));
+
+    // Rehydrate chat sessions
+    const storedSessions = await store.listChatSessions();
+    if (storedSessions.length > 0) {
+      const sessionObjects: ChatSession[] = storedSessions.map((s) => ({
+        id: s.id,
+        title: s.title,
+        preview: s.preview,
+        createdAt: s.createdAt,
+      }));
+      setChats(sessionObjects);
+      setActiveChatId(sessionObjects[0].id);
+
+      // Load messages for all sessions in parallel
+      const allMessages = await Promise.all(
+        storedSessions.map(async (s) => {
+          const msgs = await store.listChatMessages(s.id);
+          return { id: s.id, messages: msgs.map((m) => ({ role: m.role, content: m.content })) };
+        })
+      );
+      setChatMessages(() => {
+        const next: Record<string, ChatMessageEntry[]> = {};
+        allMessages.forEach(({ id, messages }) => { next[id] = messages; });
+        return next;
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -312,6 +397,7 @@ export default function Home() {
           const { fragmentId, contentHash, tokenCount } = data.result;
           const doc = docContentsRef.current[fragmentId];
           const treeNodes = treeRef.current;
+          setIndexingCount((c) => Math.max(0, c - 1));
           if (!doc) return;
           const sidebarNode = findNode(treeNodes, fragmentId);
           const parentId = findParentId(treeNodes, fragmentId);
@@ -334,6 +420,7 @@ export default function Home() {
         }
 
         if (data.type === "hash-batch-result") {
+          setIndexingCount((c) => Math.max(0, c - 1));
           for (const item of data.results) {
             const { fragmentId, contentHash, tokenCount } = item;
             const doc = docContentsRef.current[fragmentId];
@@ -374,6 +461,8 @@ export default function Home() {
 
   // ---- Persistence + worker ----
   const [storeReady, setStoreReady] = useState(false);
+  const [indexingCount, setIndexingCount] = useState(0);
+  const indexing = indexingCount > 0;
   const storeRef = useRef<RAGStore | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const docContentsRef = useRef(docContents);
@@ -518,6 +607,7 @@ export default function Home() {
     });
     const worker = workerRef.current;
     if (worker) {
+      setIndexingCount((c) => c + 1);
       const request: RagWorkerRequest = {
         type: "hash",
         fragment: { fragmentId: activeTabId, content },
@@ -567,11 +657,13 @@ export default function Home() {
 
   const handleNewChat = useCallback(() => {
     const id = generateId();
-    const session: ChatSession = { id, title: "New Chat", createdAt: Date.now(), preview: "" };
+    const now = Date.now();
+    const session: ChatSession = { id, title: "New Chat", createdAt: now, preview: "" };
     setChats((prev) => [session, ...prev]);
     setChatMessages((prev) => ({ ...prev, [id]: [] }));
     setActiveChatId(id);
     setBottomPanelOpen(true);
+    void storeRef.current?.putChatSession({ id, title: "New Chat", preview: "", createdAt: now, updatedAt: now });
   }, []);
 
   const handleSelectChat = useCallback((id: string) => {
@@ -580,6 +672,7 @@ export default function Home() {
   }, []);
 
   const handleDeleteChat = useCallback((id: string) => {
+    void storeRef.current?.deleteChatSession(id);
     setChats((prev) => prev.filter((c) => c.id !== id));
     setChatMessages((prev) => { const next = { ...prev }; delete next[id]; return next; });
     if (activeChatId === id) {
@@ -589,9 +682,11 @@ export default function Home() {
           setActiveChatId(remaining[0].id);
         } else {
           const newId = generateId();
-          const session: ChatSession = { id: newId, title: "New Chat", createdAt: Date.now(), preview: "" };
+          const now = Date.now();
+          const session: ChatSession = { id: newId, title: "New Chat", createdAt: now, preview: "" };
           setChatMessages((p) => ({ ...p, [newId]: [] }));
           setActiveChatId(newId);
+          void storeRef.current?.putChatSession({ id: newId, title: "New Chat", preview: "", createdAt: now, updatedAt: now });
           return [session];
         }
         return remaining;
@@ -602,15 +697,26 @@ export default function Home() {
   const handleChatMessagesUpdate = useCallback((chatId: string, messages: ChatMessageEntry[]) => {
     setChatMessages((prev) => ({ ...prev, [chatId]: messages }));
     const firstUser = messages.find((m) => m.role === "user");
+    const now = Date.now();
+    const title = firstUser
+      ? firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? "…" : "")
+      : "New Chat";
+    const preview = firstUser ? firstUser.content.slice(0, 60) : "";
     if (firstUser) {
       setChats((prev) =>
         prev.map((c) =>
-          c.id === chatId
-            ? { ...c, title: firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? "…" : ""), preview: firstUser.content.slice(0, 60) }
-            : c
+          c.id === chatId ? { ...c, title, preview } : c
         )
       );
     }
+    // Persist messages and update session header in DB
+    void storeRef.current?.putChatMessages(chatId, messages);
+    void storeRef.current?.listChatSessions().then((sessions) => {
+      const existing = sessions.find((s) => s.id === chatId);
+      if (existing) {
+        void storeRef.current?.putChatSession({ ...existing, title, preview, updatedAt: now });
+      }
+    });
   }, []);
 
   /* ============ Character handlers ============ */
@@ -858,6 +964,7 @@ export default function Home() {
                     chatId={activeChatId}
                     model={systemStatus.model}
                     mode={systemStatus.mode}
+                    context={chatContext}
                     initialMessages={activeChatMessages}
                     onMessagesChange={(msgs) => handleChatMessagesUpdate(activeChatId, msgs)}
                   />
@@ -873,6 +980,7 @@ export default function Home() {
         model={systemStatus.model}
         mode={systemStatus.mode}
         ollamaReady={systemStatus.ollamaReady}
+        indexing={indexing}
         onToggleChat={() => setBottomPanelOpen(!bottomPanelOpen)}
         bottomPanelOpen={bottomPanelOpen}
       />

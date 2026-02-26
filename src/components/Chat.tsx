@@ -28,6 +28,8 @@ interface ChatProps {
   model: string;
   mode: string;
   chatId?: string;
+  /** Manuscript context injected into the system prompt. Built from active doc + world data. */
+  context?: string;
   initialMessages?: { role: "user" | "assistant"; content: string }[];
   onMessagesChange?: (messages: { role: "user" | "assistant"; content: string }[]) => void;
 }
@@ -219,7 +221,7 @@ function AssistantMessage({
    Chat component
    ================================================================ */
 
-export function Chat({ model, mode, chatId, initialMessages, onMessagesChange }: ChatProps) {
+export function Chat({ model, mode, chatId, context, initialMessages, onMessagesChange }: ChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (initialMessages && initialMessages.length > 0) {
       return initialMessages.map((m) => ({ role: m.role, content: m.content }));
@@ -348,8 +350,12 @@ export function Chat({ model, mode, chatId, initialMessages, onMessagesChange }:
     setStreamingContent("");
 
     try {
+      const systemContent = context
+        ? `${SYSTEM_PROMPT}\n\n## ACTIVE MANUSCRIPT CONTEXT\n\n${context}\n---\nUse this context to give specific, grounded responses about the author's actual work. Always prefer this over general advice.`
+        : SYSTEM_PROMPT;
+
       const apiMessages = [
-        { role: "system" as const, content: SYSTEM_PROMPT },
+        { role: "system" as const, content: systemContent },
         ...newMessages,
       ];
 

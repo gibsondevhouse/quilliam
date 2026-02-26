@@ -9,6 +9,8 @@ import {
   materializeEmbedding,
   materializeNode,
   serializeNode,
+  type PersistedChatMessage,
+  type PersistedChatSession,
   type PersistedRAGNode,
   type RAGStore,
   type StoredEmbedding,
@@ -19,7 +21,7 @@ interface RAGDBSchema extends DBSchema {
   nodes: {
     key: string;
     value: PersistedRAGNode;
-    indexes: { by_parent: string | null };
+    indexes: { by_parent: string };
   };
   embeddings: {
     key: string;
@@ -33,6 +35,16 @@ interface RAGDBSchema extends DBSchema {
     key: string;
     value: StoredMetadata;
   };
+  chatSessions: {
+    key: string;
+    value: PersistedChatSession;
+    indexes: { by_updated: number };
+  };
+  chatMessages: {
+    key: string;
+    value: PersistedChatMessage;
+    indexes: { by_session: string };
+  };
 }
 
 interface PersistedEmbedding extends StoredEmbedding {
@@ -41,7 +53,7 @@ interface PersistedEmbedding extends StoredEmbedding {
 }
 
 const DB_NAME = "quilliam-rag";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<RAGDBSchema>> | null = null;
 
@@ -62,6 +74,16 @@ function getDb(): Promise<IDBPDatabase<RAGDBSchema>> {
 
         if (!database.objectStoreNames.contains("metadata")) {
           database.createObjectStore("metadata", { keyPath: "key" });
+        }
+
+        if (!database.objectStoreNames.contains("chatSessions")) {
+          const sessions = database.createObjectStore("chatSessions", { keyPath: "id" });
+          sessions.createIndex("by_updated", "updatedAt");
+        }
+
+        if (!database.objectStoreNames.contains("chatMessages")) {
+          const msgs = database.createObjectStore("chatMessages", { keyPath: "key" });
+          msgs.createIndex("by_session", "sessionId");
         }
       },
     });
@@ -145,6 +167,68 @@ export async function getMetadata<T = unknown>(key: string): Promise<T | null> {
   return record ? (record.value as T) : null;
 }
 
+/* ==============================================================
+   Chat persistence
+   ============================================================== */
+
+export async function putChatSession(session: PersistedChatSession): Promise<void> {
+  const db = await getDb();
+  await db.put("chatSessions", session);
+}
+
+export async function listChatSessions(): Promise<PersistedChatSession[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("chatSessions", "by_updated");
+  return all.reverse(); // most-recently updated first
+}
+
+export async function deleteChatSession(id: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(["chatSessions", "chatMessages"], "readwrite");
+  await tx.objectStore("chatSessions").delete(id);
+  const index = tx.objectStore("chatMessages").index("by_session");
+  let cursor = await index.openCursor(id);
+  while (cursor) {
+    await cursor.delete();
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+}
+
+export async function putChatMessages(
+  sessionId: string,
+  messages: { role: "user" | "assistant"; content: string }[]
+): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction("chatMessages", "readwrite");
+  // clear existing msgs for this session
+  const index = tx.store.index("by_session");
+  let cursor = await index.openCursor(sessionId);
+  while (cursor) {
+    await cursor.delete();
+    cursor = await cursor.continue();
+  }
+  // write fresh
+  for (let i = 0; i < messages.length; i++) {
+    const msg: PersistedChatMessage = {
+      key: `${sessionId}::${i}`,
+      sessionId,
+      index: i,
+      role: messages[i].role,
+      content: messages[i].content,
+      createdAt: Date.now(),
+    };
+    await tx.store.put(msg);
+  }
+  await tx.done;
+}
+
+export async function listChatMessages(sessionId: string): Promise<PersistedChatMessage[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("chatMessages", "by_session", sessionId);
+  return all.sort((a, b) => a.index - b.index);
+}
+
 /**
  * Factory to obtain a RAGStore backed by IndexedDB.
  */
@@ -160,5 +244,10 @@ export async function createRAGStore(): Promise<RAGStore> {
     getEmbeddingByHash,
     setMetadata,
     getMetadata,
+    putChatSession,
+    listChatSessions,
+    deleteChatSession,
+    putChatMessages,
+    listChatMessages,
   };
 }

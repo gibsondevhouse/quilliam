@@ -1166,6 +1166,23 @@ html, body {
   background: var(--red);
 }
 
+@keyframes indexing-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.status-dot.indexing-pulse {
+  background: #e5c07b;
+  animation: indexing-pulse 1.2s ease-in-out infinite;
+}
+
+.status-bar-item.indexing {
+  color: #e5c07b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .status-bar-btn {
   background: none;
   border: none;
