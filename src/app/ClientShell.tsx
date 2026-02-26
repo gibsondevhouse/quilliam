@@ -9,8 +9,8 @@ import {
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { SystemStatus, type StartupStatus } from "@/components/SystemStatus";
-import { ActivityBar } from "@/components/Editor/ActivityBar";
-import { Sidebar, type SidebarNode, type SidebarTab } from "@/components/Editor/Sidebar";
+import { AppNav } from "@/components/AppNav";
+import type { SidebarNode } from "@/components/Editor/Sidebar";
 import { SystemContext } from "@/lib/context/SystemContext";
 import { RAGContext } from "@/lib/context/RAGContext";
 import type { NodeType, RAGNode } from "@/lib/rag/hierarchy";
@@ -169,8 +169,6 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const [systemStatus, setSystemStatus] = useState<StartupStatus | null>(null);
-  const [activePanel, setActivePanel] = useState<SidebarTab>("manuscripts");
-  const [sidebarVisible, setSidebarVisible] = useState(true);
   const [tree, setTree] = useState<SidebarNode[]>([]);
   const [ragNodes, setRagNodes] = useState<Record<string, RAGNode>>({});
   const [storeReady, setStoreReady] = useState(false);
@@ -184,12 +182,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
   const handleReady = useCallback((status: StartupStatus) => {
     setSystemStatus(status);
-    // Persist last-used library so we can redirect on next load
-    const lastLibId = localStorage.getItem("quilliam_last_library");
-    if (lastLibId) {
-      router.replace(`/library/${lastLibId}/dashboard`);
-    }
-  }, [router]);
+  }, []);
 
   /* ---- Store initialization (runs once after system ready) ---- */
   useEffect(() => {
@@ -210,16 +203,6 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     void setup();
     return () => { cancelled = true; };
   }, []);
-
-  /* ---- Handle navigator panel toggle ---- */
-  const handlePanelChange = useCallback((panel: SidebarTab) => {
-    if (panel === activePanel && sidebarVisible) {
-      setSidebarVisible(false);
-    } else {
-      setActivePanel(panel);
-      setSidebarVisible(true);
-    }
-  }, [activePanel, sidebarVisible]);
 
   /* ---- Tree operations (exposed via RAGContext) ---- */
 
@@ -349,48 +332,19 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
       <RAGContext.Provider value={{ storeRef, storeReady, tree, ragNodes, addNode, renameNode, deleteNode, toggleExpand, moveNode, putRagNode }}>
         <div className="ide-root">
           <div className="ide-body">
-            <ActivityBar
-              activePanel={sidebarVisible ? activePanel : null}
-              onPanelChange={handlePanelChange}
+            <AppNav
+              tree={tree}
+              ragNodes={ragNodes}
+              activeNodeId={activeLibraryId}
+              onNodeSelect={handleNodeSelect}
+              onAddChild={handleAddChild}
+              onRenameNode={renameNode}
+              onDeleteNode={deleteNode}
+              onToggleExpand={toggleExpand}
+              onMoveNode={moveNode}
+              dirtyIds={dirtyIds}
+              pathname={pathname}
             />
-            {sidebarVisible && (
-              <Sidebar
-                activePanel={activePanel}
-                tree={tree}
-                activeNodeId={activeLibraryId}
-                onNodeSelect={handleNodeSelect}
-                onAddChild={handleAddChild}
-                onRenameNode={renameNode}
-                onDeleteNode={deleteNode}
-                onToggleExpand={toggleExpand}
-                onMoveNode={moveNode}
-                dirtyIds={dirtyIds}
-                /* Legacy per-panel props — no longer rendered in global sidebar */
-                chats={[]}
-                activeChatId={null}
-                onSelectChat={() => {}}
-                onNewChat={() => {}}
-                onDeleteChat={() => {}}
-                characters={[]}
-                activeCharacterId={null}
-                onSelectCharacter={() => {}}
-                onAddCharacter={() => {}}
-                onDeleteCharacter={() => {}}
-                locations={[]}
-                activeLocationId={null}
-                onSelectLocation={() => {}}
-                onAddLocation={() => {}}
-                onDeleteLocation={() => {}}
-                worldEntries={[]}
-                activeWorldEntryId={null}
-                onSelectWorldEntry={() => {}}
-                onAddWorldEntry={() => {}}
-                onDeleteWorldEntry={() => {}}
-                outlineHeadings={[]}
-                outlineDocumentTitle={null}
-                onOutlineJumpTo={() => {}}
-              />
-            )}
             <div className="ide-main">
               {children}
             </div>
