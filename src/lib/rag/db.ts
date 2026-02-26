@@ -11,6 +11,10 @@ import {
   serializeNode,
   type PersistedChatMessage,
   type PersistedChatSession,
+  type PersistedCharacter,
+  type PersistedLocation,
+  type PersistedWorldEntry,
+  type PersistedStory,
   type PersistedRAGNode,
   type RAGStore,
   type StoredEmbedding,
@@ -38,12 +42,32 @@ interface RAGDBSchema extends DBSchema {
   chatSessions: {
     key: string;
     value: PersistedChatSession;
-    indexes: { by_updated: number };
+    indexes: { by_updated: number; by_library: string };
   };
   chatMessages: {
     key: string;
     value: PersistedChatMessage;
     indexes: { by_session: string };
+  };
+  characters: {
+    key: string;
+    value: PersistedCharacter;
+    indexes: { by_library: string };
+  };
+  locations: {
+    key: string;
+    value: PersistedLocation;
+    indexes: { by_library: string };
+  };
+  worldEntries: {
+    key: string;
+    value: PersistedWorldEntry;
+    indexes: { by_library: string };
+  };
+  stories: {
+    key: string;
+    value: PersistedStory;
+    indexes: { by_library: string };
   };
 }
 
@@ -53,14 +77,15 @@ interface PersistedEmbedding extends StoredEmbedding {
 }
 
 const DB_NAME = "quilliam-rag";
-const DB_VERSION = 2;
+const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBPDatabase<RAGDBSchema>> | null = null;
 
 function getDb(): Promise<IDBPDatabase<RAGDBSchema>> {
   if (!dbPromise) {
     dbPromise = openDB<RAGDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(database) {
+      upgrade(database, oldVersion, _newVersion, transaction) {
+        // --- v1/v2 stores (always ensure they exist) ---
         if (!database.objectStoreNames.contains("nodes")) {
           const nodes = database.createObjectStore("nodes", { keyPath: "id" });
           nodes.createIndex("by_parent", "parentId");
@@ -79,11 +104,44 @@ function getDb(): Promise<IDBPDatabase<RAGDBSchema>> {
         if (!database.objectStoreNames.contains("chatSessions")) {
           const sessions = database.createObjectStore("chatSessions", { keyPath: "id" });
           sessions.createIndex("by_updated", "updatedAt");
+          sessions.createIndex("by_library", "libraryId");
+        } else if (oldVersion < 3) {
+          // Upgrading from v2 → add the by_library index to the existing store
+          const sessionsStore = transaction.objectStore("chatSessions");
+          if (!sessionsStore.indexNames.contains("by_library")) {
+            sessionsStore.createIndex("by_library", "libraryId");
+          }
         }
 
         if (!database.objectStoreNames.contains("chatMessages")) {
           const msgs = database.createObjectStore("chatMessages", { keyPath: "key" });
           msgs.createIndex("by_session", "sessionId");
+        }
+
+        // --- v3 new stores ---
+        if (oldVersion < 3) {
+          if (!database.objectStoreNames.contains("characters")) {
+            const chars = database.createObjectStore("characters", { keyPath: "id" });
+            chars.createIndex("by_library", "libraryId");
+          }
+
+          if (!database.objectStoreNames.contains("locations")) {
+            const locs = database.createObjectStore("locations", { keyPath: "id" });
+            locs.createIndex("by_library", "libraryId");
+          }
+
+          if (!database.objectStoreNames.contains("worldEntries")) {
+            const world = database.createObjectStore("worldEntries", { keyPath: "id" });
+            world.createIndex("by_library", "libraryId");
+          }
+        }
+
+        // --- v4 new stores ---
+        if (oldVersion < 4) {
+          if (!database.objectStoreNames.contains("stories")) {
+            const stories = database.createObjectStore("stories", { keyPath: "id" });
+            stories.createIndex("by_library", "libraryId");
+          }
         }
       },
     });
@@ -229,6 +287,87 @@ export async function listChatMessages(sessionId: string): Promise<PersistedChat
   return all.sort((a, b) => a.index - b.index);
 }
 
+export async function listChatSessionsByLibrary(libraryId: string): Promise<PersistedChatSession[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("chatSessions", "by_library", libraryId);
+  return all.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/* ==============================================================
+   Character / Location / WorldEntry persistence
+   ============================================================== */
+
+export async function putCharacter(entry: PersistedCharacter): Promise<void> {
+  const db = await getDb();
+  await db.put("characters", entry);
+}
+
+export async function getCharactersByLibrary(libraryId: string): Promise<PersistedCharacter[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("characters", "by_library", libraryId);
+}
+
+export async function deleteCharacter(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("characters", id);
+}
+
+export async function putLocation(entry: PersistedLocation): Promise<void> {
+  const db = await getDb();
+  await db.put("locations", entry);
+}
+
+export async function getLocationsByLibrary(libraryId: string): Promise<PersistedLocation[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("locations", "by_library", libraryId);
+}
+
+export async function deleteLocation(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("locations", id);
+}
+
+export async function putWorldEntry(entry: PersistedWorldEntry): Promise<void> {
+  const db = await getDb();
+  await db.put("worldEntries", entry);
+}
+
+export async function getWorldEntriesByLibrary(libraryId: string): Promise<PersistedWorldEntry[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("worldEntries", "by_library", libraryId);
+}
+
+export async function deleteWorldEntry(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("worldEntries", id);
+}
+
+/* ==============================================================
+   Story persistence
+   ============================================================== */
+
+export async function putStory(entry: PersistedStory): Promise<void> {
+  const db = await getDb();
+  await db.put("stories", entry);
+}
+
+export async function getStoriesByLibrary(libraryId: string): Promise<PersistedStory[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("stories", "by_library", libraryId);
+  return all.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export async function getStory(id: string): Promise<PersistedStory | null> {
+  const db = await getDb();
+  const record = await db.get("stories", id);
+  return record ?? null;
+}
+
+export async function deleteStory(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("stories", id);
+}
+
 /**
  * Factory to obtain a RAGStore backed by IndexedDB.
  */
@@ -246,8 +385,22 @@ export async function createRAGStore(): Promise<RAGStore> {
     getMetadata,
     putChatSession,
     listChatSessions,
+    listChatSessionsByLibrary,
     deleteChatSession,
     putChatMessages,
     listChatMessages,
+    putCharacter,
+    getCharactersByLibrary,
+    deleteCharacter,
+    putLocation,
+    getLocationsByLibrary,
+    deleteLocation,
+    putWorldEntry,
+    getWorldEntriesByLibrary,
+    deleteWorldEntry,
+    putStory,
+    getStoriesByLibrary,
+    getStory,
+    deleteStory,
   };
 }

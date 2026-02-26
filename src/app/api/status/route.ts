@@ -5,10 +5,14 @@ import { NextResponse } from "next/server";
 export interface StartupStatus {
   ram: number;
   model: string;
+  /** Dedicated Ollama model used for vector embeddings (e.g. nomic-embed-text). */
+  embedModel: string;
   contextWindow: number;
   mode: string;
   ollamaReady: boolean;
   modelAvailable: boolean;
+  /** Whether the dedicated embedding model is pulled and available. */
+  embedModelAvailable: boolean;
   error?: string;
 }
 
@@ -17,18 +21,24 @@ export async function GET() {
     const systemInfo = getSystemInfo();
     const ollamaReady = await checkOllamaHealth();
     let modelAvailable = false;
+    let embedModelAvailable = false;
 
     if (ollamaReady) {
-      modelAvailable = await isModelAvailable(systemInfo.model);
+      [modelAvailable, embedModelAvailable] = await Promise.all([
+        isModelAvailable(systemInfo.model),
+        isModelAvailable(systemInfo.embedModel),
+      ]);
     }
 
     const status: StartupStatus = {
       ram: systemInfo.ramGB,
       model: systemInfo.model,
+      embedModel: systemInfo.embedModel,
       contextWindow: systemInfo.contextWindow,
       mode: systemInfo.mode,
       ollamaReady,
       modelAvailable,
+      embedModelAvailable,
     };
 
     if (!ollamaReady) {
@@ -36,6 +46,8 @@ export async function GET() {
         "Ollama is not running. Start it with: ollama serve (in a separate terminal)";
     } else if (!modelAvailable) {
       status.error = `Model ${systemInfo.model} not found. Pull it with: ollama pull ${systemInfo.model}`;
+    } else if (!embedModelAvailable) {
+      status.error = `Embedding model not found. Pull it with: ollama pull ${systemInfo.embedModel}`;
     }
 
     return NextResponse.json(status);

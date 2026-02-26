@@ -5,10 +5,14 @@ import { useEffect, useState } from "react";
 export interface StartupStatus {
   ram: number;
   model: string;
+  /** Dedicated Ollama model used for vector embeddings (e.g. nomic-embed-text). */
+  embedModel: string;
   contextWindow: number;
   mode: string;
   ollamaReady: boolean;
   modelAvailable: boolean;
+  /** Whether the dedicated embedding model is pulled and available. */
+  embedModelAvailable: boolean;
   error?: string;
 }
 
@@ -28,7 +32,7 @@ export function SystemStatus({ onReady }: SystemStatusProps) {
         const data = await response.json();
         setStatus(data);
 
-        // If system is ready, auto-transition to editor
+        // If system is ready, auto-transition to editor (embed model is optional — warn but don't block)
         if (data.ollamaReady && data.modelAvailable && onReady) {
           setTimeout(() => {
             setFadeOut(true);
@@ -40,10 +44,12 @@ export function SystemStatus({ onReady }: SystemStatusProps) {
         setStatus({
           ram: 0,
           model: "unknown",
+          embedModel: "nomic-embed-text",
           contextWindow: 0,
           mode: "unknown",
           ollamaReady: false,
           modelAvailable: false,
+          embedModelAvailable: false,
           error: "Failed to fetch system status. Check the console for details.",
         });
       } finally {
@@ -103,6 +109,14 @@ export function SystemStatus({ onReady }: SystemStatusProps) {
               </span>
             </div>
             <div className="startup-check-row">
+              <span className="startup-check-label">Embeddings</span>
+              <span
+                className={`startup-check-badge ${status.embedModelAvailable ? "ok" : "warn"}`}
+              >
+                {status.embedModelAvailable ? status.embedModel : "Missing"}
+              </span>
+            </div>
+            <div className="startup-check-row">
               <span className="startup-check-label">Mode</span>
               <span className="startup-check-badge ok">{status.mode}</span>
             </div>
@@ -131,6 +145,11 @@ export function SystemStatus({ onReady }: SystemStatusProps) {
               {status.ollamaReady && !status.modelAvailable && (
                 <p>
                   Run <code>ollama pull {status.model}</code> to download the model.
+                </p>
+              )}
+              {status.ollamaReady && status.modelAvailable && !status.embedModelAvailable && (
+                <p>
+                  Run <code>ollama pull {status.embedModel}</code> to enable semantic search.
                 </p>
               )}
               <button

@@ -1,0 +1,566 @@
+/* ============================================================
+   STARTUP SCREEN
+   ============================================================ */
+
+.startup-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  transition: opacity 0.6s ease;
+}
+
+.startup-screen.fade-out {
+  opacity: 0;
+}
+
+.startup-content {
+  text-align: center;
+}
+
+.startup-spinner {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.startup-text {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.startup-error {
+  color: var(--red);
+  font-size: 14px;
+}
+
+.startup-card {
+  max-width: 400px;
+  width: 100%;
+  padding: 0 20px;
+}
+
+.startup-card-inner {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px 32px;
+  text-align: center;
+}
+
+.startup-brand {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+
+.startup-tagline {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 28px;
+}
+
+.startup-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.startup-check-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.startup-check-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.startup-check-badge {
+  font-size: 12px;
+  font-family: var(--font-mono), monospace;
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+.startup-check-badge.ok {
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--green);
+}
+
+.startup-check-badge.fail {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--red);
+}
+
+.startup-check-badge.warn {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--yellow);
+}
+
+.startup-error-box {
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.startup-error-box p {
+  font-size: 12px;
+  color: var(--red);
+  font-family: var(--font-mono), monospace;
+}
+
+.startup-ready {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--green);
+}
+
+.startup-ready-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 1.5s ease infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.startup-blocked {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.startup-blocked code {
+  background: var(--bg-surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.startup-blocked p {
+  margin-bottom: 12px;
+}
+
+.startup-retry-btn {
+  background: var(--accent-dim);
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.startup-retry-btn:hover {
+  background: var(--accent);
+}
+
+/* ============================================================
+   IDE LAYOUT
+   ============================================================ */
+
+.ide-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary);
+}
+
+.ide-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.ide-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ide-editor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 80px;
+  overflow: hidden;
+}
+
+/* ============================================================
+   ACTIVITY BAR (far left icon strip)
+   ============================================================ */
+
+.activity-bar {
+  width: var(--activity-bar-width);
+  min-width: var(--activity-bar-width);
+  background: var(--bg-activity);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  user-select: none;
+}
+
+.activity-bar-top {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.activity-bar-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding-bottom: 4px;
+}
+
+.activity-bar-btn {
+  position: relative;
+  width: 100%;
+  height: 48px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.activity-bar-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  background: transparent;
+  border-radius: 0 2px 2px 0;
+  transition: background 0.15s;
+}
+
+.activity-bar-btn:hover {
+  color: var(--text-primary);
+}
+
+.activity-bar-btn.active {
+  color: var(--text-primary);
+}
+
+.activity-bar-btn.active::before {
+  background: var(--accent);
+}
+
+/* ============================================================
+   TAB BAR (editor tabs)
+   ============================================================ */
+
+.tab-bar {
+  height: var(--tab-bar-height);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.tab-bar-scroll {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-bar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.1s, background 0.1s;
+  min-width: 0;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.tab-item:hover {
+  color: var(--text-primary);
+}
+
+.tab-item.active {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--bg-primary);
+}
+
+.tab-kind-icon {
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.tab-item.active .tab-kind-icon {
+  color: var(--accent);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  color: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.1s, background 0.1s;
+}
+
+.tab-item:hover .tab-close {
+  color: var(--text-muted);
+}
+
+.tab-close:hover {
+  color: var(--text-primary) !important;
+  background: var(--bg-hover);
+}
+
+/* ============================================================
+   RIGHT CHAT PANEL (Quilliam AI — Copilot-style)
+   ============================================================ */
+
+.ide-chat-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 260px;
+  max-width: 720px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-secondary);
+  min-height: 0;
+  transition: width 0s; /* width controlled by inline style + drag */
+}
+
+/* Drag-to-resize handle — 6px strip on the left edge */
+.chat-panel-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 20;
+  border-left: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.chat-panel-resize-handle:hover,
+.chat-panel-resize-handle.dragging {
+  border-left-color: var(--accent);
+}
+
+/* Header */
+.chat-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 10px 0 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.chat-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+.chat-panel-title-accent {
+  color: var(--accent);
+}
+
+.chat-panel-actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.chat-panel-icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 15px;
+  transition: color 0.1s, background 0.1s;
+}
+
+.chat-panel-icon-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.chat-panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============================================================
+   IDE WELCOME SCREEN
+   ============================================================ */
+
+.ide-welcome {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.ide-welcome-inner {
+  text-align: center;
+  max-width: 400px;
+}
+
+.ide-welcome-brand {
+  width: 56px;
+  height: 56px;
+  background: var(--accent);
+  color: white;
+  font-size: 28px;
+  font-weight: 700;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.ide-welcome-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  margin-bottom: 4px;
+}
+
+.ide-welcome-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 28px;
+}
+
+.ide-welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.ide-welcome-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: 1px solid transparent;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  text-align: left;
+  width: 100%;
+}
+
+.ide-welcome-action:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.ide-welcome-key {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 80px;
+}
+
+.ide-welcome-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+

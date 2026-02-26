@@ -15,7 +15,9 @@ export type NodeType =
   | "book"
   | "part"
   | "chapter"
-  | "scene";
+  | "scene"
+  /** Internal sub-fragment produced by chunking oversized scenes. Never shown in the UI tree. */
+  | "fragment";
 
 export const NODE_TYPE_HIERARCHY: Record<NodeType, number> = {
   library: 0,
@@ -23,6 +25,7 @@ export const NODE_TYPE_HIERARCHY: Record<NodeType, number> = {
   part: 2,
   chapter: 3,
   scene: 4,
+  fragment: 5,
 };
 
 export const VALID_CHILDREN: Record<NodeType, NodeType[]> = {
@@ -30,7 +33,8 @@ export const VALID_CHILDREN: Record<NodeType, NodeType[]> = {
   book: ["part", "chapter"],
   part: ["chapter"],
   chapter: ["scene"],
-  scene: [],
+  scene: ["fragment"],
+  fragment: [],
 };
 
 /** Node types that are directly editable as documents */
@@ -65,6 +69,10 @@ export interface RAGNode {
   // Fragment-specific
   tokenCount?: number; // Approximate token count (~500 target for fragments)
   semanticHash?: string; // Hash of semantic meaning (for deduplication)
+  /** Set on "fragment" nodes produced by chunking an oversized scene. 0-based. */
+  chunkIndex?: number;
+  /** Total number of chunks the parent scene was split into. */
+  chunkTotal?: number;
 }
 
 /**

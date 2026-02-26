@@ -6,11 +6,13 @@ interface StatusBarProps {
   ollamaReady: boolean;
   /** True while the RAG worker is processing document hashes */
   indexing?: boolean;
+  /** Whether the dedicated embedding model is available in Ollama */
+  embeddingReady?: boolean;
   onToggleChat?: () => void;
   bottomPanelOpen?: boolean;
 }
 
-export function StatusBar({ model, mode, ollamaReady, indexing, onToggleChat, bottomPanelOpen }: StatusBarProps) {
+export function StatusBar({ model, mode, ollamaReady, indexing, embeddingReady, onToggleChat, bottomPanelOpen }: StatusBarProps) {
   return (
     <footer className="status-bar">
       <div className="status-bar-left">
@@ -27,6 +29,18 @@ export function StatusBar({ model, mode, ollamaReady, indexing, onToggleChat, bo
             <span className="status-bar-separator">·</span>
             <span className="status-bar-item indexing" title="Indexing document fragments">
               <span className="status-dot indexing-pulse" />Indexing
+            </span>
+          </>
+        )}
+        {embeddingReady === false && (
+          <>
+            <span className="status-bar-separator">·</span>
+            <span
+              className="status-bar-item"
+              style={{ color: "var(--status-warn, #f5a623)" }}
+              title="Embedding model not available — run: ollama pull nomic-embed-text"
+            >
+              ⚠ Embeddings offline
             </span>
           </>
         )}

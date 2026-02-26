@@ -18,7 +18,8 @@ export async function POST(request: NextRequest) {
     }
 
     const systemInfo = getSystemInfo();
-    const model = typeof body.model === "string" ? body.model : systemInfo.model;
+    // Default to the dedicated embedding model, not the generative model
+    const model = typeof body.model === "string" ? body.model : systemInfo.embedModel;
 
     const response = await fetch(`${OLLAMA_BASE}/api/embeddings`, {
       method: "POST",

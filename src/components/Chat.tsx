@@ -30,6 +30,13 @@ interface ChatProps {
   chatId?: string;
   /** Manuscript context injected into the system prompt. Built from active doc + world data. */
   context?: string;
+  /**
+   * Optional async callback invoked with the user's query before each send.
+   * Should return a markdown string of semantically relevant passages to append
+   * after the static context block (keeps Ollama prefix-cache hits high).
+   * Return "" to signal no additional context.
+   */
+  onBuildContext?: (query: string) => Promise<string>;
   initialMessages?: { role: "user" | "assistant"; content: string }[];
   onMessagesChange?: (messages: { role: "user" | "assistant"; content: string }[]) => void;
 }
@@ -221,7 +228,7 @@ function AssistantMessage({
    Chat component
    ================================================================ */
 
-export function Chat({ model, mode, chatId, context, initialMessages, onMessagesChange }: ChatProps) {
+export function Chat({ model, mode, chatId, context, onBuildContext, initialMessages, onMessagesChange }: ChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (initialMessages && initialMessages.length > 0) {
       return initialMessages.map((m) => ({ role: m.role, content: m.content }));
@@ -350,9 +357,18 @@ export function Chat({ model, mode, chatId, context, initialMessages, onMessages
     setStreamingContent("");
 
     try {
-      const systemContent = context
+      // Build base context block (static — stays prefix-cached by Ollama)
+      let systemContent = context
         ? `${SYSTEM_PROMPT}\n\n## ACTIVE MANUSCRIPT CONTEXT\n\n${context}\n---\nUse this context to give specific, grounded responses about the author's actual work. Always prefer this over general advice.`
         : SYSTEM_PROMPT;
+
+      // Append dynamic RAG passages at the end (after static prefix, so cache is preserved)
+      if (onBuildContext) {
+        const ragContext = await onBuildContext(trimmed);
+        if (ragContext) {
+          systemContent += `\n\n${ragContext}`;
+        }
+      }
 
       const apiMessages = [
         { role: "system" as const, content: systemContent },
@@ -418,7 +434,7 @@ export function Chat({ model, mode, chatId, context, initialMessages, onMessages
     } finally {
       setStreaming(false);
     }
-  }, [input, messages, streaming, initQuestionStates]);
+  }, [input, messages, streaming, context, onBuildContext, initQuestionStates]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

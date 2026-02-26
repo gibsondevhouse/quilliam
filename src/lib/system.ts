@@ -2,9 +2,18 @@ import os from "os";
 
 export type GemmaModel = "gemma3:1b" | "gemma3:4b" | "gemma3:12b" | "gemma3:27b";
 
+/**
+ * Dedicated embedding model — kept separate from the generative model.
+ * nomic-embed-text is a lightweight (274 M param) model that produces
+ * high-quality 768-dim vectors and runs fast on CPU+Metal.
+ */
+export const EMBED_MODEL = "nomic-embed-text";
+
 export interface SystemInfo {
   ramGB: number;
   model: GemmaModel;
+  /** Ollama model used exclusively for vector embeddings. */
+  embedModel: string;
   contextWindow: number;
   mode: string;
 }
@@ -46,6 +55,7 @@ export function selectModel(ramGB: number): SystemInfo {
   return {
     ramGB: Math.round(ramGB * 100) / 100,
     model,
+    embedModel: EMBED_MODEL,
     contextWindow,
     mode,
   };

@@ -36,11 +36,54 @@ export interface StoredMetadata {
 
 /**
  * Persisted chat session header (no messages — stored separately for fast listing).
+ * libraryId is required for all new sessions; legacy rows may have it undefined.
  */
 export interface PersistedChatSession {
   id: string;
+  libraryId?: string;
   title: string;
   preview: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Persisted character record, library-scoped. */
+export interface PersistedCharacter {
+  id: string;
+  libraryId: string;
+  name: string;
+  role: string;
+  notes: string;
+  updatedAt: number;
+}
+
+/** Persisted location record, library-scoped. */
+export interface PersistedLocation {
+  id: string;
+  libraryId: string;
+  name: string;
+  description: string;
+  updatedAt: number;
+}
+
+/** Persisted world-entry record, library-scoped. */
+export interface PersistedWorldEntry {
+  id: string;
+  libraryId: string;
+  title: string;
+  category: string;
+  notes: string;
+  updatedAt: number;
+}
+
+/** Persisted story (book/novel) record — library-scoped, contains chapters. */
+export interface PersistedStory {
+  id: string;
+  libraryId: string;
+  title: string;
+  synopsis: string;
+  genre: string;
+  status: "drafting" | "editing" | "archived";
   createdAt: number;
   updatedAt: number;
 }
@@ -75,9 +118,27 @@ export interface RAGStore {
   // Chat persistence
   putChatSession(session: PersistedChatSession): Promise<void>;
   listChatSessions(): Promise<PersistedChatSession[]>;
+  listChatSessionsByLibrary(libraryId: string): Promise<PersistedChatSession[]>;
   deleteChatSession(id: string): Promise<void>;
   putChatMessages(sessionId: string, messages: { role: "user" | "assistant"; content: string }[]): Promise<void>;
   listChatMessages(sessionId: string): Promise<PersistedChatMessage[]>;
+  // Characters
+  putCharacter(entry: PersistedCharacter): Promise<void>;
+  getCharactersByLibrary(libraryId: string): Promise<PersistedCharacter[]>;
+  deleteCharacter(id: string): Promise<void>;
+  // Locations
+  putLocation(entry: PersistedLocation): Promise<void>;
+  getLocationsByLibrary(libraryId: string): Promise<PersistedLocation[]>;
+  deleteLocation(id: string): Promise<void>;
+  // World entries
+  putWorldEntry(entry: PersistedWorldEntry): Promise<void>;
+  getWorldEntriesByLibrary(libraryId: string): Promise<PersistedWorldEntry[]>;
+  deleteWorldEntry(id: string): Promise<void>;
+  // Stories
+  putStory(entry: PersistedStory): Promise<void>;
+  getStoriesByLibrary(libraryId: string): Promise<PersistedStory[]>;
+  getStory(id: string): Promise<PersistedStory | null>;
+  deleteStory(id: string): Promise<void>;
 }
 
 /**

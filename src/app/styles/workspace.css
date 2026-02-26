@@ -1,0 +1,335 @@
+/* ============================================================
+   QUESTION WORKSPACE (Modular Architect cards)
+   ============================================================ */
+
+.qw-container {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.qw-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.qw-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+
+.qw-count {
+  font-size: 10px;
+  font-family: var(--font-mono), monospace;
+  background: var(--bg-surface);
+  color: var(--accent);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.qw-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qw-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: border-color 0.15s, opacity 0.3s;
+}
+
+.qw-card.answered {
+  border-color: rgba(74, 222, 128, 0.25);
+  background: rgba(74, 222, 128, 0.04);
+}
+
+.qw-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.qw-card-question {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.qw-card-dismiss {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+}
+
+.qw-card-dismiss:hover {
+  background: var(--bg-hover);
+  color: var(--red);
+}
+
+.qw-card-reply {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.qw-card-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  caret-color: var(--accent);
+  transition: border-color 0.15s;
+}
+
+.qw-card-input:focus {
+  border-color: var(--accent);
+}
+
+.qw-card-input::placeholder {
+  color: var(--text-muted);
+}
+
+.qw-card-send {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.qw-card-send:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+
+.qw-card-send:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.qw-card-answered {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.qw-answered-label {
+  color: var(--green);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.qw-answered-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   DETAIL EDITOR BADGES (Character, Location, World)
+   ============================================================ */
+
+.detail-editor-header {
+  margin-bottom: 20px;
+}
+
+.detail-editor-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(124, 111, 239, 0.15);
+  color: var(--accent);
+}
+
+.detail-editor-badge.location {
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--green);
+}
+
+.detail-editor-badge.world {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--yellow);
+}
+
+.detail-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.detail-field-grow {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-field-grow .detail-textarea {
+  flex: 1;
+}
+
+.detail-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* ============================================================
+   SIDEBAR: DRAG & DROP, INLINE RENAME, DIRTY DOTS
+   ============================================================ */
+
+.sidebar-tree-item.drag-over {
+  background: rgba(124, 111, 239, 0.12);
+  border-top: 2px solid var(--accent);
+}
+
+.sidebar-expand-btn {
+  background: none;
+  border: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.sidebar-expand-btn.placeholder {
+  visibility: hidden;
+}
+
+.sidebar-rename-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 1px 4px;
+  outline: none;
+  min-width: 0;
+}
+
+.sidebar-dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+/* ============================================================
+   TAB: DIRTY STATE
+   ============================================================ */
+
+.tab-dirty-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.tab-item.dirty .tab-close {
+  display: none;
+}
+
+.tab-item.dirty:hover .tab-close {
+  display: flex;
+}
+
+.tab-item.dirty:hover .tab-dirty-dot {
+  display: none;
+}
+
+/* ============================================================
+   OUTLINE PANEL
+   ============================================================ */
+
+.outline-doc-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+  border-radius: 3px;
+}
+
+.outline-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.outline-item-marker {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono), monospace;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.outline-item-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

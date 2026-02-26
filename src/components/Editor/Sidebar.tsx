@@ -3,6 +3,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { NodeType } from "@/lib/rag/hierarchy";
 import { VALID_CHILDREN } from "@/lib/rag/hierarchy";
+import type {
+  CharacterEntry,
+  LocationEntry,
+  WorldEntry,
+  ChatSession,
+} from "@/lib/types";
+
+/* Re-export entity types so existing imports from this module continue to work */
+export type { CharacterEntry, LocationEntry, WorldEntry, ChatSession };
 
 /* ================================================================
    Shared types
@@ -14,33 +23,6 @@ export interface SidebarNode {
   type: NodeType;
   children: SidebarNode[];
   isExpanded?: boolean;
-}
-
-export interface ChatSession {
-  id: string;
-  title: string;
-  createdAt: number;
-  preview: string;
-}
-
-export interface CharacterEntry {
-  id: string;
-  name: string;
-  role: string;
-  notes: string;
-}
-
-export interface LocationEntry {
-  id: string;
-  name: string;
-  description: string;
-}
-
-export interface WorldEntry {
-  id: string;
-  title: string;
-  category: string;
-  notes: string;
 }
 
 /** Outline heading parsed from document text */
@@ -59,6 +41,7 @@ const TYPE_LABELS: Record<NodeType, string> = {
   part: "Part",
   chapter: "Chapter",
   scene: "Scene",
+  fragment: "Fragment", // internal sub-fragment, not shown in tree
 };
 
 const TYPE_ICONS: Record<NodeType, string> = {
@@ -67,6 +50,7 @@ const TYPE_ICONS: Record<NodeType, string> = {
   part: "◆",
   chapter: "§",
   scene: "¶",
+  fragment: "·",
 };
 
 const PANEL_TITLES: Record<SidebarTab, string> = {
