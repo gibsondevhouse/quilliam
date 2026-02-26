@@ -17,6 +17,12 @@
 		CC000000000000000000008A /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000009A /* ChatView.swift */; };
 		CC000000000000000000009A /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000AA /* MessageBubbleView.swift */; };
 		CC00000000000000000000AA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000BA /* Assets.xcassets */; };
+		CC00000000000000000000BA /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000EA /* Document.swift */; };
+		CC00000000000000000000CA /* LineEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000FA /* LineEdit.swift */; };
+		CC00000000000000000000DA /* EditParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000001B /* EditParser.swift */; };
+		CC00000000000000000000EA /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000002B /* EditorView.swift */; };
+		CC00000000000000000000FA /* DiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000003B /* DiffView.swift */; };
+		CC000000000000000000001B /* DetailTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000004B /* DetailTabView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +39,12 @@
 		BB00000000000000000000BA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB00000000000000000000CA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BB00000000000000000000DA /* Quilliam.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Quilliam.entitlements; sourceTree = "<group>"; };
+		BB00000000000000000000EA /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
+		BB00000000000000000000FA /* LineEdit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineEdit.swift; sourceTree = "<group>"; };
+		BB000000000000000000001B /* EditParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditParser.swift; sourceTree = "<group>"; };
+		BB000000000000000000002B /* EditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorView.swift; sourceTree = "<group>"; };
+		BB000000000000000000003B /* DiffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffView.swift; sourceTree = "<group>"; };
+		BB000000000000000000004B /* DetailTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailTabView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,6 +94,8 @@
 			children = (
 				BB000000000000000000003A /* Message.swift */,
 				BB000000000000000000004A /* OllamaModels.swift */,
+				BB00000000000000000000EA /* Document.swift */,
+				BB00000000000000000000FA /* LineEdit.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -90,6 +104,7 @@
 			isa = PBXGroup;
 			children = (
 				BB000000000000000000005A /* OllamaService.swift */,
+				BB000000000000000000001B /* EditParser.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -109,6 +124,9 @@
 				BB000000000000000000008A /* SidebarView.swift */,
 				BB000000000000000000009A /* ChatView.swift */,
 				BB00000000000000000000AA /* MessageBubbleView.swift */,
+				BB000000000000000000002B /* EditorView.swift */,
+				BB000000000000000000003B /* DiffView.swift */,
+				BB000000000000000000004B /* DetailTabView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -191,6 +209,12 @@
 				CC000000000000000000007A /* SidebarView.swift in Sources */,
 				CC000000000000000000008A /* ChatView.swift in Sources */,
 				CC000000000000000000009A /* MessageBubbleView.swift in Sources */,
+				CC00000000000000000000BA /* Document.swift in Sources */,
+				CC00000000000000000000CA /* LineEdit.swift in Sources */,
+				CC00000000000000000000DA /* EditParser.swift in Sources */,
+				CC00000000000000000000EA /* EditorView.swift in Sources */,
+				CC00000000000000000000FA /* DiffView.swift in Sources */,
+				CC000000000000000000001B /* DetailTabView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

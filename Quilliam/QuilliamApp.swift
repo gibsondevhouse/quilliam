@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct QuilliamApp: App {
@@ -6,8 +7,9 @@ struct QuilliamApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: Document.self)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
-        .defaultSize(width: 960, height: 640)
+        .defaultSize(width: 1100, height: 700)
     }
 }
