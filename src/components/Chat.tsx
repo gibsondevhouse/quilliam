@@ -28,6 +28,7 @@ interface ChatProps {
   model: string;
   mode: string;
   chatId?: string;
+  variant?: "panel" | "landing";
   /** Manuscript context injected into the system prompt. Built from active doc + world data. */
   context?: string;
   /**
@@ -228,7 +229,7 @@ function AssistantMessage({
    Chat component
    ================================================================ */
 
-export function Chat({ model, mode, chatId, context, onBuildContext, initialMessages, onMessagesChange }: ChatProps) {
+export function Chat({ model, mode, chatId, variant = "panel", context, onBuildContext, initialMessages, onMessagesChange }: ChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (initialMessages && initialMessages.length > 0) {
       return initialMessages.map((m) => ({ role: m.role, content: m.content }));
@@ -454,7 +455,15 @@ export function Chat({ model, mode, chatId, context, onBuildContext, initialMess
   }
 
   return (
-    <div className="chat-container">
+    <div
+      className={[
+        "chat-container",
+        `chat-container--${variant}`,
+        hasMessages ? "has-messages" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {/* Messages area */}
       <div className="chat-messages">
         {!hasMessages && (

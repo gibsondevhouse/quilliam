@@ -269,3 +269,62 @@
   margin-top: 6px;
 }
 
+/* ============================================================
+   LANDING PAGE SHELL
+   ============================================================ */
+
+.home-chat-page {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+/* Landing variant base layout */
+.chat-container--landing {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+/* Empty / welcome state: stretch messages area to center content */
+.chat-container--landing .chat-messages:empty,
+.chat-container--landing .chat-messages:has(.chat-welcome) {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Floating pill input — pre-conversation */
+.chat-container--landing:not(.has-messages) .chat-input-bar {
+  position: absolute;
+  bottom: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, 90%);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  padding: 12px 16px;
+  z-index: 10;
+}
+
+/* Once messages exist: snap to standard panel layout */
+.chat-container--landing.has-messages .chat-messages {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.chat-container--landing.has-messages .chat-input-bar {
+  position: static;
+  width: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  transform: none;
+}
+
