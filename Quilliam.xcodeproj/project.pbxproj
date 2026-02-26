@@ -1,0 +1,384 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CC000000000000000000001A /* QuilliamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000002A /* QuilliamApp.swift */; };
+		CC000000000000000000002A /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000003A /* Message.swift */; };
+		CC000000000000000000003A /* OllamaModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000004A /* OllamaModels.swift */; };
+		CC000000000000000000004A /* OllamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000005A /* OllamaService.swift */; };
+		CC000000000000000000005A /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000006A /* ChatViewModel.swift */; };
+		CC000000000000000000006A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000007A /* ContentView.swift */; };
+		CC000000000000000000007A /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000008A /* SidebarView.swift */; };
+		CC000000000000000000008A /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000009A /* ChatView.swift */; };
+		CC000000000000000000009A /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000AA /* MessageBubbleView.swift */; };
+		CC00000000000000000000AA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000BA /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		BB000000000000000000001A /* Quilliam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quilliam.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB000000000000000000002A /* QuilliamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuilliamApp.swift; sourceTree = "<group>"; };
+		BB000000000000000000003A /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
+		BB000000000000000000004A /* OllamaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaModels.swift; sourceTree = "<group>"; };
+		BB000000000000000000005A /* OllamaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaService.swift; sourceTree = "<group>"; };
+		BB000000000000000000006A /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		BB000000000000000000007A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		BB000000000000000000008A /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		BB000000000000000000009A /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		BB00000000000000000000AA /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
+		BB00000000000000000000BA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BB00000000000000000000CA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BB00000000000000000000DA /* Quilliam.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Quilliam.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DD000000000000000000003A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA000000000000000000002A = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000004A /* Quilliam */,
+				AA000000000000000000003A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA000000000000000000003A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BB000000000000000000001A /* Quilliam.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000004A /* Quilliam */ = {
+			isa = PBXGroup;
+			children = (
+				BB000000000000000000002A /* QuilliamApp.swift */,
+				AA000000000000000000005A /* Models */,
+				AA000000000000000000006A /* Services */,
+				AA000000000000000000007A /* ViewModels */,
+				AA000000000000000000008A /* Views */,
+				BB00000000000000000000BA /* Assets.xcassets */,
+				BB00000000000000000000CA /* Info.plist */,
+				BB00000000000000000000DA /* Quilliam.entitlements */,
+			);
+			path = Quilliam;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000005A /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				BB000000000000000000003A /* Message.swift */,
+				BB000000000000000000004A /* OllamaModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000006A /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				BB000000000000000000005A /* OllamaService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000007A /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				BB000000000000000000006A /* ChatViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000008A /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				BB000000000000000000007A /* ContentView.swift */,
+				BB000000000000000000008A /* SidebarView.swift */,
+				BB000000000000000000009A /* ChatView.swift */,
+				BB00000000000000000000AA /* MessageBubbleView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		EE000000000000000000001A /* Quilliam */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = GG000000000000000000002A /* Build configuration list for PBXNativeTarget "Quilliam" */;
+			buildPhases = (
+				DD000000000000000000003A /* Frameworks */,
+				DD000000000000000000001A /* Sources */,
+				DD000000000000000000002A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Quilliam;
+			productName = Quilliam;
+			productReference = BB000000000000000000001A /* Quilliam.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA000000000000000000001A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					EE000000000000000000001A = {
+						CreatedOnToolsVersion = 16.2;
+					};
+				};
+			};
+			buildConfigurationList = GG000000000000000000001A /* Build configuration list for PBXProject "Quilliam" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA000000000000000000002A;
+			productRefGroup = AA000000000000000000003A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				EE000000000000000000001A /* Quilliam */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		DD000000000000000000002A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CC00000000000000000000AA /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DD000000000000000000001A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CC000000000000000000001A /* QuilliamApp.swift in Sources */,
+				CC000000000000000000002A /* Message.swift in Sources */,
+				CC000000000000000000003A /* OllamaModels.swift in Sources */,
+				CC000000000000000000004A /* OllamaService.swift in Sources */,
+				CC000000000000000000005A /* ChatViewModel.swift in Sources */,
+				CC000000000000000000006A /* ContentView.swift in Sources */,
+				CC000000000000000000007A /* SidebarView.swift in Sources */,
+				CC000000000000000000008A /* ChatView.swift in Sources */,
+				CC000000000000000000009A /* MessageBubbleView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		FF000000000000000000001A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Quilliam/Quilliam.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Quilliam/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.quilliam.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		FF000000000000000000002A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Quilliam/Quilliam.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Quilliam/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.quilliam.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		FF000000000000000000003A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		FF000000000000000000004A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		GG000000000000000000001A /* Build configuration list for PBXProject "Quilliam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FF000000000000000000003A /* Debug */,
+				FF000000000000000000004A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		GG000000000000000000002A /* Build configuration list for PBXNativeTarget "Quilliam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FF000000000000000000001A /* Debug */,
+				FF000000000000000000002A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AA000000000000000000001A /* Project object */;
+}
