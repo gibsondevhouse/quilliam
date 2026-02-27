@@ -29,6 +29,10 @@ final class ChatViewModel {
     /// The most recently extracted patch, awaiting user review in the patch sheet.
     var pendingPatch: CanonicalPatch? = nil
 
+    /// High-confidence patch (>= 0.85) to be auto-committed by the view layer.
+    /// The view observes this value and calls `applyAutoCommitPatch(context:)`.
+    var autoCommitPatch: CanonicalPatch? = nil
+
     /// Whether to show the patch review sheet.
     var showPatchReview: Bool = false
 
@@ -196,8 +200,13 @@ final class ChatViewModel {
                 messages[assistantIndex].content += token
             case .patch(let patch):
                 if !patch.operations.isEmpty {
-                    pendingPatch = patch
-                    showPatchReview = true
+                    // High-confidence patches auto-commit; lower-confidence go to review.
+                    if patch.autoCommit {
+                        autoCommitPatch = patch
+                    } else {
+                        pendingPatch = patch
+                        showPatchReview = true
+                    }
                 }
             }
         }
@@ -233,6 +242,30 @@ final class ChatViewModel {
             if var list = changeSets[key], !list.isEmpty {
                 list[list.count - 1].commentary = assistantText
                 changeSets[key] = list
+            }
+        }
+
+        // Handle canonical entity patches returned by the cloud model.
+        let cloudCanonicalPatches = response.canonicalPatches ?? []
+        if !cloudCanonicalPatches.isEmpty {
+            let allOps = cloudCanonicalPatches.flatMap { $0.operations }
+            let avgConfidence = cloudCanonicalPatches.map { $0.confidence }.reduce(0, +)
+                / Double(cloudCanonicalPatches.count)
+            let mergedPatch = CanonicalPatch(
+                id: "patch_\(UUID().uuidString)",
+                status: "pending",
+                operations: allOps,
+                sourceType: "cloud",
+                sourceId: messages.last?.id ?? UUID().uuidString,
+                confidence: avgConfidence,
+                autoCommit: avgConfidence >= 0.85,
+                createdAt: Date()
+            )
+            if mergedPatch.autoCommit {
+                autoCommitPatch = mergedPatch
+            } else {
+                pendingPatch = mergedPatch
+                showPatchReview = true
             }
         }
     }
@@ -638,8 +671,29 @@ final class ChatViewModel {
 
     // MARK: - Canonical patch accept / reject
 
-    /// Insert the accepted patch operations into the SwiftData store.
+    /// Apply the auto-commit patch immediately, persisting both the entity records
+    /// and an audit `CanonicalPatchRecord` with status "accepted".
+    func applyAutoCommitPatch(context: ModelContext) {
+        guard let patch = autoCommitPatch else { return }
+        acceptPatch(patch, context: context)
+        autoCommitPatch = nil
+    }
+
+    /// Insert the accepted patch operations into the SwiftData store and record the patch.
     func acceptPatch(_ patch: CanonicalPatch, context: ModelContext) {
+        // Persist an audit record of the accepted patch.
+        let record = CanonicalPatchRecord(
+            id: patch.id,
+            status: "accepted",
+            operations: patch.operations,
+            sourceType: patch.sourceType,
+            sourceId: patch.sourceId,
+            confidence: patch.confidence,
+            autoCommit: patch.autoCommit,
+            createdAt: patch.createdAt
+        )
+        context.insert(record)
+
         for op in patch.operations {
             switch op {
             case .create(_, let fields):
@@ -666,9 +720,19 @@ final class ChatViewModel {
         showPatchReview = false
     }
 
-    /// Dismiss the patch review sheet without writing to the store.
-    func rejectPatch() {
+    /// Dismiss the patch review sheet and persist a rejected record for audit.
+    func rejectPatch(_ patch: CanonicalPatch, context: ModelContext) {
+        let record = CanonicalPatchRecord(
+            id: patch.id,
+            status: "rejected",
+            operations: patch.operations,
+            sourceType: patch.sourceType,
+            sourceId: patch.sourceId,
+            confidence: patch.confidence,
+            autoCommit: patch.autoCommit,
+            createdAt: patch.createdAt
+        )
+        context.insert(record)
         pendingPatch = nil
         showPatchReview = false
-    }
-}
+    }}

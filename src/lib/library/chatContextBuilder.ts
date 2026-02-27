@@ -1,4 +1,4 @@
-import type { CharacterEntry, LocationEntry, WorldEntry } from "@/lib/types";
+import type { CanonicalDoc, CharacterEntry, LocationEntry, WorldEntry } from "@/lib/types";
 
 interface BuildChatContextInput {
   libraryTitle: string;
@@ -9,6 +9,12 @@ interface BuildChatContextInput {
   locations: LocationEntry[];
   worldEntries: WorldEntry[];
   entityDrafts: Record<string, string>;
+  /**
+   * Canonical docs from the store, included as a concise entity roster so the
+   * model can reference already-established facts and the patch extractor can
+   * perform name-matching against the same entities.
+   */
+  canonicalDocs?: CanonicalDoc[];
 }
 
 export function buildChatContext(input: BuildChatContextInput): string {
@@ -21,6 +27,7 @@ export function buildChatContext(input: BuildChatContextInput): string {
     locations,
     worldEntries,
     entityDrafts,
+    canonicalDocs,
   } = input;
 
   const lines: string[] = [];
@@ -67,6 +74,21 @@ export function buildChatContext(input: BuildChatContextInput): string {
         `- ${entry.title || "Untitled"}${entry.category ? ` (${entry.category})` : ""}${notes ? ` — ${notes.slice(0, 120)}` : ""}`.trimEnd(),
       );
     });
+  }
+
+  if (canonicalDocs && canonicalDocs.length > 0) {
+    // Group by type and emit a compact roster so the model knows established entities.
+    // Capped at 20 entries total to stay within prefix-cache budget.
+    const byType = new Map<string, CanonicalDoc[]>();
+    for (const doc of canonicalDocs.slice(0, 20)) {
+      const bucket = byType.get(doc.type) ?? [];
+      bucket.push(doc);
+      byType.set(doc.type, bucket);
+    }
+    lines.push("\n### Canonical Entities (established — reference only, do not re-introduce)");
+    for (const [type, docs] of byType) {
+      lines.push(`**${type.replace(/_/g, " ")}**: ${docs.map((d) => d.name).join(", ")}`);
+    }
   }
 
   return lines.join("\n");

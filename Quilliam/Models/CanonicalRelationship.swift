@@ -60,40 +60,46 @@ final class CanonicalRelationship {
 /// A proposed changeset awaiting user review in the native Patch Review modal.
 /// Mirrors the TypeScript `CanonicalPatch` interface.
 ///
-/// Operations are stored as JSON-serialised arrays — the Swift UI decodes them
-/// as [String: AnyCodable] for display purposes; full strongly-typed decoding
-/// is reserved for the apply path.
+/// Operations are stored as JSON-serialised `PatchOperation` arrays so they
+/// can be decoded back to strongly-typed values on the apply path.
 @Model
 final class CanonicalPatchRecord {
     @Attribute(.unique) var id: String
     /// "pending" | "accepted" | "rejected"
     var status: String
-    /// JSON-serialised `PatchOperation[]`
+    /// JSON-serialised `[PatchOperation]`
     var operationsJSON: Data
     /// "chat" | "research" | "manual"
     var sourceType: String
     var sourceId: String
+    /// Extraction confidence in [0, 1]. >= 0.85 → auto-committed without user review.
+    var confidence: Double
+    /// `true` when the patch was applied automatically (confidence >= 0.85).
+    var autoCommit: Bool
     var createdAt: Date
 
     init(
         id: String,
         status: String = "pending",
-        operations: [[String: Any]] = [],
+        operations: [PatchOperation] = [],
         sourceType: String,
         sourceId: String,
+        confidence: Double = 0.65,
+        autoCommit: Bool = false,
         createdAt: Date = .now
     ) {
         self.id             = id
         self.status         = status
-        self.operationsJSON = (try? JSONSerialization.data(withJSONObject: operations)) ?? Data()
+        self.operationsJSON = (try? JSONEncoder().encode(operations)) ?? Data()
         self.sourceType     = sourceType
         self.sourceId       = sourceId
+        self.confidence     = confidence
+        self.autoCommit     = autoCommit
         self.createdAt      = createdAt
     }
 
-    var operations: [[String: Any]] {
-        guard let arr = try? JSONSerialization.jsonObject(with: operationsJSON),
-              let ops = arr as? [[String: Any]] else { return [] }
-        return ops
+    /// Decoded typed operations. Returns empty array if decoding fails.
+    var typedOperations: [PatchOperation] {
+        (try? JSONDecoder().decode([PatchOperation].self, from: operationsJSON)) ?? []
     }
 }

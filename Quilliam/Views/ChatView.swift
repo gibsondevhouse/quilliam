@@ -128,10 +128,15 @@ struct ChatView: View {
                     if accepted {
                         viewModel.acceptPatch(patch, context: modelContext)
                     } else {
-                        viewModel.rejectPatch()
+                        viewModel.rejectPatch(patch, context: modelContext)
                     }
                 }
             }
+        }
+        // Auto-commit high-confidence patches (≥ 0.85) without user review.
+        .onChange(of: viewModel.autoCommitPatch?.id) { _, newId in
+            guard newId != nil else { return }
+            viewModel.applyAutoCommitPatch(context: modelContext)
         }
         .task {
             await viewModel.refreshResearchRuns()

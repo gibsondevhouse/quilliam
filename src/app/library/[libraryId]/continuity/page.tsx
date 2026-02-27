@@ -14,6 +14,12 @@ const ALL_TYPES: CanonicalType[] = [
   "item", "lore_entry", "rule", "scene", "timeline_event",
 ];
 
+/** Number of days without review before a draft is considered stale. */
+const STALE_DAYS = 14;
+const STALE_MS = STALE_DAYS * 24 * 60 * 60 * 1000;
+/** Snapshot of "now" captured at module load — safe for render comparisons. */
+const PAGE_NOW_MS = Date.now();
+
 interface DocMap { [id: string]: CanonicalDoc }
 
 export default function ContinuityPage() {
@@ -59,6 +65,9 @@ export default function ContinuityPage() {
   const filteredDocs = typeFilter === "all" ? docs : docs.filter((d) => d.type === typeFilter);
   const contradictionDocs = docs.filter(
     (d) => Array.isArray(d.details.contradictions) && (d.details.contradictions as unknown[]).length > 0,
+  );
+    const staleDraftDocs = docs.filter(
+    (d) => d.status === "draft" && (PAGE_NOW_MS - (d.lastVerified || d.createdAt)) > STALE_MS,
   );
   const timelineDocs = docs
     .filter((d) => d.type === "timeline_event")
@@ -151,14 +160,14 @@ export default function ContinuityPage() {
 
       {tab === "contradictions" && (
         <div className="continuity-contradictions">
+          <h3 className="continuity-section-heading">Confirmed Contradictions</h3>
           {contradictionDocs.length === 0 ? (
             <p className="library-page-empty">No contradictions recorded.</p>
           ) : (
             <ul className="continuity-contradiction-list">
               {contradictionDocs.map((doc) => {
                 const contras = doc.details.contradictions as {
-                  description: string;
-                  sourceId: string;
+                  note: string;
                   at: number;
                 }[];
                 return (
@@ -167,8 +176,8 @@ export default function ContinuityPage() {
                     <ul>
                       {contras.map((c, i) => (
                         <li key={i}>
-                          {c.description}{" "}
-                          <small>— source: {c.sourceId.slice(0, 12)}… ({new Date(c.at).toLocaleDateString()})</small>
+                          {c.note}{" "}
+                          <small>({new Date(c.at).toLocaleDateString()})</small>
                         </li>
                       ))}
                     </ul>
@@ -176,6 +185,36 @@ export default function ContinuityPage() {
                 );
               })}
             </ul>
+          )}
+
+          <h3 className="continuity-section-heading" style={{ marginTop: 24 }}>
+            Stale Drafts <small>(not reviewed in {STALE_DAYS}+ days)</small>
+          </h3>
+          {staleDraftDocs.length === 0 ? (
+            <p className="library-page-empty">No stale draft docs.</p>
+          ) : (
+            <table className="canon-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Last Verified</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staleDraftDocs.map((doc) => (
+                  <tr key={doc.id}>
+                    <td><strong>{doc.name}</strong></td>
+                    <td>{doc.type.replace(/_/g, " ")}</td>
+                    <td>
+                      {doc.lastVerified
+                        ? new Date(doc.lastVerified).toLocaleDateString()
+                        : <em>never</em>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       )}

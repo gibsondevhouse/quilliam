@@ -13,14 +13,14 @@ Built for Apple Silicon with Unified Memory awareness.
 | Local inference | Ollama REST API (`http://localhost:11434`) |
 | Cloud — assist | Anthropic, BYO key, opt-in per action |
 | Cloud — research | Anthropic + Tavily, BYO keys, opt-in per action |
-| Storage (web) | IndexedDB `quilliam-rag` (DB v6) + encrypted cloud vault |
+| Storage (web) | IndexedDB `quilliam-rag` (DB v8) + encrypted cloud vault |
 | RAG | Hierarchical nodes + SHA-256 fragment hashing + local vector retrieval |
 
 ## Development
 
 ```bash
 npm install
-npm run dev       # http://localhost:3000
+npm run dev       # http://localhost:3000 (bumps to 3001+ if port is taken)
 npm run lint
 npm run build
 ```

@@ -2,8 +2,13 @@ import { randomUUID } from "crypto";
 import {
   DEFAULT_PROVIDER_CONFIG,
   DEFAULT_RUN_BUDGET,
+  type CanonicalDoc,
+  type CanonicalPatch,
+  type CanonicalType,
   type CloudProviderConfig,
+  type PatchOperation,
   type ProposedPatchBatch,
+  type Relationship,
   type RunBudget,
   type UsageMeter,
 } from "@/lib/types";
@@ -21,6 +26,12 @@ export interface AssistInput {
 export interface AssistResult {
   message: string;
   patches: ProposedPatchBatch[];
+  /**
+   * Canonical entity / relationship patches extracted from the AI response.
+   * Confidence >= 0.85 → autoCommit: true (apply without user review).
+   * Confidence < 0.85  → autoCommit: false (surfaced in Build Feed).
+   */
+  canonicalPatches: CanonicalPatch[];
   usage: UsageMeter;
 }
 
@@ -34,6 +45,17 @@ interface RawAssistResult {
     edits?: LineEdit[];
     rationale?: string;
     citations?: ProposedPatchBatch["citations"];
+  }>;
+  /**
+   * Raw canonical entity/relationship ops returned by the cloud model.
+   * Each item corresponds to a single PatchOperation.
+   */
+  canonicalPatches?: Array<{
+    op?: string;
+    docType?: string;
+    fields?: Partial<CanonicalDoc>;
+    relationship?: Omit<Relationship, "id" | "createdAt">;
+    confidence?: number;
   }>;
 }
 
@@ -84,6 +106,7 @@ export async function runAssistedCloud(input: AssistInput, anthropicApiKey: stri
         "Return strict JSON only.",
         "Use patches only when an explicit text change is requested.",
         "Each patch must include targetKind and edits in line-edit format.",
+        "If the response introduces new narrative entities (characters, locations, etc.) add them to canonicalPatches.",
         "Do not include markdown code fences.",
       ],
       query: input.query,
@@ -104,6 +127,18 @@ export async function runAssistedCloud(input: AssistInput, anthropicApiKey: stri
               },
             ],
             citations: [],
+          },
+        ],
+        canonicalPatches: [
+          {
+            op: "create | add-relationship",
+            docType: "character | location | faction | magic_system | item | lore_entry | rule | scene | timeline_event",
+            fields: {
+              name: "string",
+              summary: "string",
+              type: "<CanonicalType>",
+            },
+            confidence: 0.9,
           },
         ],
       },
@@ -141,6 +176,7 @@ export async function runAssistedCloud(input: AssistInput, anthropicApiKey: stri
     return {
       message: anthropic.text || "Assisted cloud completed, but no structured patches were returned.",
       patches: [],
+      canonicalPatches: [],
       usage,
     };
   }
@@ -162,9 +198,42 @@ export async function runAssistedCloud(input: AssistInput, anthropicApiKey: stri
     })
     .filter((patch): patch is ProposedPatchBatch => patch !== null);
 
+  // Normalise raw canonical entity ops into typed CanonicalPatch records.
+  const canonicalPatches: CanonicalPatch[] = (parsed.canonicalPatches ?? [])
+    .map((raw): CanonicalPatch | null => {
+      const opStr = raw.op ?? "create";
+      let operation: PatchOperation | null = null;
+
+      if (opStr === "create" && raw.fields) {
+        const docType = (raw.docType ?? raw.fields.type ?? "lore_entry") as CanonicalType;
+        operation = {
+          op: "create",
+          docType,
+          fields: { ...raw.fields, type: docType },
+        };
+      } else if (opStr === "add-relationship" && raw.relationship) {
+        operation = { op: "add-relationship", relationship: raw.relationship };
+      }
+
+      if (!operation) return null;
+
+      const confidence = typeof raw.confidence === "number" ? Math.min(1, Math.max(0, raw.confidence)) : 0.65;
+      return {
+        id: `cpatch_${randomUUID().slice(0, 8)}`,
+        status: "pending",
+        operations: [operation],
+        sourceRef: { kind: "chat_message", id: randomUUID() },
+        confidence,
+        autoCommit: confidence >= 0.85,
+        createdAt: Date.now(),
+      } satisfies CanonicalPatch;
+    })
+    .filter((p): p is CanonicalPatch => p !== null);
+
   return {
     message: parsed.message ?? "Assisted cloud run completed.",
     patches,
+    canonicalPatches,
     usage,
   };
 }

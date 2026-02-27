@@ -5,6 +5,8 @@
  * Uses the Web Crypto API (available in modern browsers and Node.js).
  */
 
+import { cosineSimilarity } from "@/lib/rag/search";
+
 /**
  * Hash a fragment's content using SHA-256
  * Returns a hex string
@@ -82,9 +84,9 @@ export function createDebouncedHasher(delayMs: number = 500) {
 }
 
 /**
- * Semantic hash (fingerprint of conceptual content)
- * Useful for deduplication across similar fragments
- * This is a placeholder; a full implementation would use embeddings or semantic analysis
+ * Semantic hash (fingerprint of normalised text content).
+ * Used as a fast deduplication key: two fragments with the same semantic hash
+ * are treated as identical without needing an embedding round-trip.
  */
 export async function semanticHash(content: string): Promise<string> {
   // For now, use a simple hash of normalized content
@@ -96,19 +98,74 @@ export async function semanticHash(content: string): Promise<string> {
   return hashFragment(normalized);
 }
 
+// ---------------------------------------------------------------------------
+// Internal helpers for embedding-based similarity
+// ---------------------------------------------------------------------------
+
 /**
- * Compare two fragments for semantic similarity (placeholder)
- * Returns a similarity score 0-1 (1 = identical)
+ * Fetch a single embedding vector from the local embeddings proxy.
+ * Returns `null` if the request fails or the response is malformed.
+ * Uses a relative URL so this works in both browser and Web-Worker contexts
+ * (Web Workers resolve relative URLs against the page origin).
+ */
+async function fetchEmbedding(
+  content: string,
+  model: string,
+): Promise<Float32Array | null> {
+  try {
+    const response = await fetch("/api/embeddings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: content, model }),
+    });
+    if (!response.ok) return null;
+    const json = (await response.json()) as { embedding?: number[] };
+    if (!Array.isArray(json.embedding) || json.embedding.length === 0) return null;
+    return new Float32Array(json.embedding);
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Semantic similarity
+// ---------------------------------------------------------------------------
+
+/**
+ * Compare two fragments for semantic similarity using embedding-based cosine
+ * distance.  Falls back to exact-hash equality when Ollama embeddings are
+ * unavailable (e.g., server not running, network error).
+ *
+ * Returns a score in [0, 1] where 1 = identical / maximally similar.
+ *
+ * @param content1 First fragment text.
+ * @param content2 Second fragment text.
+ * @param model    Ollama embedding model to use (default: "nomic-embed-text").
  */
 export async function fragmentSimilarity(
   content1: string,
-  content2: string
+  content2: string,
+  model = "nomic-embed-text",
 ): Promise<number> {
-  const hash1 = await semanticHash(content1);
-  const hash2 = await semanticHash(content2);
+  if (!content1.trim() || !content2.trim()) return 0;
 
-  // For now, exact match only
-  return hash1 === hash2 ? 1 : 0;
+  // Fast path: identical content → similarity 1 without an API round-trip.
+  const [hash1, hash2] = await Promise.all([
+    semanticHash(content1),
+    semanticHash(content2),
+  ]);
+  if (hash1 === hash2) return 1;
 
-  // TODO: Implement proper semantic similarity using embeddings
+  // Embedding path: fetch both vectors in parallel, compute cosine similarity.
+  try {
+    const [vec1, vec2] = await Promise.all([
+      fetchEmbedding(content1, model),
+      fetchEmbedding(content2, model),
+    ]);
+    if (!vec1 || !vec2) return 0;
+    return cosineSimilarity(vec1, vec2);
+  } catch {
+    // Graceful degradation: Ollama unavailable or embedding endpoint unreachable.
+    return 0;
+  }
 }

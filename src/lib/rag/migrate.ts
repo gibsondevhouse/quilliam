@@ -2,17 +2,20 @@
  * In-app migration utilities (Plan 001 — Phase 6).
  *
  * Migrates existing entity tables (characters, locations, worldEntries) and
- * RAG scene nodes into the new canonical document stores in three steps:
+ * RAG scene nodes into the new canonical document stores in four steps:
  *
  *   Step A — Legacy entity tables → `canonicalDocs`
  *   Step B — Implicit field relationships → `relationships`
  *   Step C — RAG scene nodes → canonical `scene` docs
+ *   Step D — Rename legacy `part` RAG nodes → `section`
  *
  * Migration is additive and non-destructive: existing records are left intact.
  * All migrated docs start with `status: "draft"`.
+ * Call `confirmMigration` after user review to mark legacy records migrated.
  *
  * Usage:
- *   const summary = await migrateLibrary(store, libraryId);
+ *   const report = await migrateLibrary(store, libraryId, onProgress);
+ *   await confirmMigration(store, libraryId);
  */
 
 import type { RAGStore } from "@/lib/rag/store";
@@ -43,8 +46,10 @@ function makeRelId(fromId: string, relType: string, toId: string): string {
 }
 
 function migrationSource(runId: string): SourceRef {
-  return { type: "migration", id: runId, label: "Migration run" };
+  return { kind: "manual", id: runId, excerpt: "Migration run" };
 }
+
+type ProgressFn = (step: string, pct: number) => void;
 
 /* ----------------------------------------------------------------
    Step A — Legacy entity tables → canonicalDocs
@@ -53,23 +58,27 @@ function migrationSource(runId: string): SourceRef {
 /**
  * Migrate characters, locations, and world entries for a given library
  * into the `canonicalDocs` store.  Returns a map of legacy ID → canonical doc ID
- * for use in Step B relationship extraction.
+ * for use in Step B relationship extraction, plus any warnings collected.
  */
 async function stepA(
   store: RAGStore,
   libraryId: string,
   runId: string,
+  onProgress?: ProgressFn,
 ): Promise<{
   charIdMap: Map<string, string>;   // legacyId → canonical docId
   locIdMap:  Map<string, string>;
   loreIdMap: Map<string, string>;
+  warnings:  string[];
 }> {
   const source = migrationSource(runId);
   const charIdMap = new Map<string, string>();
   const locIdMap  = new Map<string, string>();
   const loreIdMap = new Map<string, string>();
+  const warnings: string[] = [];
 
   /* --- Characters --- */
+  onProgress?.("characters", 5);
   const characters = await store.getCharactersByLibrary(libraryId);
   for (const char of characters) {
     const docId = makeDocId("character", char.id);
@@ -77,6 +86,9 @@ async function stepA(
     // Skip if already migrated
     const existing = await store.getDocById(docId);
     if (existing) continue;
+    if (!char.notes && !char.role) {
+      warnings.push(`Character "${char.name}" had no notes or role; left blank.`);
+    }
     const doc: CanonicalDoc = {
       id:            docId,
       type:          "character",
@@ -87,18 +99,23 @@ async function stepA(
       sources:       [source],
       relationships: [],
       lastVerified:  0,
+      createdAt:     Date.now(),
       updatedAt:     Date.now(),
     };
     await store.addDoc(doc);
   }
 
   /* --- Locations --- */
+  onProgress?.("locations", 20);
   const locations = await store.getLocationsByLibrary(libraryId);
   for (const loc of locations) {
     const docId = makeDocId("location", loc.id);
     locIdMap.set(loc.id, docId);
     const existing = await store.getDocById(docId);
     if (existing) continue;
+    if (!loc.description) {
+      warnings.push(`Location "${loc.name}" had no description; left blank.`);
+    }
     const doc: CanonicalDoc = {
       id:            docId,
       type:          "location",
@@ -109,18 +126,23 @@ async function stepA(
       sources:       [source],
       relationships: [],
       lastVerified:  0,
+      createdAt:     Date.now(),
       updatedAt:     Date.now(),
     };
     await store.addDoc(doc);
   }
 
   /* --- World entries → lore_entry --- */
+  onProgress?.("lore entries", 35);
   const worldEntries = await store.getWorldEntriesByLibrary(libraryId);
   for (const entry of worldEntries) {
     const docId = makeDocId("lore_entry", entry.id);
     loreIdMap.set(entry.id, docId);
     const existing = await store.getDocById(docId);
     if (existing) continue;
+    if (!entry.notes) {
+      warnings.push(`World entry "${entry.title}" had no notes; left blank.`);
+    }
     const doc: CanonicalDoc = {
       id:            docId,
       type:          "lore_entry",
@@ -131,12 +153,13 @@ async function stepA(
       sources:       [source],
       relationships: [],
       lastVerified:  0,
+      createdAt:     Date.now(),
       updatedAt:     Date.now(),
     };
     await store.addDoc(doc);
   }
 
-  return { charIdMap, locIdMap, loreIdMap };
+  return { charIdMap, locIdMap, loreIdMap, warnings };
 }
 
 /* ----------------------------------------------------------------
@@ -156,7 +179,9 @@ async function stepB(
   charIdMap: Map<string, string>,
   locIdMap: Map<string, string>,
   runId: string,
+  onProgress?: ProgressFn,
 ): Promise<number> {
+  onProgress?.("relationships", 55);
   const source = migrationSource(runId);
   let created = 0;
 
@@ -180,6 +205,7 @@ async function stepB(
           to:       locDocId,
           metadata: { migratedFrom: legacyCharId },
           sources:  [source],
+          createdAt: Date.now(),
         };
         await store.addRelationship(rel);
         created++;
@@ -202,7 +228,8 @@ async function stepB(
  *
  * Returns the number of scene docs created.
  */
-async function stepC(store: RAGStore, libraryId: string, runId: string): Promise<number> {
+async function stepC(store: RAGStore, libraryId: string, runId: string, onProgress?: ProgressFn): Promise<number> {
+  onProgress?.("scenes", 70);
   const source = migrationSource(runId);
   let created = 0;
 
@@ -231,6 +258,7 @@ async function stepC(store: RAGStore, libraryId: string, runId: string): Promise
       sources:       [source],
       relationships: [],
       lastVerified:  0,
+      createdAt:     Date.now(),
       updatedAt:     Date.now(),
     };
     await store.addDoc(doc);
@@ -251,71 +279,176 @@ async function stepC(store: RAGStore, libraryId: string, runId: string): Promise
 }
 
 /* ----------------------------------------------------------------
+   Step D — Rename legacy `part` RAG nodes → `section`
+   ---------------------------------------------------------------- */
+
+/**
+ * Scan all RAG nodes for the legacy `part` type and rename them to `section`
+ * (matching the NodeType union that replaced "part" in hierarchy.ts).
+ * Returns the number of nodes updated.
+ */
+async function stepD(store: RAGStore, onProgress?: ProgressFn): Promise<number> {
+  onProgress?.("section rename", 85);
+  const allNodes = await store.listAllNodes();
+  // "part" is a legacy value not in the current NodeType union; cast required.
+  const partNodes = allNodes.filter((n) => (n.type as string) === "part");
+  for (const node of partNodes) {
+    await store.putNode({ ...node, type: "section", updatedAt: Date.now() });
+  }
+  return partNodes.length;
+}
+
+/* ----------------------------------------------------------------
    Public API
    ---------------------------------------------------------------- */
 
-export interface MigrationSummary {
-  runId: string;
+/** Plan 001 §6.3 — Migration report returned after a library migration run. */
+export interface MigrationReport {
   libraryId: string;
-  charactersConverted: number;
-  locationsConverted: number;
-  loreEntriesConverted: number;
-  relationshipsCreated: number;
-  sceneDocsCreated: number;
+  characters: number;
+  locations: number;
+  worldEntries: number;
+  scenes: number;
+  relationships: number;
+  /** Warnings collected during conversion (e.g. missing fields). */
+  warnings: string[];
   completedAt: number;
 }
 
 /**
- * Run the full three-step migration for a given library.
- *
- * Safe to call multiple times — already-migrated docs are skipped via the
- * `getDocById` existence check at the start of each entity loop.
- *
- * @param store     The RAGStore instance (IDB-backed in browser, mock in tests).
- * @param libraryId The library to migrate.
- * @returns         A summary of created records for user review.
+ * @deprecated Use `MigrationReport`. Kept for backward compatibility with callers
+ * that destructure the old field names (charactersConverted, etc.).
  */
-export async function migrateLibrary(
+export type MigrationSummary = MigrationReport;
+
+/**
+ * Preview how many entities would be converted by a migration run.
+ * Counts only records not yet marked `migrated: true`.
+ */
+export async function previewMigration(
   store: RAGStore,
   libraryId: string,
-): Promise<MigrationSummary> {
-  const runId = `mig_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-
-  const { charIdMap, locIdMap, loreIdMap } = await stepA(store, libraryId, runId);
-  const relationshipsCreated = await stepB(store, charIdMap, locIdMap, runId);
-  const sceneDocsCreated     = await stepC(store, libraryId, runId);
-
-  // Record the migration run in metadata so checkSchemaVersion can track state
-  await store.setMetadata({
-    key: `migration:${libraryId}:${runId}`,
-    value: { libraryId, runId, completedAt: Date.now() },
-    updatedAt: Date.now(),
-  });
-
+): Promise<{ characters: number; locations: number; worldEntries: number; scenes: number; partNodes: number }> {
+  const [chars, locs, entries, allNodes] = await Promise.all([
+    store.getCharactersByLibrary(libraryId),
+    store.getLocationsByLibrary(libraryId),
+    store.getWorldEntriesByLibrary(libraryId),
+    store.listAllNodes(),
+  ]);
+  const sceneNodes = allNodes.filter(
+    (n) => n.type === "scene" && n.content && n.content.trim().length > 0,
+  );
+  const partNodes = allNodes.filter((n) => (n.type as string) === "part");
   return {
-    runId,
-    libraryId,
-    charactersConverted: charIdMap.size,
-    locationsConverted:  locIdMap.size,
-    loreEntriesConverted: loreIdMap.size,
-    relationshipsCreated,
-    sceneDocsCreated,
-    completedAt: Date.now(),
+    characters:   chars.filter((c) => !c.migrated).length,
+    locations:    locs.filter((l) => !l.migrated).length,
+    worldEntries: entries.filter((e) => !e.migrated).length,
+    scenes:       sceneNodes.length,
+    partNodes:    partNodes.length,
   };
 }
 
 /**
- * Check whether a migration has been run for a given library.
- * Returns the most recent migration run metadata, or null if none found.
+ * Confirm step: mark all legacy entity records as `migrated: true`.
+ * Safe to call after the user has reviewed the MigrationReport and confirmed.
+ */
+export async function confirmMigration(store: RAGStore, libraryId: string): Promise<void> {
+  const [chars, locs, entries] = await Promise.all([
+    store.getCharactersByLibrary(libraryId),
+    store.getLocationsByLibrary(libraryId),
+    store.getWorldEntriesByLibrary(libraryId),
+  ]);
+  for (const char of chars) {
+    if (!char.migrated) await store.putCharacter({ ...char, migrated: true, updatedAt: Date.now() });
+  }
+  for (const loc of locs) {
+    if (!loc.migrated) await store.putLocation({ ...loc, migrated: true, updatedAt: Date.now() });
+  }
+  for (const entry of entries) {
+    if (!entry.migrated) await store.putWorldEntry({ ...entry, migrated: true, updatedAt: Date.now() });
+  }
+  await store.setMetadata({
+    key:      `migration:${libraryId}:last`,
+    value:    { libraryId, confirmedAt: Date.now() },
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Check whether this library has unmigrated legacy records.
+ * Returns true when legacy store has records but no canonical docs have been created yet.
+ */
+export async function needsMigration(store: RAGStore, libraryId: string): Promise<boolean> {
+  const [chars, locs, entries] = await Promise.all([
+    store.getCharactersByLibrary(libraryId),
+    store.getLocationsByLibrary(libraryId),
+    store.getWorldEntriesByLibrary(libraryId),
+  ]);
+  if (chars.length + locs.length + entries.length === 0) return false;
+  const canonDocs = await store.queryDocsByType("character");
+  return canonDocs.length === 0;
+}
+
+/**
+ * Run the full four-step migration for a given library.
+ *
+ * Steps:
+ *   A — `characters`, `locations`, `worldEntries` tables → `canonicalDocs`
+ *   B — Implicit FK fields → `relationships`
+ *   C — Scene RAG nodes → canonical `scene` docs
+ *   D — Rename legacy `part` RAG node type → `section`
+ *
+ * Safe to run multiple times — already-migrated docs are skipped via
+ * `getDocById` checks at the start of each entity loop.
+ *
+ * @param store       The RAGStore instance (IDB-backed in browser, mock in tests).
+ * @param libraryId   The library to migrate.
+ * @param onProgress  Optional callback receiving (stepLabel, pct 0–100).
+ * @returns           A MigrationReport with counts and any warnings.
+ */
+export async function migrateLibrary(
+  store: RAGStore,
+  libraryId: string,
+  onProgress?: (step: string, pct: number) => void,
+): Promise<MigrationReport> {
+  const runId = `mig_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  onProgress?.("starting", 0);
+
+  const { charIdMap, locIdMap, loreIdMap, warnings } = await stepA(store, libraryId, runId, onProgress);
+  const relationships = await stepB(store, charIdMap, locIdMap, runId, onProgress);
+  const scenes        = await stepC(store, libraryId, runId, onProgress);
+  await stepD(store, onProgress);
+
+  onProgress?.("complete", 100);
+
+  // Record the migration run in metadata so checkSchemaVersion can track state
+  await store.setMetadata({
+    key:      `migration:${libraryId}:${runId}`,
+    value:    { libraryId, runId, completedAt: Date.now() },
+    updatedAt: Date.now(),
+  });
+
+  return {
+    libraryId,
+    characters:   charIdMap.size,
+    locations:    locIdMap.size,
+    worldEntries: loreIdMap.size,
+    scenes,
+    relationships,
+    warnings,
+    completedAt:  Date.now(),
+  };
+}
+
+/**
+ * Check whether a migration has been confirmed for a given library.
+ * Returns the most recent sentinel metadata, or null if none found.
  */
 export async function getLastMigration(
   store: RAGStore,
   libraryId: string,
-): Promise<{ runId: string; libraryId: string; completedAt: number } | null> {
-  // We can't list metadata keys by prefix without a full scan; for simplicity
-  // just try to find via a known sentinel key set during migration.
-  const sentinel = await store.getMetadata<{ runId: string; libraryId: string; completedAt: number }>(
+): Promise<{ libraryId: string; confirmedAt?: number; completedAt?: number } | null> {
+  return store.getMetadata<{ libraryId: string; confirmedAt?: number; completedAt?: number }>(
     `migration:${libraryId}:last`,
   );
-  return sentinel;
 }

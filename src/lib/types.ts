@@ -173,7 +173,7 @@ export const DEFAULT_RUN_BUDGET: RunBudget = {
 };
 
 // ---------------------------------------------------------------------------
-// Canonical document model (Plan 001 — Phase 2)
+// Canonical document model (Plan 001 — Phase 1)
 // ---------------------------------------------------------------------------
 
 /**
@@ -194,14 +194,21 @@ export type CanonicalType =
   | "scene"
   | "timeline_event";
 
-/** A traceable citation pointing back to the prose or research that originated a fact. */
+/**
+ * A traceable citation pointing back to the prose or research that originated a fact.
+ *
+ * `kind` values:
+ *   "chat_message"      — from a local or cloud chat turn
+ *   "research_artifact" — from a research run artifact
+ *   "scene_node"        — from a RAG scene node
+ *   "manual"            — entered directly by the user
+ */
 export interface SourceRef {
-  /** "scene" | "research" | "chat" | "migration" | "manual" */
-  type: string;
+  kind: "chat_message" | "research_artifact" | "scene_node" | "manual";
   /** ID of the originating node, artifact, message, or run. */
   id: string;
-  /** Human-readable label for display in the Sources tab. */
-  label?: string;
+  /** Optional short quote for evidence display in the Sources tab. */
+  excerpt?: string;
 }
 
 /** Denormalised outgoing edge on a `CanonicalDoc` for fast single-doc reads. */
@@ -209,7 +216,7 @@ export interface RelationshipRef {
   /** ID of the `Relationship` record in the relationships store. */
   relationshipId: string;
   /** Target doc ID. */
-  toDocId: string;
+  toId: string;
   /** Edge label (e.g., "member_of", "located_at"). */
   type: string;
 }
@@ -225,11 +232,14 @@ export interface CanonicalDoc {
   summary: string;
   /**
    * Type-specific structured fields.
-   * character: appearance, personality, goals, backstory, age, affiliations
-   * location: geography, climate, culture, pointsOfInterest
-   * faction: ideology, leadership, territory, members
-   * magic_system: principles, limitations, costs, practitioners
-   * scene: chapterRef, presentCharacters, presentLocations, rawContent
+   * character:      appearance, personality, goals, backstory, age, affiliations
+   * location:       geography, climate, culture, pointsOfInterest
+   * faction:        ideology, leadership, territory, memberIds
+   * magic_system:   principles, limitations, costs, practitioners
+   * item:           description, owner, powers, origin
+   * lore_entry:     topic, content, relatedDocs
+   * rule:           statement, exceptions, scope
+   * scene:          chapterRef, presentCharacters, presentLocations, summary, rawContent
    * timeline_event: date, participants, location, consequences
    */
   details: Record<string, unknown>;
@@ -241,6 +251,7 @@ export interface CanonicalDoc {
   relationships: RelationshipRef[];
   /** Updated each time a continuity check confirms no contradiction (epoch ms). */
   lastVerified: number;
+  createdAt: number;
   updatedAt: number;
 }
 
@@ -254,15 +265,24 @@ export interface Relationship {
   /** Optional extra data: timeframe, strength, confidence score. */
   metadata: Record<string, unknown>;
   sources: SourceRef[];
+  createdAt: number;
 }
 
-/** Atomic operation inside a `Patch`. */
+/**
+ * Atomic operation inside a `Patch` / `CanonicalPatch`.
+ *
+ * Op naming uses kebab-case to match the Swift EditParser conventions.
+ */
 export type PatchOperation =
   | { op: "create"; docType: CanonicalType; fields: Partial<CanonicalDoc> }
   | { op: "update"; docId: string; field: string; oldValue: unknown; newValue: unknown }
-  | { op: "add-relationship"; relationship: Omit<Relationship, "id"> }
+  | { op: "add-relationship"; relationship: Omit<Relationship, "id" | "createdAt"> }
   | { op: "remove-relationship"; relationshipId: string }
-  | { op: "mark-contradiction"; docId: string; description: string; sourceId: string };
+  | { op: "mark-contradiction"; docId: string; note: string }
+  | { op: "delete"; docId: string };
+
+/** Alias matching the plan's naming convention. */
+export type PatchOp = PatchOperation;
 
 /**
  * A proposed changeset awaiting user review in the Build Feed.
@@ -273,9 +293,19 @@ export interface CanonicalPatch {
   /** "pending" = awaiting review; "accepted" = applied; "rejected" = archived. */
   status: "pending" | "accepted" | "rejected";
   operations: PatchOperation[];
-  /** Where the patch was proposed from. */
-  sourceType: "chat" | "research" | "manual";
-  /** ID of the originating chat message, research run, or session. */
-  sourceId: string;
+  /** Where the patch originated. */
+  sourceRef: SourceRef;
+  /**
+   * Extraction confidence in [0, 1].
+   * >= 0.85 → eligible for auto-commit (autoCommit: true).
+   * < 0.85  → must be reviewed in the Build Feed.
+   */
+  confidence: number;
+  /** When true the patch was (or should be) committed without user review. */
+  autoCommit: boolean;
   createdAt: number;
+  resolvedAt?: number;
 }
+
+/** Alias matching the plan's naming convention. */
+export type Patch = CanonicalPatch;

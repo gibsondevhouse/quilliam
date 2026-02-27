@@ -21,6 +21,8 @@ struct RawEntity: Codable {
     var type: String?
     var name: String?
     var summary: String?
+    /// Confidence score [0, 1] returned by the extraction model; defaults to 0.65.
+    var confidence: Double?
 }
 
 /// A single relationship extracted from the model response.
@@ -97,6 +99,10 @@ struct CanonicalPatch: Identifiable, Codable {
     var operations: [PatchOperation]
     var sourceType: String      // "chat" | "research" | "manual"
     var sourceId: String
+    /// Extraction confidence in [0, 1]. >= 0.85 → eligible for auto-commit.
+    var confidence: Double
+    /// When true, this patch was or should be applied without user review.
+    var autoCommit: Bool
     var createdAt: Date
 }
 

@@ -65,6 +65,8 @@ export interface PersistedCharacter {
   role: string;
   notes: string;
   updatedAt: number;
+  /** Set to true after the one-time canonical migration is confirmed. */
+  migrated?: boolean;
 }
 
 /** Persisted location record, library-scoped. */
@@ -74,6 +76,8 @@ export interface PersistedLocation {
   name: string;
   description: string;
   updatedAt: number;
+  /** Set to true after the one-time canonical migration is confirmed. */
+  migrated?: boolean;
 }
 
 /** Persisted world-entry record, library-scoped. */
@@ -84,6 +88,8 @@ export interface PersistedWorldEntry {
   category: string;
   notes: string;
   updatedAt: number;
+  /** Set to true after the one-time canonical migration is confirmed. */
+  migrated?: boolean;
 }
 
 /** Persisted story (book/novel) record — library-scoped, contains chapters. */

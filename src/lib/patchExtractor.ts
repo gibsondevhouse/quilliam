@@ -1,17 +1,22 @@
 /**
- * Canonical entity and relationship extraction (Plan 001 — Phase 4).
+ * Canonical entity and relationship extraction (Plan 001 — Phase 3/4).
  *
- * `extractCanonical` parses prose or research text through the local Ollama
- * model and returns a `CanonicalPatch` containing proposed create / update /
- * add-relationship operations for user review in the Build Feed.
+ * `extractPatches` parses prose or research text through the local Ollama model,
+ * matches against existing canonical docs, and returns `Patch[]` ready for the
+ * Build Feed pipeline:
+ *   - autoCommit patches (confidence ≥ 0.85) → apply immediately via `applyPatch`
+ *   - review patches (confidence < 0.85) → persist with `store.addPatch`
  *
- * All extraction is 100 % local (Ollama). No external API calls are made here.
- * Cloud-assisted extraction goes through /api/cloud/assist with mode="canonical".
+ * `applyPatch` iterates a patch's operations and dispatches each to the RAGStore,
+ * then marks the patch as "accepted".
  *
- * Confidence tiers (per plan section 8.2):
- *   Low    → adding a citation/synonym       → auto-committed (not returned as pending)
- *   Medium → new doc creation                → pending patch
- *   High   → field update / contradiction    → pending patch
+ * `extractCanonical` (legacy single-patch form) is preserved for backward compat.
+ *
+ * Confidence tiers (plan 03 table):
+ *   0.90 – add-relationship where both ends already exist  → autoCommit: true
+ *   0.65 – create or update ops                            → autoCommit: false
+ *
+ * All extraction is 100 % local (Ollama).
  */
 
 import { OLLAMA_BASE_URL } from "@/lib/ollama";
@@ -24,6 +29,8 @@ import type {
   Relationship,
   SourceRef,
 } from "@/lib/types";
+
+type SourceKind = SourceRef["kind"];
 
 // ---------------------------------------------------------------------------
 // ID generation helpers
@@ -153,13 +160,13 @@ async function callOllamaExtraction(text: string): Promise<ExtractionResult> {
  * All operations in the returned patch must be reviewed by the user in the
  * Build Feed before they are written to the `canonicalDocs` store.
  *
- * @param text       The prose or research text to analyse.
- * @param sourceType Origin of the text ("chat" | "research" | "manual").
- * @param sourceId   ID of the originating message, run, or session.
+ * @param text     The prose or research text to analyse.
+ * @param kind     Origin kind of the text ("chat_message" | "research_artifact" | "manual").
+ * @param sourceId ID of the originating message, run, or session.
  */
 export async function extractCanonical(
   text: string,
-  sourceType: CanonicalPatch["sourceType"],
+  kind: SourceKind,
   sourceId: string,
 ): Promise<CanonicalPatch> {
   const extraction = await callOllamaExtraction(text);
@@ -167,7 +174,7 @@ export async function extractCanonical(
   // Build a name → docId map for relationship resolution
   const nameToId = new Map<string, string>();
   const operations: PatchOperation[] = [];
-  const source: SourceRef = { type: sourceType, id: sourceId };
+  const source: SourceRef = { kind, id: sourceId };
 
   for (const entity of extraction.entities) {
     const rawType = entity.type?.toLowerCase().replace(/ /g, "_");
@@ -177,6 +184,7 @@ export async function extractCanonical(
     const docId = makeDocId(docType, entity.name ?? "");
     nameToId.set((entity.name ?? "").toLowerCase(), docId);
 
+    const now = Date.now();
     const fields: Partial<CanonicalDoc> = {
       id: docId,
       type: docType,
@@ -187,7 +195,8 @@ export async function extractCanonical(
       sources: [source],
       relationships: [],
       lastVerified: 0,
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     operations.push({ op: "create", docType, fields });
@@ -198,7 +207,7 @@ export async function extractCanonical(
     const toId   = nameToId.get((rel.to   ?? "").toLowerCase());
     if (!fromId || !toId) continue;
 
-    const relationship: Omit<Relationship, "id"> = {
+    const relationship: Omit<Relationship, "id" | "createdAt"> = {
       from:     fromId,
       type:     rel.relType ?? "related_to",
       to:       toId,
@@ -210,12 +219,13 @@ export async function extractCanonical(
   }
 
   const patch: CanonicalPatch = {
-    id:         makeId("patch"),
-    status:     "pending",
+    id:          makeId("patch"),
+    status:      "pending",
     operations,
-    sourceType,
-    sourceId,
-    createdAt:  Date.now(),
+    sourceRef:   source,
+    confidence:  operations.length > 0 ? 0.6 : 0,
+    autoCommit:  false,
+    createdAt:   Date.now(),
   };
 
   return patch;
@@ -227,13 +237,251 @@ export async function extractCanonical(
  */
 export async function extractAndStorePatch(
   text: string,
-  sourceType: CanonicalPatch["sourceType"],
+  kind: SourceKind,
   sourceId: string,
   store: { addPatch(p: CanonicalPatch): Promise<void> },
 ): Promise<CanonicalPatch> {
-  const patch = await extractCanonical(text, sourceType, sourceId);
+  const patch = await extractCanonical(text, kind, sourceId);
   if (patch.operations.length > 0) {
     await store.addPatch(patch);
   }
   return patch;
+}
+
+// ---------------------------------------------------------------------------
+// Plan 003 — Patch Proposal Pipeline
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal store interface required by `applyPatch`.
+ * Keeps patchExtractor free of a hard import on the IndexedDB-backed RAGStore.
+ */
+export interface PatchApplyStore {
+  addDoc(doc: CanonicalDoc): Promise<void>;
+  updateDoc(id: string, changes: Partial<CanonicalDoc>): Promise<void>;
+  addRelationship(rel: Relationship): Promise<void>;
+  removeRelationship(id: string): Promise<void>;
+  deleteDoc(id: string): Promise<void>;
+  updatePatchStatus(id: string, status: CanonicalPatch["status"]): Promise<void>;
+}
+
+/**
+ * Extract canonical entities and relationships from `text`, matching against
+ * `existingDocs` to decide whether to create new docs or update existing ones.
+ *
+ * Returns an array of up to two `CanonicalPatch` objects:
+ *   1. An **auto-commit** patch (confidence 0.90, autoCommit: true) containing
+ *      `add-relationship` operations between docs that already exist in the store.
+ *   2. A **review** patch (confidence 0.65, autoCommit: false) containing all
+ *      `create` and `update` operations, plus relationships involving new docs.
+ *
+ * Empty patch objects are omitted from the return value.
+ *
+ * @param text         Prose or research text to analyse.
+ * @param existingDocs Current canonical docs from the store (used for name matching).
+ * @param sourceRef    Origin of the text (chat message, research artifact, etc.).
+ */
+export async function extractPatches(
+  text: string,
+  existingDocs: CanonicalDoc[],
+  sourceRef: SourceRef,
+): Promise<CanonicalPatch[]> {
+  const extraction = await callOllamaExtraction(text);
+
+  // Build lowercase name → existing doc lookup table
+  const existingByName = new Map<string, CanonicalDoc>();
+  for (const doc of existingDocs) {
+    existingByName.set(doc.name.toLowerCase(), doc);
+    // Also index aliases stored in details (if present)
+    const aliases = (doc.details?.aliases ?? []) as string[];
+    for (const alias of aliases) {
+      existingByName.set(alias.toLowerCase(), doc);
+    }
+  }
+
+  // Track all name → docId resolutions (existing + newly-proposed)
+  const resolvedIds = new Map<string, string>();
+  for (const [name, doc] of existingByName) {
+    resolvedIds.set(name, doc.id);
+  }
+
+  // Ops split by confidence tier
+  const autoOps: PatchOperation[] = [];   // confidence 0.90, autoCommit: true
+  const reviewOps: PatchOperation[] = []; // confidence 0.65, autoCommit: false
+
+  // --- Entity operations -------------------------------------------------------
+  for (const entity of extraction.entities) {
+    const rawType = entity.type?.toLowerCase().replace(/ /g, "_");
+    if (!VALID_TYPES.has(rawType)) continue;
+
+    const docType = rawType as CanonicalType;
+    const name = entity.name ?? "";
+    const nameLower = name.toLowerCase();
+
+    const existing = existingByName.get(nameLower);
+
+    if (existing) {
+      // Entity already exists — propose a summary update when content differs
+      if (entity.summary && entity.summary.trim() !== existing.summary.trim()) {
+        reviewOps.push({
+          op: "update",
+          docId: existing.id,
+          field: "summary",
+          oldValue: existing.summary,
+          newValue: entity.summary.trim(),
+        });
+      }
+      // Keep resolved for relationship lookup (already registered above)
+    } else {
+      // New entity — propose create
+      const docId = makeDocId(docType, name);
+      resolvedIds.set(nameLower, docId);
+
+      const now = Date.now();
+      const fields: Partial<CanonicalDoc> = {
+        id:            docId,
+        type:          docType,
+        name,
+        summary:       entity.summary ?? "",
+        details:       {},
+        status:        "draft",
+        sources:       [sourceRef],
+        relationships: [],
+        lastVerified:  0,
+        createdAt:     now,
+        updatedAt:     now,
+      };
+      reviewOps.push({ op: "create", docType, fields });
+    }
+  }
+
+  // --- Relationship operations --------------------------------------------------
+  for (const rel of extraction.relationships) {
+    const fromName = (rel.from ?? "").toLowerCase();
+    const toName   = (rel.to   ?? "").toLowerCase();
+    const fromId = resolvedIds.get(fromName);
+    const toId   = resolvedIds.get(toName);
+    if (!fromId || !toId) continue;
+
+    const relationship: Omit<Relationship, "id" | "createdAt"> = {
+      from:     fromId,
+      type:     rel.relType ?? "related_to",
+      to:       toId,
+      metadata: {},
+      sources:  [sourceRef],
+    };
+
+    // Both ends already exist in the store → high-confidence citation, auto-commit
+    const bothExistAlready =
+      existingByName.has(fromName) && existingByName.has(toName);
+
+    if (bothExistAlready) {
+      autoOps.push({ op: "add-relationship", relationship });
+    } else {
+      reviewOps.push({ op: "add-relationship", relationship });
+    }
+  }
+
+  // --- Assemble patches ---------------------------------------------------------
+  const patches: CanonicalPatch[] = [];
+
+  if (autoOps.length > 0) {
+    patches.push({
+      id:         makeId("patch"),
+      status:     "pending",
+      operations: autoOps,
+      sourceRef,
+      confidence: 0.9,
+      autoCommit: true,
+      createdAt:  Date.now(),
+    });
+  }
+
+  if (reviewOps.length > 0) {
+    patches.push({
+      id:         makeId("patch"),
+      status:     "pending",
+      operations: reviewOps,
+      sourceRef,
+      confidence: 0.65,
+      autoCommit: false,
+      createdAt:  Date.now(),
+    });
+  }
+
+  return patches;
+}
+
+/**
+ * Apply all operations in `patch` to the store, then mark the patch as "accepted".
+ *
+ * Operations are executed in declaration order. Partial failures are NOT rolled back —
+ * callers that require atomicity should wrap in their own store transaction.
+ *
+ * @param patch  The patch to apply (typically one with `autoCommit: true`).
+ * @param store  A store instance exposing the required mutation methods.
+ */
+export async function applyPatch(
+  patch: CanonicalPatch,
+  store: PatchApplyStore,
+): Promise<void> {
+  const now = Date.now();
+
+  for (const op of patch.operations) {
+    switch (op.op) {
+      case "create": {
+        const doc: CanonicalDoc = {
+          id:            (op.fields.id as string) ?? makeDocId(op.docType, (op.fields.name as string) ?? ""),
+          type:          op.docType,
+          name:          (op.fields.name as string) ?? "",
+          summary:       (op.fields.summary as string) ?? "",
+          details:       (op.fields.details as Record<string, unknown>) ?? {},
+          status:        "draft",
+          sources:       (op.fields.sources as SourceRef[]) ?? [patch.sourceRef],
+          relationships: [],
+          lastVerified:  0,
+          createdAt:     now,
+          updatedAt:     now,
+          // Spread last so explicit fields in the proposal win
+          ...op.fields,
+        };
+        await store.addDoc(doc);
+        break;
+      }
+
+      case "update":
+        await store.updateDoc(op.docId, {
+          [op.field]: op.newValue,
+          updatedAt:  now,
+        } as Partial<CanonicalDoc>);
+        break;
+
+      case "add-relationship": {
+        const rel: Relationship = {
+          id:        makeId("rel"),
+          createdAt: now,
+          ...op.relationship,
+        };
+        await store.addRelationship(rel);
+        break;
+      }
+
+      case "remove-relationship":
+        await store.removeRelationship(op.relationshipId);
+        break;
+
+      case "delete":
+        await store.deleteDoc(op.docId);
+        break;
+
+      case "mark-contradiction":
+        await store.updateDoc(op.docId, {
+          status:    "draft",
+          updatedAt: now,
+        });
+        break;
+    }
+  }
+
+  await store.updatePatchStatus(patch.id, "accepted");
 }

@@ -113,11 +113,23 @@ export function createRAGNode(
 }
 
 /**
- * Validate parent-child relationship
+ * Normalise legacy node types for backward compatibility.
+ * Existing data stored before the rename can have type `'part'`; treat it as `'section'`.
  */
-export function isValidChild(parentType: NodeType, childType: NodeType): boolean {
-  const validChildren = VALID_CHILDREN[parentType];
-  return validChildren.includes(childType);
+export function normalizeNodeType(type: string): NodeType {
+  if (type === "part") return "section";
+  return type as NodeType;
+}
+
+/**
+ * Validate parent-child relationship.
+ * Accepts raw strings so callers with legacy `'part'` nodes still work.
+ */
+export function isValidChild(parentType: string, childType: string): boolean {
+  const normParent = normalizeNodeType(parentType);
+  const normChild  = normalizeNodeType(childType);
+  const validChildren = VALID_CHILDREN[normParent];
+  return validChildren?.includes(normChild) ?? false;
 }
 
 /**

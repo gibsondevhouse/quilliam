@@ -32,7 +32,7 @@ import type {
 function groupBySource(patches: CanonicalPatch[]): Map<string, CanonicalPatch[]> {
   const groups = new Map<string, CanonicalPatch[]>();
   for (const patch of patches) {
-    const key = `${patch.sourceType}:${patch.sourceId}`;
+    const key = `${patch.sourceRef.kind}:${patch.sourceRef.id}`;
     const list = groups.get(key) ?? [];
     list.push(patch);
     groups.set(key, list);
@@ -41,11 +41,12 @@ function groupBySource(patches: CanonicalPatch[]): Map<string, CanonicalPatch[]>
 }
 
 function sourceLabel(patch: CanonicalPatch): string {
-  switch (patch.sourceType) {
-    case "chat":     return `Chat — ${patch.sourceId.slice(0, 8)}`;
-    case "research": return `Research run — ${patch.sourceId.slice(0, 8)}`;
-    case "manual":   return "Manual";
-    default:         return patch.sourceId.slice(0, 12);
+  switch (patch.sourceRef.kind) {
+    case "chat_message":      return `Chat — ${patch.sourceRef.id.slice(0, 8)}`;
+    case "research_artifact": return `Research run — ${patch.sourceRef.id.slice(0, 8)}`;
+    case "scene_node":        return `Scene — ${patch.sourceRef.id.slice(0, 8)}`;
+    case "manual":            return "Manual";
+    default:                  return patch.sourceRef.id.slice(0, 12);
   }
 }
 
@@ -60,8 +61,17 @@ function opSummary(op: PatchOperation): string {
     case "remove-relationship":
       return `Remove relationship: ${op.relationshipId}`;
     case "mark-contradiction":
-      return `Contradiction on ${op.docId}: ${op.description}`;
+      return `Contradiction on ${op.docId}: ${op.note}`;
+    case "delete":
+      return `Delete doc: ${op.docId}`;
   }
+}
+
+function confidenceBadgeProps(score: number): { label: string; cls: string } {
+  const pct = Math.round(score * 100);
+  if (score >= 0.85) return { label: `${pct}%`, cls: "build-feed-confidence--high" };
+  if (score >= 0.60) return { label: `${pct}%`, cls: "build-feed-confidence--medium" };
+  return { label: `${pct}%`, cls: "build-feed-confidence--low" };
 }
 
 /* ----------------------------------------------------------------
@@ -73,6 +83,7 @@ async function applyPatch(
   store: {
     addDoc(d: CanonicalDoc): Promise<void>;
     updateDoc(id: string, p: Partial<CanonicalDoc>): Promise<void>;
+    deleteDoc(id: string): Promise<void>;
     addRelationship(r: Relationship): Promise<void>;
     removeRelationship(id: string): Promise<void>;
     getDocById(id: string): Promise<CanonicalDoc | undefined>;
@@ -92,6 +103,7 @@ async function applyPatch(
           sources:       (op.fields.sources as CanonicalDoc["sources"]) ?? [],
           relationships: [],
           lastVerified:  0,
+          createdAt:     Date.now(),
           updatedAt:     Date.now(),
         };
         await store.addDoc(doc);
@@ -103,7 +115,7 @@ async function applyPatch(
       }
       case "add-relationship": {
         const relId = `rel_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-        await store.addRelationship({ ...op.relationship, id: relId } as Relationship);
+        await store.addRelationship({ ...op.relationship, id: relId, createdAt: Date.now() } as Relationship);
         break;
       }
       case "remove-relationship": {
@@ -115,10 +127,14 @@ async function applyPatch(
         if (existing) {
           const contradictions = [
             ...((existing.details.contradictions as unknown[]) ?? []),
-            { description: op.description, sourceId: op.sourceId, at: Date.now() },
+            { note: op.note, at: Date.now() },
           ];
           await store.updateDoc(op.docId, { details: { ...existing.details, contradictions } });
         }
+        break;
+      }
+      case "delete": {
+        await store.deleteDoc(op.docId);
         break;
       }
     }
@@ -134,33 +150,46 @@ interface PatchCardProps {
   patch: CanonicalPatch;
   onAccept: (id: string) => void;
   onReject: (id: string) => void;
+  resolved?: boolean;
+  resolvedAs?: "accepted" | "rejected";
 }
 
-function PatchCard({ patch, onAccept, onReject }: PatchCardProps) {
+function PatchCard({ patch, onAccept, onReject, resolved, resolvedAs }: PatchCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const badge = confidenceBadgeProps(patch.confidence);
 
   return (
-    <div className="build-feed-card">
+    <div className={`build-feed-card${resolved ? " build-feed-card--resolved" : ""}`}>
       <div className="build-feed-card-header">
         <div className="build-feed-card-meta">
           <span className="build-feed-card-source">{sourceLabel(patch)}</span>
           <span className="build-feed-card-count">{patch.operations.length} op(s)</span>
+          <span className={`build-feed-confidence ${badge.cls}`}>{badge.label}</span>
+          {resolved && resolvedAs && (
+            <span className={`build-feed-resolved-label build-feed-resolved-label--${resolvedAs}`}>
+              {resolvedAs === "accepted" ? "✓ accepted" : "✕ rejected"}
+            </span>
+          )}
         </div>
         <div className="build-feed-card-actions">
-          <button
-            className="build-feed-btn build-feed-btn--accept"
-            onClick={() => onAccept(patch.id)}
-            title="Accept all operations in this patch"
-          >
-            Accept
-          </button>
-          <button
-            className="build-feed-btn build-feed-btn--reject"
-            onClick={() => onReject(patch.id)}
-            title="Reject all operations — archived, not deleted"
-          >
-            Reject
-          </button>
+          {!resolved && (
+            <>
+              <button
+                className="build-feed-btn build-feed-btn--accept"
+                onClick={() => onAccept(patch.id)}
+                title="Accept all operations in this patch"
+              >
+                Accept
+              </button>
+              <button
+                className="build-feed-btn build-feed-btn--reject"
+                onClick={() => onReject(patch.id)}
+                title="Reject all operations — archived, not deleted"
+              >
+                Reject
+              </button>
+            </>
+          )}
           <button
             className="build-feed-btn build-feed-btn--expand"
             onClick={() => setExpanded((v) => !v)}
@@ -187,9 +216,12 @@ function PatchCard({ patch, onAccept, onReject }: PatchCardProps) {
    Main component
    ---------------------------------------------------------------- */
 
+type ResolvedPatch = CanonicalPatch & { resolvedAs: "accepted" | "rejected" };
+
 export function BuildFeed() {
   const { storeRef, storeReady } = useRAGContext();
   const [patches, setPatches] = useState<CanonicalPatch[]>([]);
+  const [resolvedPatches, setResolvedPatches] = useState<ResolvedPatch[]>([]);
   // Start with loading=true — avoids synchronous setState inside the effect.
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
@@ -215,40 +247,65 @@ export function BuildFeed() {
     if (!patch) return;
     await applyPatch(patch, store);
     setPatches((prev) => prev.filter((p) => p.id !== patchId));
+    setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "accepted" as const }]);
   }, [patches, storeRef]);
 
   const handleReject = useCallback(async (patchId: string) => {
     const store = storeRef.current;
     if (!store) return;
+    const patch = patches.find((p) => p.id === patchId);
+    if (!patch) return;
     await store.updatePatchStatus(patchId, "rejected");
     setPatches((prev) => prev.filter((p) => p.id !== patchId));
-  }, [storeRef]);
+    setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "rejected" as const }]);
+  }, [patches, storeRef]);
 
   const handleAcceptAll = useCallback(async (sourceKey: string) => {
     const store = storeRef.current;
     if (!store) return;
     const group = groups.get(sourceKey) ?? [];
+    const newlyResolved: ResolvedPatch[] = [];
     for (const patch of group) {
       await applyPatch(patch, store);
+      newlyResolved.push({ ...patch, resolvedAs: "accepted" as const });
     }
     setPatches((prev) => prev.filter((p) => {
-      const key = `${p.sourceType}:${p.sourceId}`;
+      const key = `${p.sourceRef.kind}:${p.sourceRef.id}`;
       return key !== sourceKey;
     }));
+    setResolvedPatches((prev) => [...prev, ...newlyResolved]);
   }, [groups, storeRef]);
 
   const handleRejectAll = useCallback(async (sourceKey: string) => {
     const store = storeRef.current;
     if (!store) return;
     const group = groups.get(sourceKey) ?? [];
+    const newlyResolved: ResolvedPatch[] = [];
     for (const patch of group) {
       await store.updatePatchStatus(patch.id, "rejected");
+      newlyResolved.push({ ...patch, resolvedAs: "rejected" as const });
     }
     setPatches((prev) => prev.filter((p) => {
-      const key = `${p.sourceType}:${p.sourceId}`;
+      const key = `${p.sourceRef.kind}:${p.sourceRef.id}`;
       return key !== sourceKey;
     }));
+    setResolvedPatches((prev) => [...prev, ...newlyResolved]);
   }, [groups, storeRef]);
+
+  const handleAcceptHighConfidence = useCallback(async () => {
+    const store = storeRef.current;
+    if (!store) return;
+    const highConf = patches.filter((p) => p.confidence >= 0.85);
+    if (highConf.length === 0) return;
+    const newlyResolved: ResolvedPatch[] = [];
+    for (const patch of highConf) {
+      await applyPatch(patch, store);
+      newlyResolved.push({ ...patch, resolvedAs: "accepted" as const });
+    }
+    const highIds = new Set(highConf.map((p) => p.id));
+    setPatches((prev) => prev.filter((p) => !highIds.has(p.id)));
+    setResolvedPatches((prev) => [...prev, ...newlyResolved]);
+  }, [patches, storeRef]);
 
   if (loading) {
     return <div className="build-feed-empty"><p>Loading Build Feed…</p></div>;
@@ -256,12 +313,46 @@ export function BuildFeed() {
 
   if (patches.length === 0) {
     return (
-      <div className="build-feed-empty">
-        <h2>Build Feed</h2>
-        <p>No pending patches. Write in chat or run research to propose canonical entities.</p>
+      <div className="build-feed">
+        <div className="build-feed-header">
+          <h2>Build Feed</h2>
+          {resolvedPatches.length > 0 && (
+            <span className="build-feed-badge">{resolvedPatches.length} resolved</span>
+          )}
+        </div>
+        {resolvedPatches.length === 0 && (
+          <div className="build-feed-empty">
+            <p>No pending patches. Write in chat or run research to propose canonical entities.</p>
+          </div>
+        )}
+        {resolvedPatches.length > 0 && (
+          <div className="build-feed-resolved">
+            <div className="build-feed-resolved-header">
+              <span>Resolved this session ({resolvedPatches.length})</span>
+              <button
+                className="build-feed-btn build-feed-btn--clear"
+                onClick={() => setResolvedPatches([])}
+              >
+                Clear
+              </button>
+            </div>
+            {resolvedPatches.map((patch) => (
+              <PatchCard
+                key={patch.id}
+                patch={patch}
+                onAccept={() => undefined}
+                onReject={() => undefined}
+                resolved
+                resolvedAs={patch.resolvedAs}
+              />
+            ))}
+          </div>
+        )}
       </div>
     );
   }
+
+  const highConfCount = patches.filter((p) => p.confidence >= 0.85).length;
 
   return (
     <div className="build-feed">
@@ -269,6 +360,30 @@ export function BuildFeed() {
         <h2>Build Feed</h2>
         <span className="build-feed-badge">{patches.length} pending</span>
       </div>
+
+      {/* Global batch controls */}
+      {patches.length > 0 && (
+        <div className="build-feed-batch-controls">
+          <button
+            className="build-feed-btn build-feed-btn--accept build-feed-btn--batch"
+            onClick={() => void handleAcceptHighConfidence()}
+            disabled={highConfCount === 0}
+            title="Accept all patches with confidence ≥ 85%"
+          >
+            Accept high-confidence{highConfCount > 0 ? ` (${highConfCount})` : ""}
+          </button>
+          {resolvedPatches.length > 0 && (
+            <button
+              className="build-feed-btn build-feed-btn--clear"
+              onClick={() => setResolvedPatches([])}
+              title="Hide resolved patches from this session"
+            >
+              Clear resolved ({resolvedPatches.length})
+            </button>
+          )}
+        </div>
+      )}
+
       {Array.from(groups.entries()).map(([key, group]) => (
         <div key={key} className="build-feed-group">
           <div className="build-feed-group-header">
@@ -287,7 +402,7 @@ export function BuildFeed() {
                 className="build-feed-btn build-feed-btn--reject"
                 onClick={() => void handleRejectAll(key)}
               >
-                Reject all
+                Reject all from source
               </button>
             </div>
           </div>
@@ -301,6 +416,31 @@ export function BuildFeed() {
           ))}
         </div>
       ))}
+
+      {/* Recently resolved (this session) */}
+      {resolvedPatches.length > 0 && (
+        <div className="build-feed-resolved">
+          <div className="build-feed-resolved-header">
+            <span>Resolved this session ({resolvedPatches.length})</span>
+            <button
+              className="build-feed-btn build-feed-btn--clear"
+              onClick={() => setResolvedPatches([])}
+            >
+              Clear
+            </button>
+          </div>
+          {resolvedPatches.map((patch) => (
+            <PatchCard
+              key={patch.id}
+              patch={patch}
+              onAccept={() => undefined}
+              onReject={() => undefined}
+              resolved
+              resolvedAs={patch.resolvedAs}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

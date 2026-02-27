@@ -126,6 +126,8 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
   // needing a synchronous setState call inside the effect.
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "canon">("all");
+  const [sortOrder, setSortOrder] = useState<"name" | "updated">("name");
 
   /* Load docs on mount / when store is ready */
   useEffect(() => {
@@ -148,6 +150,15 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
     [docs, activeId],
   );
 
+  const displayedDocs = useMemo(() => {
+    const filtered = statusFilter === "all" ? docs : docs.filter((d) => d.status === statusFilter);
+    return [...filtered].sort((a, b) =>
+      sortOrder === "name"
+        ? a.name.localeCompare(b.name)
+        : b.updatedAt - a.updatedAt,
+    );
+  }, [docs, statusFilter, sortOrder]);
+
   /* Add a new draft doc locally */
   const handleAdd = useCallback(async () => {
     const store = storeRef.current;
@@ -163,6 +174,7 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
       sources:      [],
       relationships: [],
       lastVerified: 0,
+      createdAt:    Date.now(),
       updatedAt:    Date.now(),
     };
     await store.addDoc(doc);
@@ -192,8 +204,9 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
       id:         makePatchId(),
       status:     "pending",
       operations: ops,
-      sourceType: "manual",
-      sourceId:   activeId,
+      sourceRef:  { kind: "manual", id: activeId },
+      confidence: 1,
+      autoCommit: false,
       createdAt:  Date.now(),
     };
     await store.addPatch(patch);
@@ -223,6 +236,32 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
           <button className="library-page-action" onClick={handleAdd}>+ Add</button>
         </div>
 
+        <div className="canonical-dashboard-controls">
+          <div className="canonical-dashboard-filter">
+            <label htmlFor="status-filter">Status:</label>
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as "all" | "draft" | "canon")}
+            >
+              <option value="all">All</option>
+              <option value="draft">Draft</option>
+              <option value="canon">Canon</option>
+            </select>
+          </div>
+          <div className="canonical-dashboard-sort">
+            <label htmlFor="sort-order">Sort:</label>
+            <select
+              id="sort-order"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as "name" | "updated")}
+            >
+              <option value="name">Name</option>
+              <option value="updated">Last updated</option>
+            </select>
+          </div>
+        </div>
+
         {loading ? (
           <div className="library-page-empty"><p>Loading…</p></div>
         ) : docs.length === 0 ? (
@@ -232,9 +271,13 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
               Add your first {title.toLowerCase().replace(/s$/, "")}
             </button>
           </div>
+        ) : displayedDocs.length === 0 ? (
+          <div className="library-page-empty">
+            <p>No {statusFilter} {title.toLowerCase()}.</p>
+          </div>
         ) : (
           <ul className="library-item-list">
-            {docs.map((doc) => (
+            {displayedDocs.map((doc) => (
               <li key={doc.id} className="library-item-row">
                 <button
                   className={`library-item-btn ${activeId === doc.id ? "active" : ""}`}

@@ -55,7 +55,7 @@ actor OllamaService {
     JSON format:
     {
       "entities": [
-        { "type": "<CanonicalType>", "name": "<name>", "summary": "<one sentence>" }
+        { "type": "<CanonicalType>", "name": "<name>", "summary": "<one sentence>", "confidence": 0.85 }
       ],
       "relationships": [
         { "from": "<name>", "relType": "<edge label>", "to": "<name>" }
@@ -64,7 +64,8 @@ actor OllamaService {
 
     Valid CanonicalType values: character, location, faction, magic_system, item, lore_entry, rule, scene, timeline_event
     Valid edge labels: member_of, located_at, appears_in, owns, rivals, parent_of, precedes, commands, rules, allies_with, opposes
-    Return empty arrays if nothing clearly matches.
+    confidence: a 0.0–1.0 score. Use >= 0.85 only for entities explicitly stated in the input text.
+    Use 0.65 for entities that are implied. Return empty arrays if nothing clearly matches.
     """
 
     /// Stream the chat response and, when the stream completes, run a separate
@@ -103,6 +104,111 @@ actor OllamaService {
                 }
             }
         }
+    }
+
+    // MARK: - Inline structured-patch chat (§7.4)
+
+    /// Chat variant for world-building / research prompts that instructs the model to
+    /// emit both a narrative response **and** a structured `<canonical_patch>` JSON block
+    /// at the end. The block is stripped from the token stream and parsed into a
+    /// `CanonicalPatch` that is yielded as the final event.
+    ///
+    /// Events: `.token` for narrative text, `.patch` for the extracted entity patch.
+    func chatWithStructuredPatches(
+        messages: [Message],
+        model: String,
+        sourceId: String
+    ) -> AsyncThrowingStream<ExtractionStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    var allMessages = messages
+                    allMessages.insert(self.structuredPatchSystemMessage(), at: 0)
+
+                    let request = try self.buildRequest(messages: allMessages, model: model)
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                        throw OllamaError.invalidResponse
+                    }
+
+                    var narrative = ""
+                    var patchBuffer = ""
+                    var inPatchBlock = false
+                    let openTag  = "<canonical_patch>"
+                    let closeTag = "</canonical_patch>"
+
+                    for try await line in bytes.lines {
+                        guard !line.isEmpty, let data = line.data(using: .utf8) else { continue }
+                        let sr = try JSONDecoder().decode(OllamaStreamResponse.self, from: data)
+                        narrative += sr.message.content
+                        if sr.done { break }
+                    }
+
+                    // Split narrative from patch block (if present)
+                    if let openRange = narrative.range(of: openTag),
+                       let closeRange = narrative.range(of: closeTag),
+                       openRange.upperBound <= closeRange.lowerBound {
+                        let beforePatch = String(narrative[narrative.startIndex ..< openRange.lowerBound])
+                        patchBuffer = String(narrative[openRange.upperBound ..< closeRange.lowerBound])
+                        let afterPatch = String(narrative[closeRange.upperBound...])
+                        let fullNarrative = (beforePatch + afterPatch).trimmingCharacters(in: .whitespacesAndNewlines)
+                        inPatchBlock = true
+
+                        // Yield the cleaned narrative as a single token
+                        if !fullNarrative.isEmpty {
+                            continuation.yield(.token(fullNarrative))
+                        }
+                    } else {
+                        // No patch block found — yield full text as narrative
+                        if !narrative.isEmpty {
+                            continuation.yield(.token(narrative))
+                        }
+                    }
+
+                    if inPatchBlock && !patchBuffer.isEmpty {
+                        let patch = parseExtractionJSON(
+                            patchBuffer.trimmingCharacters(in: .whitespacesAndNewlines),
+                            sourceId: sourceId
+                        )
+                        if !patch.operations.isEmpty {
+                            continuation.yield(.patch(patch))
+                        }
+                    }
+
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    /// System message instructing the model to append structured entity JSON at the end
+    /// of its response when new narrative entities are introduced.
+    private func structuredPatchSystemMessage() -> Message {
+        let prompt = """
+        You are an AI writing assistant for Quilliam. Write your response normally. \
+        If your response introduces new narrative entities (characters, locations, factions, \
+        items, etc.) that should be persisted in the world bible, append EXACTLY the following \
+        block at the very end — no other text after it:
+
+        <canonical_patch>
+        {
+          "entities": [
+            { "type": "character", "name": "<name>", "summary": "<one sentence>", "confidence": 0.9 }
+          ],
+          "relationships": [
+            { "from": "<name>", "relType": "<edge label>", "to": "<name>" }
+          ]
+        }
+        </canonical_patch>
+
+        Valid CanonicalType values: character, location, faction, magic_system, item, lore_entry, rule, scene, timeline_event
+        Valid edge labels: member_of, located_at, appears_in, owns, rivals, parent_of, precedes, commands, rules, allies_with, opposes
+        confidence: 0.0–1.0. Use >= 0.85 only for facts stated directly in the narrative. \
+        Omit the patch block entirely if no new entities appear.
+        """
+        return Message(role: .system, content: prompt)
     }
 
     /// Non-streaming Ollama call that extracts canonical entities from `text`.
@@ -177,9 +283,18 @@ actor OllamaService {
             ops.append(.addRelationship(candidate))
         }
 
+        // Compute overall confidence as the average of per-entity scores.
+        let confidenceValues = result.entities.compactMap { $0.confidence }
+        let avgConfidence: Double = confidenceValues.isEmpty
+            ? 0.65
+            : confidenceValues.reduce(0, +) / Double(confidenceValues.count)
+        let shouldAutoCommit = avgConfidence >= 0.85
+
         return CanonicalPatch(
             id: "patch_\(UUID().uuidString)", status: "pending",
-            operations: ops, sourceType: "chat", sourceId: sourceId, createdAt: Date()
+            operations: ops, sourceType: "chat", sourceId: sourceId,
+            confidence: avgConfidence, autoCommit: shouldAutoCommit,
+            createdAt: Date()
         )
     }
 
@@ -339,6 +454,14 @@ actor CloudAssistService {
                 "edits": [],
                 "citations": []
               }
+            ],
+            "canonicalPatches": [
+              {
+                "op": "create | add-relationship",
+                "docType": "character | location | faction | magic_system | item | lore_entry | rule | scene | timeline_event",
+                "fields": { "name": "string", "summary": "string", "type": "<CanonicalType>" },
+                "confidence": 0.9
+              }
             ]
           }
         }
@@ -369,6 +492,7 @@ actor CloudAssistService {
             return CloudAssistResponse(
                 message: text.isEmpty ? "Assisted cloud completed without structured patch output." : text,
                 patches: [],
+                canonicalPatches: [],
                 usage: UsageMeter(
                     spentUsd: 0,
                     inputTokens: decoded.usage?.input_tokens ?? 0,

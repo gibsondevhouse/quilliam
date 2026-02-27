@@ -3,6 +3,31 @@ import { getSystemInfo } from "@/lib/system";
 import { OLLAMA_BASE_URL } from "@/lib/ollama";
 
 /**
+ * POST /api/chat — streaming Ollama proxy.
+ *
+ * ## Patch Proposal Pipeline (Plan 003)
+ *
+ * The route streams the Ollama response as-is (NDJSON, Content-Type: text/event-stream).
+ * Canonical entity extraction happens **client-side** after the stream completes:
+ *
+ *   1. `useLocalChat` (Chat.tsx) assembles `fullContent` from the stream.
+ *   2. When `onPatchesExtracted` is set, it POSTs `fullContent` to
+ *      `/api/extract-canonical` with `existingDocs` from the client IDB store.
+ *   3. `/api/extract-canonical` calls `extractPatches(text, existingDocs, sourceRef)`
+ *      and returns `{ patches: CanonicalPatch[] }`.
+ *   4. The caller separates auto-commit patches (confidence >= 0.85, autoCommit: true)
+ *      from review patches and dispatches accordingly:
+ *        - auto-commit → `applyPatch(patch, store)` (writes to IDB, marks "accepted")
+ *        - review      → `store.addPatch(patch)`   (queued as "pending" in Build Feed)
+ *
+ * The `extractCanonical` flag below remains as an opt-in that appends an inline
+ * extraction hint to the user message, causing the model to emit a
+ * `canonical_extraction` JSON fence alongside its narrative reply.
+ * This fence is stripped by the client before display; the text content is
+ * forwarded to `/api/extract-canonical` as the extraction source.
+ */
+
+/**
  * Canonical extraction instruction appended to the system prompt when the
  * `extractCanonical` flag is set by the client.
  * The model is instructed to emit a fenced JSON block at the end of its reply

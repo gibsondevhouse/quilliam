@@ -14,6 +14,7 @@ import { useRAGContext } from "@/lib/context/RAGContext";
 import { useSystemContext } from "@/lib/context/SystemContext";
 import { TabBar, type EditorTab } from "@/components/Editor/TabBar";
 import { Chat } from "@/components/Chat";
+import { BuildFeed } from "@/components/BuildFeed";
 import { StatusBar } from "@/components/Editor/StatusBar";
 import {
   DEFAULT_PROVIDER_CONFIG,
@@ -53,6 +54,7 @@ const SUB_NAV_ITEMS = [
   { label: "Rules",          path: "rules" },
   { label: "Timeline",       path: "timeline" },
   { label: "World",          path: "world" },
+  { label: "Canon",          path: "canon" },
   { label: "Systems",        path: "systems" },
   { label: "Build Feed",     path: "build-feed" },
   { label: "Continuity",     path: "continuity" },
@@ -458,6 +460,8 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     },
   });
 
+  const [buildFeedOpen, setBuildFeedOpen] = useState(false);
+
   /* ---- RAG Worker ---- */
   const {
     workerRef,
@@ -838,6 +842,16 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
             ))}
           </div>
           <button
+            className={`library-subnav-chat-btn ${buildFeedOpen ? "active" : ""}`}
+            onClick={() => setBuildFeedOpen(!buildFeedOpen)}
+            title="Toggle Build Feed Panel"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+            Feed
+          </button>
+          <button
             className={`library-subnav-chat-btn ${bottomPanelOpen ? "active" : ""}`}
             onClick={() => setBottomPanelOpen(!bottomPanelOpen)}
             title="Toggle AI Thread Panel"
@@ -849,8 +863,31 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
           </button>
         </nav>
 
-        {/* Body: content + optional tabs + optional chat panel */}
+        {/* Body: content + optional build feed panel + optional tabs + optional chat panel */}
         <div className="library-body">
+          {/* Left Build Feed panel */}
+          {buildFeedOpen && (
+            <div className="library-build-feed-panel">
+              <div className="library-build-feed-panel-header">
+                <span className="library-build-feed-panel-title">
+                  ⚡ Build Feed
+                </span>
+                <button
+                  className="library-build-feed-panel-btn"
+                  onClick={() => setBuildFeedOpen(false)}
+                  title="Close Build Feed"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              <div className="library-build-feed-panel-body">
+                <BuildFeed />
+              </div>
+            </div>
+          )}
+
           {/* Left/main area: tab bar + page content */}
           <div className="library-main">
             {openTabs.length > 0 && (

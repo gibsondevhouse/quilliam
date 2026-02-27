@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLibraryContext } from "@/lib/context/LibraryContext";
-import { migrateLibrary } from "@/lib/rag/migrate";
-import type { MigrationSummary } from "@/lib/rag/migrate";
+import { migrateLibrary, previewMigration, confirmMigration } from "@/lib/rag/migrate";
+import type { MigrationReport } from "@/lib/rag/migrate";
 import type { CloudProviderConfig, RunBudget } from "@/lib/types";
 
 interface VaultStatus {
@@ -37,10 +37,16 @@ export default function SystemsPage() {
   const [providerConfigDraft, setProviderConfigDraft] = useState<CloudProviderConfig>(lib.cloudProviderConfig);
   const [budgetDraft, setBudgetDraft] = useState<RunBudget>(lib.defaultRunBudget);
 
-  // Migration state
-  const [migrationStatus, setMigrationStatus] = useState<"idle" | "running" | "done" | "error">("idle");
-  const [migrationSummary, setMigrationSummary] = useState<MigrationSummary | null>(null);
+  // Migration wizard state
+  type WizardStep = "idle" | "previewing" | "preview" | "running" | "review" | "confirming" | "done" | "error";
+  const [wizardStep, setWizardStep] = useState<WizardStep>("idle");
+  const [previewCounts, setPreviewCounts] = useState<{
+    characters: number; locations: number; worldEntries: number; scenes: number; partNodes: number;
+  } | null>(null);
+  const [migrationReport, setMigrationReport] = useState<MigrationReport | null>(null);
+  const [migrationProgress, setMigrationProgress] = useState<{ step: string; pct: number } | null>(null);
   const [migrationError, setMigrationError] = useState<string | null>(null);
+
 
   const loadVaultStatus = useCallback(async () => {
     try {
@@ -174,20 +180,58 @@ export default function SystemsPage() {
     lib.setDefaultRunBudget(budgetDraft);
   }, [budgetDraft, lib]);
 
-  const handleMigrate = useCallback(async () => {
+  const handleMigratePreview = useCallback(async () => {
     const store = lib.storeRef.current;
     if (!store) return;
-    setMigrationStatus("running");
-    setMigrationError(null);
+    setWizardStep("previewing");
     try {
-      const summary = await migrateLibrary(store, lib.libraryId);
-      setMigrationSummary(summary);
-      setMigrationStatus("done");
+      const counts = await previewMigration(store, lib.libraryId);
+      setPreviewCounts(counts);
+      setWizardStep("preview");
     } catch (err) {
       setMigrationError(err instanceof Error ? err.message : String(err));
-      setMigrationStatus("error");
+      setWizardStep("error");
     }
   }, [lib.libraryId, lib.storeRef]);
+
+  const handleMigrateRun = useCallback(async () => {
+    const store = lib.storeRef.current;
+    if (!store) return;
+    setWizardStep("running");
+    setMigrationProgress({ step: "starting", pct: 0 });
+    setMigrationError(null);
+    try {
+      const report = await migrateLibrary(store, lib.libraryId, (step, pct) => {
+        setMigrationProgress({ step, pct });
+      });
+      setMigrationReport(report);
+      setWizardStep("review");
+    } catch (err) {
+      setMigrationError(err instanceof Error ? err.message : String(err));
+      setWizardStep("error");
+    }
+  }, [lib.libraryId, lib.storeRef]);
+
+  const handleMigrateConfirm = useCallback(async () => {
+    const store = lib.storeRef.current;
+    if (!store) return;
+    setWizardStep("confirming");
+    try {
+      await confirmMigration(store, lib.libraryId);
+      setWizardStep("done");
+    } catch (err) {
+      setMigrationError(err instanceof Error ? err.message : String(err));
+      setWizardStep("error");
+    }
+  }, [lib.libraryId, lib.storeRef]);
+
+  const handleMigrateRollback = useCallback(() => {
+    // Non-destructive: canonical docs created but legacy records not confirmed.
+    // Just reset the wizard — user can review canonical store manually.
+    setMigrationReport(null);
+    setMigrationProgress(null);
+    setWizardStep("idle");
+  }, []);
 
   return (
     <div className="library-page systems-page">
@@ -390,45 +434,177 @@ export default function SystemsPage() {
         <h3>Data Migration</h3>
         <p className="systems-description">
           Copy legacy Characters, Locations, and World entries into the canonical document
-          stores (Factions, Magic Systems, Items, etc.). Existing canonical docs are never
-          overwritten — this is safe to run more than once.
+          stores. Existing canonical docs are never overwritten — safe to run more than once.
+          Original legacy records are preserved after migration.
         </p>
 
-        {migrationStatus === "idle" && (
-          <button className="library-page-action primary" onClick={() => void handleMigrate()}>
-            Run migration
-          </button>
+        {/* Step 1 — Intro */}
+        {wizardStep === "idle" && (
+          <div>
+            <p style={{ marginBottom: 12 }}>
+              This wizard converts legacy entity tables into canonical documents, extracts
+              implicit relationships, lifts scene RAG nodes into canonical Scene docs, and
+              renames any legacy &quot;part&quot; nodes to &quot;section&quot;.
+            </p>
+            <button
+              className="library-page-action primary"
+              onClick={() => void handleMigratePreview()}
+            >
+              Preview migration
+            </button>
+          </div>
         )}
 
-        {migrationStatus === "running" && (
-          <p className="systems-status">Migrating…</p>
+        {/* Step 2 — Previewing (loading) */}
+        {wizardStep === "previewing" && (
+          <p className="systems-status">Counting entities…</p>
         )}
 
-        {migrationStatus === "done" && migrationSummary && (
-          <div className="migration-summary">
-            <p>✓ Migration complete</p>
+        {/* Step 3 — Preview counts */}
+        {wizardStep === "preview" && previewCounts && (
+          <div className="migration-preview">
+            <p>The following will be converted:</p>
             <ul>
-              <li>{migrationSummary.charactersConverted} characters</li>
-              <li>{migrationSummary.locationsConverted} locations</li>
-              <li>{migrationSummary.loreEntriesConverted} lore entries</li>
-              <li>{migrationSummary.relationshipsCreated} relationships inferred</li>
-              <li>{migrationSummary.sceneDocsCreated} scene docs created</li>
+              <li>{previewCounts.characters} character{previewCounts.characters !== 1 ? "s" : ""}</li>
+              <li>{previewCounts.locations} location{previewCounts.locations !== 1 ? "s" : ""}</li>
+              <li>{previewCounts.worldEntries} world entr{previewCounts.worldEntries !== 1 ? "ies" : "y"}</li>
+              <li>{previewCounts.scenes} scene node{previewCounts.scenes !== 1 ? "s" : ""}</li>
+              {previewCounts.partNodes > 0 && (
+                <li>{previewCounts.partNodes} &quot;part&quot; node{previewCounts.partNodes !== 1 ? "s" : ""} renamed to &quot;section&quot;</li>
+              )}
             </ul>
-            <button className="library-page-action" onClick={() => setMigrationStatus("idle")}>
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                className="library-page-action primary"
+                onClick={() => void handleMigrateRun()}
+              >
+                Run migration
+              </button>
+              <button
+                className="library-page-action"
+                onClick={() => setWizardStep("idle")}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4 — Running (progress bar) */}
+        {wizardStep === "running" && (
+          <div className="migration-running">
+            <p className="systems-status">
+              Migrating{migrationProgress ? ` — ${migrationProgress.step}` : ""}…
+            </p>
+            {migrationProgress && (
+              <div
+                style={{
+                  background: "var(--border-subtle, #e0e0e0)",
+                  borderRadius: 4,
+                  height: 8,
+                  marginTop: 8,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    background: "var(--accent, #0070f3)",
+                    height: "100%",
+                    width: `${migrationProgress.pct}%`,
+                    transition: "width 0.3s ease",
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 5 — Review report */}
+        {wizardStep === "review" && migrationReport && (
+          <div className="migration-review">
+            <p style={{ fontWeight: 600, marginBottom: 8 }}>Migration complete — review results</p>
+            <ul>
+              <li>{migrationReport.characters} character{migrationReport.characters !== 1 ? "s" : ""} converted</li>
+              <li>{migrationReport.locations} location{migrationReport.locations !== 1 ? "s" : ""} converted</li>
+              <li>{migrationReport.worldEntries} world entr{migrationReport.worldEntries !== 1 ? "ies" : "y"} converted</li>
+              <li>{migrationReport.scenes} scene doc{migrationReport.scenes !== 1 ? "s" : ""} created</li>
+              <li>{migrationReport.relationships} relationship{migrationReport.relationships !== 1 ? "s" : ""} inferred</li>
+            </ul>
+            {migrationReport.warnings.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <p style={{ fontWeight: 600, color: "var(--warning, #d97706)" }}>
+                  Warnings ({migrationReport.warnings.length})
+                </p>
+                <ul style={{ marginTop: 4 }}>
+                  {migrationReport.warnings.map((w, i) => (
+                    <li key={i} style={{ fontSize: 13, opacity: 0.85 }}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p style={{ marginTop: 12, fontSize: 13, opacity: 0.8 }}>
+              Confirming will mark legacy records as migrated. Original records are preserved
+              and will not be deleted. You can rollback (canonical docs will remain but legacy
+              records stay unmarked).
+            </p>
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                className="library-page-action primary"
+                onClick={() => void handleMigrateConfirm()}
+              >
+                Confirm migration
+              </button>
+              <button
+                className="library-page-action"
+                onClick={handleMigrateRollback}
+              >
+                Rollback
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 6 — Confirming */}
+        {wizardStep === "confirming" && (
+          <p className="systems-status">Confirming…</p>
+        )}
+
+        {/* Step 7 — Done */}
+        {wizardStep === "done" && (
+          <div className="migration-done">
+            <p>✓ Migration confirmed — legacy records marked as migrated.</p>
+            <button
+              className="library-page-action"
+              onClick={() => {
+                setWizardStep("idle");
+                setMigrationReport(null);
+                setPreviewCounts(null);
+                setMigrationProgress(null);
+              }}
+            >
               Run again
             </button>
           </div>
         )}
 
-        {migrationStatus === "error" && (
+        {/* Error state */}
+        {wizardStep === "error" && (
           <div className="migration-error">
             <p>Migration failed: {migrationError}</p>
-            <button className="library-page-action" onClick={() => setMigrationStatus("idle")}>
+            <button
+              className="library-page-action"
+              onClick={() => {
+                setWizardStep("idle");
+                setMigrationError(null);
+              }}
+            >
               Retry
             </button>
           </div>
         )}
+
       </section>
     </div>
   );
 }
+

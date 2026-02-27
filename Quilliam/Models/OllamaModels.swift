@@ -201,5 +201,8 @@ struct ResearchRunRecord: Codable, Identifiable, Sendable {
 struct CloudAssistResponse: Codable, Sendable {
     var message: String
     var patches: [ProposedPatchBatch]
+    /// Canonical entity/relationship patches extracted by the cloud model.
+    /// `autoCommit: true` when `confidence >= 0.85`.
+    var canonicalPatches: [CanonicalPatch]?
     var usage: UsageMeter?
 }

@@ -859,3 +859,501 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+
+/* ============================================================
+   BUILD FEED SIDE PANEL (library layout)
+   ============================================================ */
+
+.library-build-feed-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 340px;
+  min-width: 260px;
+  max-width: 560px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.library-build-feed-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  user-select: none;
+  background: var(--bg-secondary);
+}
+
+.library-build-feed-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+.library-build-feed-panel-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+
+.library-build-feed-panel-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.library-build-feed-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* ============================================================
+   BUILD FEED COMPONENT
+   ============================================================ */
+
+.build-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 12px;
+  min-height: 0;
+}
+
+.build-feed-empty {
+  padding: 20px 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.build-feed-empty h2 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.build-feed-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.build-feed-header h2 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.build-feed-badge {
+  font-size: 10px;
+  font-family: var(--font-mono), monospace;
+  background: var(--accent);
+  color: var(--bg-primary);
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* Global batch controls */
+.build-feed-batch-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* Groups */
+.build-feed-group {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.build-feed-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.build-feed-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.build-feed-group-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Individual patch card */
+.build-feed-card {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.build-feed-card:first-child {
+  border-top: none;
+}
+
+.build-feed-card--resolved {
+  opacity: 0.6;
+}
+
+.build-feed-card-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.build-feed-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.build-feed-card-source {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.build-feed-card-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono), monospace;
+  white-space: nowrap;
+}
+
+.build-feed-card-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Confidence badge */
+.build-feed-confidence {
+  font-size: 10px;
+  font-family: var(--font-mono), monospace;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.build-feed-confidence--high {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.build-feed-confidence--medium {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+}
+
+.build-feed-confidence--low {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+/* Resolved label inside card */
+.build-feed-resolved-label {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.build-feed-resolved-label--accepted {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.build-feed-resolved-label--rejected {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+/* Buttons */
+.build-feed-btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  white-space: nowrap;
+}
+
+.build-feed-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.build-feed-btn--accept {
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.build-feed-btn--accept:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: #4ade80;
+}
+
+.build-feed-btn--reject {
+  border-color: rgba(248, 113, 113, 0.3);
+  color: #f87171;
+}
+
+.build-feed-btn--reject:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: #f87171;
+}
+
+.build-feed-btn--expand {
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 0 6px;
+}
+
+.build-feed-btn--expand:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.build-feed-btn--batch {
+  height: 26px;
+  font-size: 11px;
+}
+
+.build-feed-btn--clear {
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.build-feed-btn--clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* Operations list (expanded) */
+.build-feed-ops {
+  list-style: none;
+  margin: 0;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+.build-feed-op {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.build-feed-op-badge {
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.build-feed-op-badge--create         { background: rgba(74,222,128,0.15); color: #4ade80; }
+.build-feed-op-badge--update         { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.build-feed-op-badge--add-relationship    { background: rgba(167,139,250,0.15); color: #a78bfa; }
+.build-feed-op-badge--remove-relationship { background: rgba(248,113,113,0.15); color: #f87171; }
+.build-feed-op-badge--mark-contradiction  { background: rgba(250,204,21,0.15); color: #facc15; }
+.build-feed-op-badge--delete         { background: rgba(248,113,113,0.15); color: #f87171; }
+
+.build-feed-op-summary {
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+/* Resolved section */
+.build-feed-resolved {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  opacity: 0.75;
+}
+
+.build-feed-resolved-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ================================================================
+   Canonical Dashboard Controls (filter + sort bar)
+   ================================================================ */
+
+.canonical-dashboard-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+
+.canonical-dashboard-filter,
+.canonical-dashboard-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.canonical-dashboard-filter select,
+.canonical-dashboard-sort select {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-input, var(--bg-surface));
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+/* ================================================================
+   Canon (global) page
+   ================================================================ */
+
+.canon-page .library-page-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.canon-page-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.canon-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.canon-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.canon-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.canon-table tr:hover td {
+  background: var(--bg-hover, rgba(255,255,255,0.03));
+}
+
+.canonical-type-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Continuity viewer shared heading */
+.continuity-section-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin: 0 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+
