@@ -10,11 +10,16 @@ import {
   materializeNode,
   serializeNode,
   type PersistedAiLibrarySettings,
+  type PersistedCanonicalDoc,
+  type PersistedCanonicalPatch,
   type PersistedChatMessage,
   type PersistedChatSession,
   type PersistedCharacter,
   type PersistedLibraryMeta,
   type PersistedLocation,
+  type PersistedPatchByDocEntry,
+  type PersistedRelationIndexEntry,
+  type PersistedRelationship,
   type PersistedResearchArtifact,
   type PersistedResearchRun,
   type PersistedUsageLedger,
@@ -25,6 +30,7 @@ import {
   type StoredEmbedding,
   type StoredMetadata,
 } from "@/lib/rag/store";
+import type { CanonicalType } from "@/lib/types";
 
 interface RAGDBSchema extends DBSchema {
   nodes: {
@@ -94,6 +100,33 @@ interface RAGDBSchema extends DBSchema {
     value: PersistedUsageLedger;
     indexes: { by_updated: number };
   };
+  // v7 — canonical document stores
+  canonicalDocs: {
+    key: string;
+    value: PersistedCanonicalDoc;
+    indexes: { by_type: string; by_status: string; by_lastVerified: number };
+  };
+  relationships: {
+    key: string;
+    value: PersistedRelationship;
+    indexes: { by_from: string; by_to: string; by_type: string };
+  };
+  patches: {
+    key: string;
+    value: PersistedCanonicalPatch;
+    indexes: { by_status: string; by_sourceType: string; by_sourceId: string };
+  };
+  // v8 — compound-key index stores (replaces buggy single-key v7 stores)
+  relationIndexByDoc: {
+    key: [string, string]; // [docId, relationshipId]
+    value: PersistedRelationIndexEntry;
+    indexes: { by_doc: string };
+  };
+  patchByDoc: {
+    key: [string, string]; // [docId, patchId]
+    value: PersistedPatchByDocEntry;
+    indexes: { by_doc: string; by_status: string; by_patchId: string };
+  };
 }
 
 interface PersistedEmbedding extends StoredEmbedding {
@@ -106,7 +139,7 @@ function libraryMetaKey(libraryId: string): string {
 }
 
 const DB_NAME = "quilliam-rag";
-const DB_VERSION = 6;
+const DB_VERSION = 8;
 
 let dbPromise: Promise<IDBPDatabase<RAGDBSchema>> | null = null;
 
@@ -215,6 +248,121 @@ function getDb(): Promise<IDBPDatabase<RAGDBSchema>> {
           }
           if (database.objectStoreNames.contains("embeddings")) {
             await transaction.objectStore("embeddings").clear();
+          }
+        }
+
+        // --- v7: canonical document stores ---
+        if (oldVersion < 7) {
+          if (!database.objectStoreNames.contains("canonicalDocs")) {
+            const docs = database.createObjectStore("canonicalDocs", { keyPath: "id" });
+            docs.createIndex("by_type", "type");
+            docs.createIndex("by_status", "status");
+            docs.createIndex("by_lastVerified", "lastVerified");
+          }
+
+          if (!database.objectStoreNames.contains("relationships")) {
+            const rels = database.createObjectStore("relationships", { keyPath: "id" });
+            rels.createIndex("by_from", "from");
+            rels.createIndex("by_to", "to");
+            rels.createIndex("by_type", "type");
+          }
+
+          if (!database.objectStoreNames.contains("patches")) {
+            const patches = database.createObjectStore("patches", { keyPath: "id" });
+            patches.createIndex("by_status", "status");
+            patches.createIndex("by_sourceType", "sourceType");
+            patches.createIndex("by_sourceId", "sourceId");
+          }
+
+          if (!database.objectStoreNames.contains("relationIndexByDoc")) {
+            const ridx = database.createObjectStore("relationIndexByDoc", {
+              keyPath: ["docId", "relationshipId"],
+            });
+            ridx.createIndex("by_doc", "docId");
+          }
+
+          if (!database.objectStoreNames.contains("patchByDoc")) {
+            const pbd = database.createObjectStore("patchByDoc", {
+              keyPath: ["docId", "patchId"],
+            });
+            pbd.createIndex("by_doc", "docId");
+            pbd.createIndex("by_status", "status");
+            pbd.createIndex("by_patchId", "patchId");
+          }
+
+          // Record applied schema version in metadata
+          if (database.objectStoreNames.contains("metadata")) {
+            await transaction.objectStore("metadata").put({
+              key: "schemaVersion",
+              value: 7,
+              updatedAt: Date.now(),
+            });
+          }
+        }
+
+        // --- v8: replace single-key index stores with compound-key stores ---
+        if (oldVersion < 8) {
+          // Drop old single-key stores created in v7
+          if (database.objectStoreNames.contains("relationIndexByDoc")) {
+            database.deleteObjectStore("relationIndexByDoc");
+          }
+          if (database.objectStoreNames.contains("patchByDoc")) {
+            database.deleteObjectStore("patchByDoc");
+          }
+
+          // Recreate with compound keyPath
+          const ridx = database.createObjectStore("relationIndexByDoc", {
+            keyPath: ["docId", "relationshipId"],
+          });
+          ridx.createIndex("by_doc", "docId");
+
+          const pidx = database.createObjectStore("patchByDoc", {
+            keyPath: ["docId", "patchId"],
+          });
+          pidx.createIndex("by_doc", "docId");
+          pidx.createIndex("by_status", "status");
+          pidx.createIndex("by_patchId", "patchId");
+
+          // Rebuild patchByDoc index from surviving patches store
+          if (database.objectStoreNames.contains("patches")) {
+            const patchStore = transaction.objectStore("patches");
+            const allPatches = await patchStore.getAll() as PersistedCanonicalPatch[];
+            for (const patch of allPatches) {
+              const affectedDocs = new Set<string>();
+              for (const op of patch.operations) {
+                if ("docId" in op) affectedDocs.add(op.docId as string);
+                if ("fields" in op && (op.fields as { id?: string }).id) {
+                  affectedDocs.add((op.fields as { id: string }).id);
+                }
+                if ("relationship" in op) {
+                  const rel = op.relationship as { from: string; to: string };
+                  affectedDocs.add(rel.from);
+                  affectedDocs.add(rel.to);
+                }
+              }
+              for (const docId of affectedDocs) {
+                await pidx.put({ docId, patchId: patch.id, status: patch.status });
+              }
+            }
+          }
+
+          // Rebuild relationIndexByDoc index from surviving relationships store
+          if (database.objectStoreNames.contains("relationships")) {
+            const relStore = transaction.objectStore("relationships");
+            const allRels = await relStore.getAll() as PersistedRelationship[];
+            for (const rel of allRels) {
+              await ridx.put({ docId: rel.from, relationshipId: rel.id });
+              await ridx.put({ docId: rel.to,   relationshipId: rel.id });
+            }
+          }
+
+          // Update schemaVersion marker
+          if (database.objectStoreNames.contains("metadata")) {
+            await transaction.objectStore("metadata").put({
+              key: "schemaVersion",
+              value: 8,
+              updatedAt: Date.now(),
+            });
           }
         }
       },
@@ -646,6 +794,150 @@ export async function getUsageLedger(runId: string): Promise<PersistedUsageLedge
 }
 
 /* ==============================================================
+   Canonical documents (Plan 001 — Phase 3)
+   ============================================================== */
+
+export async function addDoc(doc: PersistedCanonicalDoc): Promise<void> {
+  const db = await getDb();
+  await db.put("canonicalDocs", { ...doc, updatedAt: doc.updatedAt ?? Date.now() });
+}
+
+export async function updateDoc(id: string, patch: Partial<PersistedCanonicalDoc>): Promise<void> {
+  const db = await getDb();
+  const existing = await db.get("canonicalDocs", id);
+  if (!existing) return;
+  await db.put("canonicalDocs", { ...existing, ...patch, id, updatedAt: Date.now() });
+}
+
+export async function getDocById(id: string): Promise<PersistedCanonicalDoc | undefined> {
+  const db = await getDb();
+  return db.get("canonicalDocs", id);
+}
+
+export async function queryDocsByType(type: CanonicalType): Promise<PersistedCanonicalDoc[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("canonicalDocs", "by_type", type);
+}
+
+export async function deleteDoc(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("canonicalDocs", id);
+}
+
+/* ==============================================================
+   Relationships (Plan 001 — Phase 3)
+   ============================================================== */
+
+export async function addRelationship(rel: PersistedRelationship): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(["relationships", "relationIndexByDoc"], "readwrite");
+  await tx.objectStore("relationships").put(rel);
+  // Upsert both directions in the denormalised index
+  await tx.objectStore("relationIndexByDoc").put({ docId: rel.from, relationshipId: rel.id });
+  await tx.objectStore("relationIndexByDoc").put({ docId: rel.to,   relationshipId: rel.id });
+  await tx.done;
+}
+
+export async function removeRelationship(id: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(["relationships", "relationIndexByDoc"], "readwrite");
+  const rel = await tx.objectStore("relationships").get(id);
+  if (rel) {
+    await tx.objectStore("relationships").delete(id);
+    // Compound key: [docId, relationshipId]
+    await tx.objectStore("relationIndexByDoc").delete([rel.from, id]);
+    await tx.objectStore("relationIndexByDoc").delete([rel.to,   id]);
+  }
+  await tx.done;
+}
+
+export async function getRelationsForDoc(docId: string): Promise<PersistedRelationship[]> {
+  const db = await getDb();
+  // Range scan via compound-key index: all rows where docId matches
+  const entries = await db.getAllFromIndex("relationIndexByDoc", "by_doc", docId);
+  if (entries.length === 0) return [];
+  const tx = db.transaction("relationships", "readonly");
+  const results = await Promise.all(entries.map((e) => tx.store.get(e.relationshipId)));
+  return results.filter((r): r is PersistedRelationship => r !== undefined);
+}
+
+/* ==============================================================
+   Patches (Plan 001 — Phase 3)
+   ============================================================== */
+
+export async function addPatch(patch: PersistedCanonicalPatch): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(["patches", "patchByDoc"], "readwrite");
+  await tx.objectStore("patches").put(patch);
+  // Index the patch against every doc it touches
+  const docIds = new Set<string>();
+  for (const op of patch.operations) {
+    if ("docId" in op) docIds.add(op.docId);
+    if ("fields" in op && op.fields.id) docIds.add(op.fields.id as string);
+    if ("relationship" in op) {
+      docIds.add(op.relationship.from);
+      docIds.add(op.relationship.to);
+    }
+    if ("relationshipId" in op && op.op === "remove-relationship") {
+      // No doc ID available without the relationship record; skip for now
+    }
+  }
+  for (const docId of docIds) {
+    await tx.objectStore("patchByDoc").put({ docId, patchId: patch.id, status: patch.status });
+  }
+  await tx.done;
+}
+
+export async function updatePatchStatus(
+  id: string,
+  status: PersistedCanonicalPatch["status"]
+): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(["patches", "patchByDoc"], "readwrite");
+  const existing = await tx.objectStore("patches").get(id);
+  if (!existing) { await tx.done; return; }
+  await tx.objectStore("patches").put({ ...existing, status });
+  // Update status on all patchByDoc index rows for this patchId
+  const indexRows = await tx.objectStore("patchByDoc").index("by_patchId").getAll(id);
+  for (const row of indexRows) {
+    await tx.objectStore("patchByDoc").put({ ...row, status });
+  }
+  await tx.done;
+}
+
+export async function getPendingPatches(): Promise<PersistedCanonicalPatch[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("patches", "by_status", "pending");
+}
+
+export async function getPatchesForDoc(docId: string): Promise<PersistedCanonicalPatch[]> {
+  const db = await getDb();
+  // Range scan via compound-key index: all rows where docId matches
+  const entries = await db.getAllFromIndex("patchByDoc", "by_doc", docId);
+  if (entries.length === 0) return [];
+  const tx = db.transaction("patches", "readonly");
+  const results = await Promise.all(entries.map((e) => tx.store.get(e.patchId)));
+  return results.filter((p): p is PersistedCanonicalPatch => p !== undefined);
+}
+
+/* ==============================================================
+   Schema version utilities (Plan 001 — Phase 3)
+   ============================================================== */
+
+/**
+ * Check whether the stored schema version matches the current IDB_VERSION.
+ * Returns `needsMigration: true` when the stored version falls behind,
+ * prompting the app to show a migration banner.
+ */
+export async function checkSchemaVersion(): Promise<{ needsMigration: boolean; storedVersion: number | null }> {
+  const storedVersion = await getMetadata<number>("schemaVersion");
+  return {
+    needsMigration: storedVersion !== null && storedVersion < DB_VERSION,
+    storedVersion,
+  };
+}
+
+/* ==============================================================
    Storage health & corpus-scale utilities
    (Phase 3 — IndexedDB performance ceiling, run001 research)
    ============================================================== */
@@ -780,5 +1072,18 @@ export async function createRAGStore(): Promise<RAGStore> {
     listResearchArtifacts,
     putUsageLedger,
     getUsageLedger,
+    addDoc,
+    updateDoc,
+    getDocById,
+    queryDocsByType,
+    deleteDoc,
+    addRelationship,
+    removeRelationship,
+    getRelationsForDoc,
+    addPatch,
+    updatePatchStatus,
+    getPendingPatches,
+    getPatchesForDoc,
+    checkSchemaVersion,
   };
 }

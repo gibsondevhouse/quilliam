@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import SwiftData
 
 @Observable
 @MainActor
@@ -19,6 +20,17 @@ final class ChatViewModel {
     var researchRuns: [ResearchRunRecord] = []
 
     let availableModels = ["gemma3:4b", "llama3.2", "mistral", "phi4"]
+
+    // MARK: - Canonical patch state
+
+    /// Whether to run entity extraction after each local AI response.
+    var extractCanonical: Bool = false
+
+    /// The most recently extracted patch, awaiting user review in the patch sheet.
+    var pendingPatch: CanonicalPatch? = nil
+
+    /// Whether to show the patch review sheet.
+    var showPatchReview: Bool = false
 
     // MARK: - Document / editor state
 
@@ -105,7 +117,11 @@ final class ChatViewModel {
         do {
             switch executionMode {
             case .local:
-                try await sendLocalMessage()
+                if extractCanonical {
+                    try await streamWithExtraction()
+                } else {
+                    try await sendLocalMessage()
+                }
             case .assistedCloud:
                 try await sendAssistedCloudMessage(query: text)
             case .deepResearch:
@@ -153,6 +169,36 @@ final class ChatViewModel {
             if var list = changeSets[key], !list.isEmpty {
                 list[list.count - 1].commentary = commentary
                 changeSets[key] = list
+            }
+        }
+    }
+
+    private func streamWithExtraction() async throws {
+        let assistantMessage = Message(role: .assistant, content: "")
+        messages.append(assistantMessage)
+        let assistantIndex = messages.count - 1
+
+        var history = Array(messages.dropLast())
+        if let doc = currentDocument, !doc.workingText.isEmpty {
+            history.insert(buildDocumentSystemPrompt(for: doc), at: 0)
+        }
+
+        let sourceId = messages.last?.id ?? UUID().uuidString
+
+        for try await event in await service.chatWithExtraction(
+            messages: history,
+            model: selectedModel,
+            sourceId: sourceId
+        ) {
+            switch event {
+            case .token(let token):
+                guard assistantIndex < messages.count else { break }
+                messages[assistantIndex].content += token
+            case .patch(let patch):
+                if !patch.operations.isEmpty {
+                    pendingPatch = patch
+                    showPatchReview = true
+                }
             }
         }
     }
@@ -588,5 +634,41 @@ final class ChatViewModel {
         Outside edit fences, write plain commentary explaining your reasoning. \
         Never nest fence markers.
         """)
+    }
+
+    // MARK: - Canonical patch accept / reject
+
+    /// Insert the accepted patch operations into the SwiftData store.
+    func acceptPatch(_ patch: CanonicalPatch, context: ModelContext) {
+        for op in patch.operations {
+            switch op {
+            case .create(_, let fields):
+                let doc = CanonicalDocument(
+                    id: fields.id,
+                    type: fields.type,
+                    name: fields.name,
+                    summary: fields.summary,
+                    status: "draft",
+                    sources: fields.sources
+                )
+                context.insert(doc)
+            case .addRelationship(let rel):
+                let r = CanonicalRelationship(
+                    id: UUID().uuidString,
+                    from: rel.from,
+                    type: rel.relType,
+                    to: rel.to
+                )
+                context.insert(r)
+            }
+        }
+        pendingPatch = nil
+        showPatchReview = false
+    }
+
+    /// Dismiss the patch review sheet without writing to the store.
+    func rejectPatch() {
+        pendingPatch = nil
+        showPatchReview = false
     }
 }

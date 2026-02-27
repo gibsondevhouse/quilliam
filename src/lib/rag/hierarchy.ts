@@ -1,19 +1,22 @@
 /**
  * RAG Hierarchy Types for Quilliam
  *
- * Quilliam organizes manuscripts as a 6-level recursive tree:
+ * Quilliam organises manuscripts as a 7-level recursive tree:
  * 1. Library (Root) — Global settings, user voice/style profiles
- * 2. Universe/Beat — High-level world rules or investigative themes
- * 3. Series/Investigation — Character arc continuity or multi-part reports
- * 4. Volume/Edition — Individual books or long-form publication drafts
- * 5. Chapter/Article — Active writing buffer (in-focus)
- * 6. Fragment (Leaf) — Semantic chunks (~500 tokens) for vectorization
+ * 2. Series (optional) — Groups books in the same universe
+ * 3. Book — Individual novels or long-form publication drafts
+ * 4. Section — Named structural division within a book (renamed from "part")
+ * 5. Chapter — Active writing buffer (in-focus)
+ * 6. Scene — Writing unit linked to a canonical Scene doc
+ * 7. Fragment (Leaf) — Semantic chunks (~500 tokens) for vectorisation; hidden in tree UI
  */
 
 export type NodeType =
   | "library"
+  | "series"
   | "book"
-  | "part"
+  /** Renamed from "part" — displayed as "Section" in the UI. */
+  | "section"
   | "chapter"
   | "scene"
   /** Internal sub-fragment produced by chunking oversized scenes. Never shown in the UI tree. */
@@ -21,17 +24,19 @@ export type NodeType =
 
 export const NODE_TYPE_HIERARCHY: Record<NodeType, number> = {
   library: 0,
-  book: 1,
-  part: 2,
-  chapter: 3,
-  scene: 4,
-  fragment: 5,
+  series: 1,
+  book: 2,
+  section: 3,
+  chapter: 4,
+  scene: 5,
+  fragment: 6,
 };
 
 export const VALID_CHILDREN: Record<NodeType, NodeType[]> = {
-  library: ["book"],
-  book: ["part", "chapter"],
-  part: ["chapter"],
+  library: ["series", "book"],
+  series: ["book"],
+  book: ["section", "chapter"],
+  section: ["chapter"],
   chapter: ["scene"],
   scene: ["fragment"],
   fragment: [],
@@ -73,6 +78,12 @@ export interface RAGNode {
   chunkIndex?: number;
   /** Total number of chunks the parent scene was split into. */
   chunkTotal?: number;
+  /**
+   * Set on "scene" nodes after Step C of the canonical migration.
+   * Points to the `CanonicalDoc` id (e.g., `scn_...`) that holds the raw content,
+   * so the tree UI can offer a quick-link badge to the canonical scene doc panel.
+   */
+  sceneDocId?: string;
 }
 
 /**

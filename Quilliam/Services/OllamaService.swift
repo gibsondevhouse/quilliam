@@ -44,6 +44,151 @@ actor OllamaService {
         request.httpBody = try JSONEncoder().encode(body)
         return request
     }
+
+    // MARK: - Canonical extraction
+
+    private let extractionSystemPrompt = """
+    You are a canonical entity extractor for a narrative writing tool.
+    Given a passage of prose or research notes, identify all narrative entities and relationships.
+    Respond ONLY with a valid JSON object — no markdown, no explanation.
+
+    JSON format:
+    {
+      "entities": [
+        { "type": "<CanonicalType>", "name": "<name>", "summary": "<one sentence>" }
+      ],
+      "relationships": [
+        { "from": "<name>", "relType": "<edge label>", "to": "<name>" }
+      ]
+    }
+
+    Valid CanonicalType values: character, location, faction, magic_system, item, lore_entry, rule, scene, timeline_event
+    Valid edge labels: member_of, located_at, appears_in, owns, rivals, parent_of, precedes, commands, rules, allies_with, opposes
+    Return empty arrays if nothing clearly matches.
+    """
+
+    /// Stream the chat response and, when the stream completes, run a separate
+    /// extraction call to produce a `CanonicalPatch` from the buffered response text.
+    /// Yields tuples of token events continuously; the patch arrives exactly once as
+    /// the final yield after the stream finishes.
+    func chatWithExtraction(
+        messages: [Message],
+        model: String,
+        sourceId: String
+    ) -> AsyncThrowingStream<ExtractionStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    // 1. Stream the main response, buffering full text
+                    var fullText = ""
+                    let request = try self.buildRequest(messages: messages, model: model)
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                        throw OllamaError.invalidResponse
+                    }
+                    for try await line in bytes.lines {
+                        guard !line.isEmpty, let data = line.data(using: .utf8) else { continue }
+                        let sr = try JSONDecoder().decode(OllamaStreamResponse.self, from: data)
+                        fullText += sr.message.content
+                        continuation.yield(.token(sr.message.content))
+                        if sr.done { break }
+                    }
+
+                    // 2. Run the extraction call on the buffered text
+                    let patch = try await self.extractEntities(from: fullText, model: model, sourceId: sourceId)
+                    continuation.yield(.patch(patch))
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    /// Non-streaming Ollama call that extracts canonical entities from `text`.
+    private func extractEntities(
+        from text: String,
+        model: String,
+        sourceId: String
+    ) async throws -> CanonicalPatch {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/chat"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let systemMsg = OllamaMessage(role: "system", content: extractionSystemPrompt)
+        let userMsg   = OllamaMessage(role: "user",   content: text)
+        let body      = OllamaRequest(model: model, messages: [systemMsg, userMsg], stream: false)
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let decoded   = try JSONDecoder().decode(OllamaStreamResponse.self, from: data)
+        let raw       = decoded.message.content
+
+        // Strip optional markdown code fence
+        let cleaned = raw
+            .replacingOccurrences(of: #"^```[a-z]*\n?"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\n?```$"#,        with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return parseExtractionJSON(cleaned, sourceId: sourceId)
+    }
+
+    /// Parse the raw JSON string produced by the extraction model into a `CanonicalPatch`.
+    private func parseExtractionJSON(_ json: String, sourceId: String) -> CanonicalPatch {
+        let emptyPatch = CanonicalPatch(
+            id: "patch_\(UUID().uuidString)", status: "pending",
+            operations: [], sourceType: "chat", sourceId: sourceId, createdAt: Date()
+        )
+        guard let data = json.data(using: .utf8) else { return emptyPatch }
+
+        let result = (try? JSONDecoder().decode(ExtractionResult.self, from: data))
+            ?? ExtractionResult(entities: [], relationships: [])
+
+        var ops: [PatchOperation] = []
+        var nameToId: [String: String] = [:]
+        let source = SourceRef(type: "chat", id: sourceId, label: nil)
+
+        for entity in result.entities {
+            guard let rawType = entity.type?.lowercased().replacingOccurrences(of: " ", with: "_"),
+                  let canonType = CanonicalType(rawValue: rawType),
+                  let name = entity.name, !name.isEmpty else { continue }
+            let docId = makeDocId(type: canonType, name: name)
+            nameToId[name.lowercased()] = docId
+            let fields = CanonicalDocFields(
+                id: docId,
+                type: canonType,
+                name: name,
+                summary: entity.summary ?? "",
+                sources: [source]
+            )
+            ops.append(.create(docType: rawType, fields: fields))
+        }
+
+        for rel in result.relationships {
+            guard let fromName = rel.from, let toName = rel.to,
+                  let fromId = nameToId[fromName.lowercased()],
+                  let toId   = nameToId[toName.lowercased()] else { continue }
+            let candidate = RelationshipCandidate(
+                from: fromId,
+                relType: rel.relType ?? "related_to",
+                to: toId,
+                sources: [source]
+            )
+            ops.append(.addRelationship(candidate))
+        }
+
+        return CanonicalPatch(
+            id: "patch_\(UUID().uuidString)", status: "pending",
+            operations: ops, sourceType: "chat", sourceId: sourceId, createdAt: Date()
+        )
+    }
+
+    private func makeDocId(type: CanonicalType, name: String) -> String {
+        let clean = name.lowercased()
+            .replacingOccurrences(of: " ", with: "_")
+            .filter { $0.isLetter || $0.isNumber || $0 == "_" }
+        return "\(type.rawValue)_\(clean)"
+    }
 }
 
 enum OllamaError: LocalizedError {

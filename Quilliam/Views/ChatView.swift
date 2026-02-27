@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct ChatView: View {
     @Bindable var viewModel: ChatViewModel
+    @Environment(\.modelContext) private var modelContext
 
     @State private var showCloudConfirmation = false
     @State private var anthropicKeyInput = ""
@@ -71,6 +73,13 @@ struct ChatView: View {
                     .frame(width: 160)
                     .help("Local is default. Cloud/deep research require explicit confirmation per send.")
 
+                    if viewModel.executionMode == .local {
+                        Toggle("Extract entities", isOn: $viewModel.extractCanonical)
+                            .toggleStyle(.checkbox)
+                            .font(.caption)
+                            .help("After each response, run entity extraction to produce a canonical patch for review.")
+                    }
+
                     TextField("Message…", text: $viewModel.inputText, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1 ... 5)
@@ -112,6 +121,17 @@ struct ChatView: View {
             }
         } message: {
             Text(cloudConfirmationCopy)
+        }
+        .sheet(isPresented: $viewModel.showPatchReview) {
+            if let patch = viewModel.pendingPatch {
+                CanonicalPatchReviewView(patch: patch) { accepted in
+                    if accepted {
+                        viewModel.acceptPatch(patch, context: modelContext)
+                    } else {
+                        viewModel.rejectPatch()
+                    }
+                }
+            }
         }
         .task {
             await viewModel.refreshResearchRuns()

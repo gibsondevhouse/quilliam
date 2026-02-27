@@ -18,7 +18,7 @@ export default function ChaptersPage() {
     const results: { id: string; title: string; type: NodeType }[] = [];
     for (const n of nodes) {
       if (n.type === "chapter" || n.type === "scene") results.push(n);
-      if (n.type === "book" || n.type === "part") results.push(...gatherChapters(n.children));
+      if (n.type === "book" || n.type === "section" || n.type === "series") results.push(...gatherChapters(n.children));
     }
     return results;
   };

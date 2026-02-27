@@ -543,6 +543,22 @@
   font-size: 14px;
 }
 
+.legacy-notice {
+  margin: 8px 0 4px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--yellow, #f0b429) 10%, transparent);
+  border-left: 3px solid var(--yellow, #f0b429);
+  border-radius: 0 4px 4px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.legacy-notice a {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
 .library-page-hint {
   padding: 16px 20px;
   font-size: 12px;

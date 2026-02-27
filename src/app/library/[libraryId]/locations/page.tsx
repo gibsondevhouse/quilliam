@@ -19,6 +19,13 @@ export default function LocationsPage() {
           <h2>Locations</h2>
           <button className="library-page-action" onClick={() => lib.addLocation()}>+ Add</button>
         </div>
+        <div className="legacy-notice">
+          <p>
+            This view shows legacy data.{" "}
+            <a href={`/library/${lib.libraryId}/systems#migration`}>Run the migration</a>{" "}
+            to copy these records into the new canonical docs store.
+          </p>
+        </div>
         {lib.locations.length === 0 ? (
           <div className="library-page-empty">
             <p>No locations yet.</p>

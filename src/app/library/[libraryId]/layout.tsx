@@ -19,6 +19,7 @@ import {
   DEFAULT_PROVIDER_CONFIG,
   DEFAULT_RUN_BUDGET,
   AiExecutionMode,
+  CanonicalPatch,
   ChatMessageEntry,
   ChatSession,
   type CloudProviderConfig,
@@ -40,13 +41,21 @@ import { useRagWorker } from "@/lib/library/ragWorker";
    Library sub-nav link
    ---------------------------------------------------------------- */
 const SUB_NAV_ITEMS = [
-  { label: "Dashboard",  path: "dashboard" },
-  { label: "Stories",    path: "stories" },
-  { label: "Threads",   path: "threads" },
-  { label: "Characters", path: "characters" },
-  { label: "Locations", path: "locations" },
-  { label: "World",     path: "world" },
-  { label: "Systems",   path: "systems" },
+  { label: "Dashboard",      path: "dashboard" },
+  { label: "Stories",        path: "stories" },
+  { label: "Threads",        path: "threads" },
+  { label: "Characters",     path: "characters" },
+  { label: "Locations",      path: "locations" },
+  { label: "Factions",       path: "factions" },
+  { label: "Magic Systems",  path: "magic-systems" },
+  { label: "Items",          path: "items" },
+  { label: "Lore",           path: "lore" },
+  { label: "Rules",          path: "rules" },
+  { label: "Timeline",       path: "timeline" },
+  { label: "World",          path: "world" },
+  { label: "Systems",        path: "systems" },
+  { label: "Build Feed",     path: "build-feed" },
+  { label: "Continuity",     path: "continuity" },
 ] as const;
 
 /* ----------------------------------------------------------------
@@ -67,6 +76,9 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   const libraryTitle = libraryRagNode?.title ?? libraryMeta?.title ?? "Untitled Library";
   const libraryDescription = libraryMeta?.description ?? "";
   const libraryStatus = libraryMeta?.status ?? "drafting";
+
+  /* ---- Migration banner ---- */
+  const [showMigrationBanner, setShowMigrationBanner] = useState(false);
 
   const upsertLibraryMeta = useCallback((patch: Partial<PersistedLibraryMeta>) => {
     setLibraryMeta((prev) => {
@@ -118,6 +130,30 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       cancelled = true;
     };
   }, [libraryId, libraryRagNode?.title, storeReady, storeRef]);
+
+  /* ---- First-boot migration offer ---- */
+  useEffect(() => {
+    if (!storeReady) return;
+    const store = storeRef.current;
+    if (!store) return;
+    void (async () => {
+      // Check if we've already offered migration
+      const offered = await store.getMetadata<boolean>("migrationOffered");
+      if (offered) return;
+
+      // Check if legacy data exists
+      const chars = await store.getCharactersByLibrary(libraryId);
+      const locs  = await store.getLocationsByLibrary(libraryId);
+      if (chars.length + locs.length === 0) return;
+
+      // Only offer if canonical store is still empty
+      const canonDocs = await store.queryDocsByType("character");
+      if (canonDocs.length > 0) return;
+
+      setShowMigrationBanner(true);
+      await store.setMetadata({ key: "migrationOffered", value: true, updatedAt: Date.now() });
+    })();
+  }, [libraryId, storeReady, storeRef]);
 
   const setLibraryTitle = useCallback((title: string) => {
     const node = ragNodes[libraryId];
@@ -220,8 +256,47 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     }
   }, [libraryId, storeRef]);
 
-  /* ---- Tab state ---- */
-  const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
+  /**
+   * Called by Chat when a deep research run completes.
+   * Extracts canonical entities from the run's artifacts via the local Ollama model
+   * and persists the resulting patch to IDB for Build Feed review.
+   * Runs asynchronously and never throws — failures are logged and silently ignored.
+   */
+  const handleResearchRunComplete = useCallback(async (run: ResearchRunRecord) => {
+    try {
+      const artifactText = run.artifacts
+        .filter((a) => a.kind === "notes" || a.kind === "outline" || a.kind === "claims")
+        .map((a) => a.content)
+        .join("\n\n")
+        .trim();
+
+      if (!artifactText) return;
+
+      const response = await fetch("/api/extract-canonical", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: artifactText,
+          sourceType: "research",
+          sourceId: run.id,
+        }),
+      });
+
+      if (!response.ok) return;
+
+      const payload = (await response.json()) as { patch?: CanonicalPatch };
+      const patch = payload.patch;
+      if (!patch || patch.operations.length === 0) return;
+
+      const store = storeRef.current;
+      if (store) {
+        await store.addPatch(patch);
+      }
+    } catch (error) {
+      console.error("Research canonical extraction failed:", error);
+    }
+  }, [storeRef]);
+  /* ---- Tab state ---- */  const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   const openTab = useCallback((tab: EditorTab) => {
@@ -721,6 +796,31 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   return (
     <LibraryContext.Provider value={ctxValue}>
       <div className="library-layout">
+        {/* First-boot migration offer banner */}
+        {showMigrationBanner && (
+          <div className="migration-banner">
+            <p>
+              Legacy character and location data detected. Run a one-time migration to
+              populate the canonical docs stores?
+            </p>
+            <button
+              className="library-page-action primary"
+              onClick={() => {
+                setShowMigrationBanner(false);
+                router.push(`/library/${libraryId}/systems#migration`);
+              }}
+            >
+              Go to migration
+            </button>
+            <button
+              className="library-page-action"
+              onClick={() => setShowMigrationBanner(false)}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* Secondary nav: library-scoped tabs */}
         <nav className="library-subnav">
           <span className="library-subnav-title" title={libraryTitle}>
@@ -826,6 +926,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
                     onBuildContext={buildContext}
                     onEditBlock={handleEditBlock}
                     onResearchRunChange={refreshResearchRuns}
+                    onResearchRunComplete={handleResearchRunComplete}
                   />
                 )}
               </div>

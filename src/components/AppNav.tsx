@@ -13,6 +13,7 @@ import type { SidebarNode } from "@/lib/navigation";
 export interface AppNavProps {
   tree: SidebarNode[];
   ragNodes: Record<string, RAGNode>;
+  libraryId: string | null;
   activeNodeId: string | null;
   onNodeSelect: (id: string) => void;
   onAddChild: (parentId: string | null, childType: NodeType) => void;
@@ -29,8 +30,9 @@ export interface AppNavProps {
 
 const TYPE_ICONS: Record<NodeType, string> = {
   library: "📚",
+  series: "🌐",
   book: "📖",
-  part: "◆",
+  section: "◆",
   chapter: "§",
   scene: "¶",
   fragment: "·",
@@ -38,8 +40,9 @@ const TYPE_ICONS: Record<NodeType, string> = {
 
 const TYPE_LABELS: Record<NodeType, string> = {
   library: "Library",
+  series: "Series",
   book: "Book",
-  part: "Part",
+  section: "Section",
   chapter: "Chapter",
   scene: "Scene",
   fragment: "Fragment",
@@ -106,6 +109,7 @@ function ContextMenu({
 function TreeNode({
   node,
   depth,
+  libraryId,
   activeNodeId,
   renamingId,
   renameValue,
@@ -123,6 +127,7 @@ function TreeNode({
 }: {
   node: SidebarNode;
   depth: number;
+  libraryId: string | null;
   activeNodeId: string | null;
   renamingId: string | null;
   renameValue: string;
@@ -140,7 +145,8 @@ function TreeNode({
 }) {
   const [dragOver, setDragOver] = useState(false);
   const renameRef = useRef<HTMLInputElement>(null);
-  const hasChildren = node.children.length > 0;
+  // Fragment nodes are hidden from the tree UI — they are internal chunking artefacts.
+  const hasChildren = node.children.some((c) => c.type !== "fragment");
   const isActive = node.id === activeNodeId;
   const isRenaming = node.id === renamingId;
   const expanded = node.isExpanded ?? true;
@@ -206,17 +212,31 @@ function TreeNode({
           <>
             <span className="sidebar-item-label">{node.title}</span>
             {isDirty && <span className="sidebar-dirty-dot" title="Unsaved changes" />}
+            {node.type === "scene" && node.sceneDocId && libraryId && (
+              <a
+                href={`/library/${libraryId}/canonical-scenes?highlight=${node.sceneDocId}`}
+                className="scene-doc-badge"
+                title={`Open canonical scene doc: ${node.sceneDocId}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                ↗
+              </a>
+            )}
             <span className="sidebar-type-badge">{TYPE_LABELS[node.type]}</span>
           </>
         )}
       </div>
       {expanded && hasChildren && (
         <div>
-          {node.children.map((child) => (
+          {node.children
+            // Fragment nodes are internal chunking artefacts — hide from the tree UI.
+            .filter((child) => child.type !== "fragment")
+            .map((child) => (
             <TreeNode
               key={child.id}
               node={child}
               depth={depth + 1}
+              libraryId={libraryId}
               activeNodeId={activeNodeId}
               renamingId={renamingId}
               renameValue={renameValue}
@@ -246,6 +266,7 @@ function TreeNode({
 export function AppNav({
   tree,
   ragNodes,
+  libraryId,
   activeNodeId,
   onNodeSelect,
   onAddChild,
@@ -396,6 +417,7 @@ export function AppNav({
               key={node.id}
               node={node}
               depth={0}
+              libraryId={libraryId}
               activeNodeId={activeNodeId}
               renamingId={renamingId}
               renameValue={renameValue}

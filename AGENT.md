@@ -25,13 +25,14 @@ Critical web entry points:
 
 - App shell and global state: `src/app/ClientShell.tsx`
 - Library workspace orchestration: `src/app/library/[libraryId]/layout.tsx`
-- Library sub-routes: `dashboard/`, `stories/`, `chapters/`, `beats/`, `characters/`, `locations/`, `world/`, `threads/[id]/`, `systems/`
+- Library sub-routes: `dashboard/`, `stories/`, `chapters/`, `beats/`, `characters/`, `locations/`, `world/`, `threads/[id]/`, `systems/`,
+  `factions/`, `magic-systems/`, `items/`, `lore/`, `rules/`, `canonical-scenes/`, `timeline/`, `build-feed/`, `continuity/`
 - Chat UI and mode routing: `src/components/Chat.tsx`
 - Cloud vault + provider clients: `src/lib/cloud/*`
 - Deep research engine: `src/lib/research/*`
 - Shared entity types: `src/lib/types.ts`
 - API routes: `src/app/api/*/route.ts`
-  - Local: `/api/chat`, `/api/embeddings`, `/api/status`, `/api/system`
+  - Local: `/api/chat`, `/api/embeddings`, `/api/status`, `/api/system`, `/api/extract-canonical`
   - Cloud: `/api/cloud/assist`, `/api/cloud/vault/*`
   - Research: `/api/research/runs` (GET/POST), `/api/research/runs/[id]` (GET), `/api/research/runs/[id]/cancel` (POST), `/api/research/runs/[id]/events` (SSE)
 - RAG + IDB contracts: `src/lib/rag/*`
@@ -43,7 +44,8 @@ Critical native entry points:
 - AI orchestration: `Quilliam/ViewModels/ChatViewModel.swift`
 - Ollama streaming: `Quilliam/Services/OllamaService.swift`
 - Edit-fence parsing: `Quilliam/Services/EditParser.swift`
-- Domain models: `Quilliam/Models/` (`Document.swift`, `Message.swift`, `OllamaModels.swift`, `LineEdit.swift`, `EditableEntity.swift`)
+- Domain models: `Quilliam/Models/` (`Document.swift`, `Message.swift`, `OllamaModels.swift`, `LineEdit.swift`, `EditableEntity.swift`,
+  `CanonicalDocument.swift`, `CanonicalRelationship.swift`)
 - Chat UX controls (mode, keys, run monitor): `Quilliam/Views/ChatView.swift`
 
 ## 3) Local Development
@@ -81,12 +83,16 @@ Optional web runtime knobs:
 
 Web:
 
-- IndexedDB `quilliam-rag` is at **DB v6**. Store inventory:
+- IndexedDB `quilliam-rag` is at **DB v7**. Store inventory:
   - v1–v2: `nodes`, `embeddings`, `metadata`, `chatSessions`, `chatMessages`
   - v3: `characters`, `locations`, `worldEntries`
   - v4: `stories`
   - v5: `aiSettings`, `researchRuns`, `researchArtifacts`
   - v6: `usageLedgers`
+  - v7: `canonicalDocs`, `relationships`, `patches`, `relationIndexByDoc`, `patchByDoc`
+- `RAGNode` hierarchy: `library > series > book > section > chapter > scene > fragment` (7 levels; `series` added, `part` renamed → `section`).
+- `RAGNode.sceneDocId?: string` links a scene tree-node to its canonical scene doc in the `canonicalDocs` store.
+- Canonical patch lifecycle: all model-proposed canon mutations land as `CanonicalPatch { status: "pending" }` records; user accepts/rejects in the Build Feed (`/build-feed`). Patches are never auto-committed.
 - Cloud vault is encrypted at rest and unlocked per session.
 - Deep research runs/artifacts/usage are durably persisted and resumable after reload.
 

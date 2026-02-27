@@ -171,3 +171,111 @@ export const DEFAULT_RUN_BUDGET: RunBudget = {
   maxMinutes: 45,
   maxSources: 12,
 };
+
+// ---------------------------------------------------------------------------
+// Canonical document model (Plan 001 — Phase 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * All first-class narrative entity kinds.
+ * ID prefix conventions:
+ *   character: char_   location: loc_   faction: fac_
+ *   magic_system: mgc_ item: itm_       lore_entry: lre_
+ *   rule: rul_         scene: scn_      timeline_event: evt_
+ */
+export type CanonicalType =
+  | "character"
+  | "location"
+  | "faction"
+  | "magic_system"
+  | "item"
+  | "lore_entry"
+  | "rule"
+  | "scene"
+  | "timeline_event";
+
+/** A traceable citation pointing back to the prose or research that originated a fact. */
+export interface SourceRef {
+  /** "scene" | "research" | "chat" | "migration" | "manual" */
+  type: string;
+  /** ID of the originating node, artifact, message, or run. */
+  id: string;
+  /** Human-readable label for display in the Sources tab. */
+  label?: string;
+}
+
+/** Denormalised outgoing edge on a `CanonicalDoc` for fast single-doc reads. */
+export interface RelationshipRef {
+  /** ID of the `Relationship` record in the relationships store. */
+  relationshipId: string;
+  /** Target doc ID. */
+  toDocId: string;
+  /** Edge label (e.g., "member_of", "located_at"). */
+  type: string;
+}
+
+/** Base record for all canonical narrative entities. */
+export interface CanonicalDoc {
+  /** Prefix-encoded unique ID (e.g., `char_123`). */
+  id: string;
+  type: CanonicalType;
+  /** Primary display name or title. */
+  name: string;
+  /** Short human-readable summary. */
+  summary: string;
+  /**
+   * Type-specific structured fields.
+   * character: appearance, personality, goals, backstory, age, affiliations
+   * location: geography, climate, culture, pointsOfInterest
+   * faction: ideology, leadership, territory, members
+   * magic_system: principles, limitations, costs, practitioners
+   * scene: chapterRef, presentCharacters, presentLocations, rawContent
+   * timeline_event: date, participants, location, consequences
+   */
+  details: Record<string, unknown>;
+  /** "draft" = unreviewed; "canon" = user-accepted. */
+  status: "draft" | "canon";
+  /** Citations to originating prose, research artifacts, or chat messages. */
+  sources: SourceRef[];
+  /** Denormalised outgoing edges — canonical store remains the `relationships` table. */
+  relationships: RelationshipRef[];
+  /** Updated each time a continuity check confirms no contradiction (epoch ms). */
+  lastVerified: number;
+  updatedAt: number;
+}
+
+/** Typed edge between two canonical documents. */
+export interface Relationship {
+  id: string;
+  from: string;
+  /** Edge label: "member_of", "located_at", "appears_in", "owns", "rivals", "parent_of", "precedes", etc. */
+  type: string;
+  to: string;
+  /** Optional extra data: timeframe, strength, confidence score. */
+  metadata: Record<string, unknown>;
+  sources: SourceRef[];
+}
+
+/** Atomic operation inside a `Patch`. */
+export type PatchOperation =
+  | { op: "create"; docType: CanonicalType; fields: Partial<CanonicalDoc> }
+  | { op: "update"; docId: string; field: string; oldValue: unknown; newValue: unknown }
+  | { op: "add-relationship"; relationship: Omit<Relationship, "id"> }
+  | { op: "remove-relationship"; relationshipId: string }
+  | { op: "mark-contradiction"; docId: string; description: string; sourceId: string };
+
+/**
+ * A proposed changeset awaiting user review in the Build Feed.
+ * Mirrors the Swift change-set concept but operates on canonical docs rather than line-edits.
+ */
+export interface CanonicalPatch {
+  id: string;
+  /** "pending" = awaiting review; "accepted" = applied; "rejected" = archived. */
+  status: "pending" | "accepted" | "rejected";
+  operations: PatchOperation[];
+  /** Where the patch was proposed from. */
+  sourceType: "chat" | "research" | "manual";
+  /** ID of the originating chat message, research run, or session. */
+  sourceId: string;
+  createdAt: number;
+}

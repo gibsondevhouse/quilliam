@@ -284,7 +284,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (node.type === "part") {
+    if (node.type === "section") {
       const book = findAncestorOfType(ragNodesRef.current, id, "book");
       if (book) {
         router.push(`/library/${libId}/stories/${book.id}/chapters`);
@@ -317,7 +317,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (childType === "part") {
+      if (childType === "section") {
         const book = parentId ? findAncestorOfType(ragNodesRef.current, parentId, "book") : null;
         if (book) {
           router.push(`/library/${libId}/stories/${book.id}/chapters`);
@@ -358,6 +358,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
             <AppNav
               tree={tree}
               ragNodes={ragNodes}
+              libraryId={activeLibraryId}
               activeNodeId={activeLibraryId}
               onNodeSelect={handleNodeSelect}
               onAddChild={handleAddChild}

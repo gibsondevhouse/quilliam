@@ -21,6 +21,13 @@ export default function CharactersPage() {
           <h2>Characters</h2>
           <button className="library-page-action" onClick={() => lib.addCharacter()}>+ Add</button>
         </div>
+        <div className="legacy-notice">
+          <p>
+            This view shows legacy data.{" "}
+            <a href={`/library/${lib.libraryId}/systems#migration`}>Run the migration</a>{" "}
+            to copy these records into the new canonical docs store.
+          </p>
+        </div>
         {lib.characters.length === 0 ? (
           <div className="library-page-empty">
             <p>No characters yet.</p>

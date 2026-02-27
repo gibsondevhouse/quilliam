@@ -7,8 +7,9 @@ export function generateId() {
 
 export const DEFAULT_TITLES: Record<NodeType, string> = {
   library: "Untitled Library",
+  series: "Untitled Series",
   book: "Untitled Book",
-  part: "Untitled Part",
+  section: "Untitled Section",
   chapter: "Untitled Chapter",
   scene: "Untitled Scene",
   fragment: "Fragment",
@@ -104,6 +105,7 @@ export function buildSidebarTreeFromRAG(nodes: RAGNode[]): SidebarNode[] {
       type: node.type,
       children: [],
       isExpanded: true,
+      ...(node.sceneDocId ? { sceneDocId: node.sceneDocId } : {}),
     });
   });
   const roots: SidebarNode[] = [];

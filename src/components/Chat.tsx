@@ -65,6 +65,11 @@ interface ChatProps {
    */
   onEditBlock?: (event: EditBlockEvent) => void;
   onResearchRunChange?: () => void;
+  /**
+   * Called when a deep research run reaches `completed` status.
+   * The library layout uses this to trigger canonical entity extraction from artifacts.
+   */
+  onResearchRunComplete?: (run: ResearchRunRecord) => void;
   initialMessages?: { role: "user" | "assistant"; content: string }[];
   onMessagesChange?: (messages: { role: "user" | "assistant"; content: string }[]) => void;
 }
@@ -336,6 +341,7 @@ function useDeepResearch(params: {
   providerConfig: CloudProviderConfig;
   runBudget: RunBudget;
   onResearchRunChange?: () => void;
+  onResearchRunComplete?: (run: ResearchRunRecord) => void;
   setActiveResearchRun: Dispatch<SetStateAction<ResearchRunRecord | null>>;
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   pollingControllerRef: RefObject<AbortController | null>;
@@ -345,6 +351,7 @@ function useDeepResearch(params: {
     providerConfig,
     runBudget,
     onResearchRunChange,
+    onResearchRunComplete,
     setActiveResearchRun,
     setMessages,
     pollingControllerRef,
@@ -425,6 +432,9 @@ function useDeepResearch(params: {
             setActiveResearchRun(latestRun);
             if (terminal.has(latestRun.status)) {
               onResearchRunChange?.();
+              if (latestRun.status === "completed") {
+                onResearchRunComplete?.(latestRun);
+              }
               setMessages((prev) => [
                 ...prev,
                 { role: "assistant" as const, content: formatResearchRunSummary(latestRun) },
@@ -461,6 +471,7 @@ function useDeepResearch(params: {
     [
       libraryId,
       onResearchRunChange,
+      onResearchRunComplete,
       pollingControllerRef,
       providerConfig,
       runBudget,
@@ -594,6 +605,7 @@ export function Chat({
   onBuildContext,
   onEditBlock,
   onResearchRunChange,
+  onResearchRunComplete,
   initialMessages,
   onMessagesChange,
 }: ChatProps) {
@@ -745,6 +757,7 @@ export function Chat({
     providerConfig,
     runBudget,
     onResearchRunChange,
+    onResearchRunComplete,
     setActiveResearchRun,
     setMessages,
     pollingControllerRef,

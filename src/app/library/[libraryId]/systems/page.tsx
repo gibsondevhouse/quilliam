@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLibraryContext } from "@/lib/context/LibraryContext";
+import { migrateLibrary } from "@/lib/rag/migrate";
+import type { MigrationSummary } from "@/lib/rag/migrate";
 import type { CloudProviderConfig, RunBudget } from "@/lib/types";
 
 interface VaultStatus {
@@ -34,6 +36,11 @@ export default function SystemsPage() {
 
   const [providerConfigDraft, setProviderConfigDraft] = useState<CloudProviderConfig>(lib.cloudProviderConfig);
   const [budgetDraft, setBudgetDraft] = useState<RunBudget>(lib.defaultRunBudget);
+
+  // Migration state
+  const [migrationStatus, setMigrationStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [migrationSummary, setMigrationSummary] = useState<MigrationSummary | null>(null);
+  const [migrationError, setMigrationError] = useState<string | null>(null);
 
   const loadVaultStatus = useCallback(async () => {
     try {
@@ -166,6 +173,21 @@ export default function SystemsPage() {
   const applyBudgetSettings = useCallback(() => {
     lib.setDefaultRunBudget(budgetDraft);
   }, [budgetDraft, lib]);
+
+  const handleMigrate = useCallback(async () => {
+    const store = lib.storeRef.current;
+    if (!store) return;
+    setMigrationStatus("running");
+    setMigrationError(null);
+    try {
+      const summary = await migrateLibrary(store, lib.libraryId);
+      setMigrationSummary(summary);
+      setMigrationStatus("done");
+    } catch (err) {
+      setMigrationError(err instanceof Error ? err.message : String(err));
+      setMigrationStatus("error");
+    }
+  }, [lib.libraryId, lib.storeRef]);
 
   return (
     <div className="library-page systems-page">
@@ -361,6 +383,50 @@ export default function SystemsPage() {
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className="library-card" id="migration" style={{ marginTop: 16, padding: 16 }}>
+        <h3>Data Migration</h3>
+        <p className="systems-description">
+          Copy legacy Characters, Locations, and World entries into the canonical document
+          stores (Factions, Magic Systems, Items, etc.). Existing canonical docs are never
+          overwritten — this is safe to run more than once.
+        </p>
+
+        {migrationStatus === "idle" && (
+          <button className="library-page-action primary" onClick={() => void handleMigrate()}>
+            Run migration
+          </button>
+        )}
+
+        {migrationStatus === "running" && (
+          <p className="systems-status">Migrating…</p>
+        )}
+
+        {migrationStatus === "done" && migrationSummary && (
+          <div className="migration-summary">
+            <p>✓ Migration complete</p>
+            <ul>
+              <li>{migrationSummary.charactersConverted} characters</li>
+              <li>{migrationSummary.locationsConverted} locations</li>
+              <li>{migrationSummary.loreEntriesConverted} lore entries</li>
+              <li>{migrationSummary.relationshipsCreated} relationships inferred</li>
+              <li>{migrationSummary.sceneDocsCreated} scene docs created</li>
+            </ul>
+            <button className="library-page-action" onClick={() => setMigrationStatus("idle")}>
+              Run again
+            </button>
+          </div>
+        )}
+
+        {migrationStatus === "error" && (
+          <div className="migration-error">
+            <p>Migration failed: {migrationError}</p>
+            <button className="library-page-action" onClick={() => setMigrationStatus("idle")}>
+              Retry
+            </button>
+          </div>
         )}
       </section>
     </div>

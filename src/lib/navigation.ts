@@ -6,4 +6,5 @@ export interface SidebarNode {
   type: NodeType;
   children: SidebarNode[];
   isExpanded?: boolean;
+  sceneDocId?: string;
 }
