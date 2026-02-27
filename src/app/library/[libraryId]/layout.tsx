@@ -15,19 +15,26 @@ import { useSystemContext } from "@/lib/context/SystemContext";
 import { TabBar, type EditorTab } from "@/components/Editor/TabBar";
 import { Chat } from "@/components/Chat";
 import { StatusBar } from "@/components/Editor/StatusBar";
-import type { CharacterEntry, LocationEntry, WorldEntry, ChatSession, ChatMessageEntry, Story } from "@/lib/types";
-import type { RAGNode } from "@/lib/rag/hierarchy";
-import { createRAGNode } from "@/lib/rag/hierarchy";
-import type { RagWorkerRequest, RagWorkerResponse } from "@/lib/rag/messages";
+import {
+  DEFAULT_PROVIDER_CONFIG,
+  DEFAULT_RUN_BUDGET,
+  AiExecutionMode,
+  ChatMessageEntry,
+  ChatSession,
+  type CloudProviderConfig,
+  ResearchRunRecord,
+  Story,
+  type RunBudget,
+} from "@/lib/types";
 import type { PersistedLibraryMeta } from "@/lib/rag/store";
-import { embedNode } from "@/lib/rag/embedder";
 import { buildRAGContext } from "@/lib/rag/retrieval";
-import { chunkScene, needsChunking, staleFragmentIds } from "@/lib/rag/chunker";
-import type { ChangeSet } from "@/lib/changeSets";
-import { applyEdits, fileTargetKey } from "@/lib/changeSets";
+import { applyEdits, type ChangeSet } from "@/lib/changeSets";
 import type { EditBlockEvent } from "@/lib/editParser";
-
-function generateId() { return crypto.randomUUID(); }
+import { buildChatContext as createChatContext } from "@/lib/library/chatContextBuilder";
+import { useChatState } from "@/lib/library/chatState";
+import { useChangeSetMachine } from "@/lib/library/changeSetMachine";
+import { useEntityState } from "@/lib/library/entityState";
+import { useRagWorker } from "@/lib/library/ragWorker";
 
 /* ----------------------------------------------------------------
    Library sub-nav link
@@ -126,6 +133,93 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     upsertLibraryMeta({ status: s });
   }, [upsertLibraryMeta]);
 
+  /* ---- AI execution settings ---- */
+  const [aiModeState, setAiModeState] = useState<AiExecutionMode>("local");
+  const [cloudProviderConfigState, setCloudProviderConfigState] = useState<CloudProviderConfig>(DEFAULT_PROVIDER_CONFIG);
+  const [defaultRunBudgetState, setDefaultRunBudgetState] = useState<RunBudget>(DEFAULT_RUN_BUDGET);
+  const [researchRuns, setResearchRuns] = useState<ResearchRunRecord[]>([]);
+
+  const persistAiSettings = useCallback(
+    (next: {
+      executionMode: AiExecutionMode;
+      providerConfig: CloudProviderConfig;
+      defaultBudget: RunBudget;
+    }) => {
+      void storeRef.current?.putAiLibrarySettings({
+        libraryId,
+        executionMode: next.executionMode,
+        providerConfig: next.providerConfig,
+        defaultBudget: next.defaultBudget,
+        updatedAt: Date.now(),
+      });
+    },
+    [libraryId, storeRef],
+  );
+
+  const setAiMode = useCallback(
+    (mode: AiExecutionMode) => {
+      setAiModeState(mode);
+      persistAiSettings({
+        executionMode: mode,
+        providerConfig: cloudProviderConfigState,
+        defaultBudget: defaultRunBudgetState,
+      });
+    },
+    [cloudProviderConfigState, defaultRunBudgetState, persistAiSettings],
+  );
+
+  const setCloudProviderConfig = useCallback(
+    (cfg: CloudProviderConfig) => {
+      setCloudProviderConfigState(cfg);
+      persistAiSettings({
+        executionMode: aiModeState,
+        providerConfig: cfg,
+        defaultBudget: defaultRunBudgetState,
+      });
+    },
+    [aiModeState, defaultRunBudgetState, persistAiSettings],
+  );
+
+  const setDefaultRunBudget = useCallback(
+    (budget: RunBudget) => {
+      setDefaultRunBudgetState(budget);
+      persistAiSettings({
+        executionMode: aiModeState,
+        providerConfig: cloudProviderConfigState,
+        defaultBudget: budget,
+      });
+    },
+    [aiModeState, cloudProviderConfigState, persistAiSettings],
+  );
+
+  const refreshResearchRuns = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/research/runs?libraryId=${encodeURIComponent(libraryId)}`);
+      if (!response.ok) return;
+      const payload = (await response.json()) as { runs?: ResearchRunRecord[] };
+      const runs = Array.isArray(payload.runs) ? payload.runs : [];
+      setResearchRuns(runs);
+
+      const store = storeRef.current;
+      if (store) {
+        for (const run of runs) {
+          await store.putResearchRun(run);
+          await store.putUsageLedger({
+            runId: run.id,
+            usage: run.usage,
+            updatedAt: run.updatedAt,
+          });
+          for (const artifact of run.artifacts) {
+            await store.putResearchArtifact(artifact);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to refresh research runs", error);
+      // Leave stale data intact when offline or route unavailable.
+    }
+  }, [libraryId, storeRef]);
+
   /* ---- Tab state ---- */
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
@@ -170,85 +264,32 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     return ids;
   }, [docContents, savedContents]);
 
-  /* ---- Characters ---- */
-  const [characters, setCharacters] = useState<CharacterEntry[]>([]);
-  const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
-
-  const addCharacter = useCallback((): CharacterEntry => {
-    const id = generateId();
-    const entry: CharacterEntry = { id, libraryId, name: "", role: "", notes: "" };
-    setCharacters((prev) => [...prev, entry]);
-    setActiveCharacterId(id);
-    void storeRef.current?.putCharacter({ ...entry, updatedAt: Date.now() });
-    return entry;
-  }, [libraryId, storeRef]);
-
-  const selectCharacter = useCallback((id: string) => {
-    setActiveCharacterId(id);
-  }, []);
-
-  const updateCharacter = useCallback((entry: CharacterEntry) => {
-    setCharacters((prev) => prev.map((c) => (c.id === entry.id ? entry : c)));
-    void storeRef.current?.putCharacter({ ...entry, updatedAt: Date.now() });
-  }, [storeRef]);
-
-  const deleteCharacter = useCallback((id: string) => {
-    setCharacters((prev) => prev.filter((c) => c.id !== id));
-    if (activeCharacterId === id) setActiveCharacterId(null);
-    void storeRef.current?.deleteCharacter(id);
-  }, [activeCharacterId, storeRef]);
-
-  /* ---- Locations ---- */
-  const [locations, setLocations] = useState<LocationEntry[]>([]);
-  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
-
-  const addLocation = useCallback((): LocationEntry => {
-    const id = generateId();
-    const entry: LocationEntry = { id, libraryId, name: "", description: "" };
-    setLocations((prev) => [...prev, entry]);
-    setActiveLocationId(id);
-    void storeRef.current?.putLocation({ ...entry, updatedAt: Date.now() });
-    return entry;
-  }, [libraryId, storeRef]);
-
-  const selectLocation = useCallback((id: string) => { setActiveLocationId(id); }, []);
-
-  const updateLocation = useCallback((entry: LocationEntry) => {
-    setLocations((prev) => prev.map((l) => (l.id === entry.id ? entry : l)));
-    void storeRef.current?.putLocation({ ...entry, updatedAt: Date.now() });
-  }, [storeRef]);
-
-  const deleteLocation = useCallback((id: string) => {
-    setLocations((prev) => prev.filter((l) => l.id !== id));
-    if (activeLocationId === id) setActiveLocationId(null);
-    void storeRef.current?.deleteLocation(id);
-  }, [activeLocationId, storeRef]);
-
-  /* ---- World entries ---- */
-  const [worldEntries, setWorldEntries] = useState<WorldEntry[]>([]);
-  const [activeWorldEntryId, setActiveWorldEntryId] = useState<string | null>(null);
-
-  const addWorldEntry = useCallback((): WorldEntry => {
-    const id = generateId();
-    const entry: WorldEntry = { id, libraryId, title: "", category: "", notes: "" };
-    setWorldEntries((prev) => [...prev, entry]);
-    setActiveWorldEntryId(id);
-    void storeRef.current?.putWorldEntry({ ...entry, updatedAt: Date.now() });
-    return entry;
-  }, [libraryId, storeRef]);
-
-  const selectWorldEntry = useCallback((id: string) => { setActiveWorldEntryId(id); }, []);
-
-  const updateWorldEntry = useCallback((entry: WorldEntry) => {
-    setWorldEntries((prev) => prev.map((w) => (w.id === entry.id ? entry : w)));
-    void storeRef.current?.putWorldEntry({ ...entry, updatedAt: Date.now() });
-  }, [storeRef]);
-
-  const deleteWorldEntry = useCallback((id: string) => {
-    setWorldEntries((prev) => prev.filter((w) => w.id !== id));
-    if (activeWorldEntryId === id) setActiveWorldEntryId(null);
-    void storeRef.current?.deleteWorldEntry(id);
-  }, [activeWorldEntryId, storeRef]);
+  const {
+    characters,
+    setCharacters,
+    activeCharacterId,
+    addCharacter,
+    selectCharacter,
+    updateCharacter,
+    deleteCharacter,
+    locations,
+    setLocations,
+    activeLocationId,
+    addLocation,
+    selectLocation,
+    updateLocation,
+    deleteLocation,
+    worldEntries,
+    setWorldEntries,
+    activeWorldEntryId,
+    addWorldEntry,
+    selectWorldEntry,
+    updateWorldEntry,
+    deleteWorldEntry,
+  } = useEntityState({
+    libraryId,
+    storeRef,
+  });
 
   /* ---- Stories ---- */
   const [stories, setStories] = useState<Story[]>([]);
@@ -314,131 +355,49 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   }, [activeStoryId, activeTabId, deleteNode, ragNodes, storeRef]);
 
   /* ---- Chat / Threads ---- */
-  const initialChatId = useMemo(() => generateId(), []);
-  const [chats, setChats] = useState<ChatSession[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [chatMessages, setChatMessages] = useState<Record<string, ChatMessageEntry[]>>({});
-  const [bottomPanelOpen, setBottomPanelOpen] = useState(false);
-  const [chatPanelWidth, setChatPanelWidth] = useState(340);
-  const chatPanelWidthRef = useRef(340);
-  const isDraggingRef = useRef(false);
-  const dragStartXRef = useRef(0);
-  const dragStartWidthRef = useRef(340);
-
-  const addChat = useCallback((): string => {
-    const id = generateId();
-    const now = Date.now();
-    const session: ChatSession = { id, libraryId, title: "New Thread", createdAt: now, preview: "" };
-    setChats((prev) => [session, ...prev]);
-    setChatMessages((prev) => ({ ...prev, [id]: [] }));
-    setActiveChatId(id);
-    setBottomPanelOpen(true);
-    void storeRef.current?.putChatSession({ id, libraryId, title: "New Thread", preview: "", createdAt: now, updatedAt: now });
-    return id;
-  }, [libraryId, storeRef]);
-
-  const selectChat = useCallback((id: string) => {
-    setActiveChatId(id);
-    setBottomPanelOpen(true);
-    router.push(`/library/${libraryId}/threads/${id}`);
-  }, [libraryId, router]);
-
-  const deleteChat = useCallback((id: string) => {
-    void storeRef.current?.deleteChatSession(id);
-    setChats((prev) => {
-      const remaining = prev.filter((c) => c.id !== id);
-      if (activeChatId === id) {
-        setActiveChatId(remaining[0]?.id ?? null);
-      }
-      return remaining;
-    });
-    setChatMessages((prev) => { const next = { ...prev }; delete next[id]; return next; });
-  }, [activeChatId, storeRef]);
-
-  const updateChatMessages = useCallback((chatId: string, messages: ChatMessageEntry[]) => {
-    setChatMessages((prev) => ({ ...prev, [chatId]: messages }));
-    const firstUser = messages.find((m) => m.role === "user");
-    const title = firstUser ? firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? "…" : "") : "New Thread";
-    const preview = firstUser ? firstUser.content.slice(0, 60) : "";
-    if (firstUser) {
-      setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, title, preview } : c));
-    }
-    void storeRef.current?.putChatMessages(chatId, messages);
-    const now = Date.now();
-    void storeRef.current?.listChatSessionsByLibrary(libraryId).then((sessions) => {
-      const existing = sessions.find((s) => s.id === chatId);
-      if (existing) {
-        void storeRef.current?.putChatSession({ ...existing, libraryId, title, preview, updatedAt: now });
-      }
-    });
-  }, [libraryId, storeRef]);
+  const {
+    initialChatId,
+    chats,
+    setChats,
+    activeChatId,
+    setActiveChatId,
+    chatMessages,
+    setChatMessages,
+    addChat,
+    selectChat,
+    deleteChat,
+    updateChatMessages,
+    bottomPanelOpen,
+    setBottomPanelOpen,
+    chatPanelWidth,
+    setChatPanelWidth,
+    chatPanelWidthRef,
+    isDraggingRef,
+    dragStartXRef,
+    dragStartWidthRef,
+  } = useChatState({
+    libraryId,
+    storeRef,
+    onNavigateToChat: (id) => {
+      router.push(`/library/${libraryId}/threads/${id}`);
+    },
+  });
 
   /* ---- RAG Worker ---- */
-  const [indexingCount, setIndexingCount] = useState(0);
-  const workerRef = useRef<Worker | null>(null);
-  const ragNodesRef = useRef(ragNodes);
-  const systemStatusRef = useRef(systemStatus);
-  useEffect(() => { ragNodesRef.current = ragNodes; }, [ragNodes]);
-  useEffect(() => { systemStatusRef.current = systemStatus; }, [systemStatus]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!storeReady) return;
-
-    const worker = new Worker(new URL("../../../workers/rag-indexer.ts", import.meta.url));
-    workerRef.current = worker;
-
-    worker.onmessage = async (event: MessageEvent<RagWorkerResponse>) => {
-      if (cancelled) return;
-      const data = event.data;
-
-      if (data.type === "hash-result") {
-        const { fragmentId, contentHash, tokenCount } = data.result;
-        const doc = docContentsRef.current[fragmentId];
-        setIndexingCount((c) => Math.max(0, c - 1));
-        if (!doc) return;
-
-        const existingNode = ragNodesRef.current[fragmentId];
-        const updated: RAGNode = {
-          ...(existingNode ?? createRAGNode(fragmentId, "chapter", doc.title, doc.content, null, contentHash)),
-          title: doc.title,
-          content: doc.content,
-          contentHash,
-          tokenCount,
-          updatedAt: Date.now(),
-        };
-
-        putRagNode(updated);
-        setSavedContents((prev) => ({ ...prev, [fragmentId]: doc.content }));
-
-        const prevChunkTotal = existingNode?.chunkTotal ?? 0;
-        const willChunk = needsChunking(doc.content);
-        let chunks: RAGNode[] = [];
-        if (willChunk) {
-          chunks = await chunkScene(fragmentId, doc.title, doc.content);
-          putRagNode({ ...updated, chunkTotal: chunks.length, childrenIds: chunks.map((c) => c.id) });
-        }
-        if (prevChunkTotal > 0) {
-          const staleIds = staleFragmentIds(fragmentId, prevChunkTotal);
-          for (const id of staleIds) void storeRef.current?.deleteNode(id);
-        }
-        if (willChunk && chunks.length > 0 && storeRef.current) {
-          for (const c of chunks) {
-            putRagNode(c);
-            void embedNode(c.id, c.content, c.contentHash, systemStatusRef.current?.embedModel ?? "nomic-embed-text", storeRef.current);
-          }
-        } else if (!willChunk && storeRef.current) {
-          void embedNode(fragmentId, doc.content, contentHash, systemStatusRef.current?.embedModel ?? "nomic-embed-text", storeRef.current);
-        }
-      }
-    };
-
-    return () => {
-      cancelled = true;
-      worker.terminate();
-      workerRef.current = null;
-    };
-  }, [storeReady, putRagNode, storeRef]);
+  const {
+    workerRef,
+    ragNodesRef,
+    indexingCount,
+    queueHash,
+  } = useRagWorker({
+    storeReady,
+    ragNodes,
+    putRagNode,
+    storeRef,
+    systemStatus,
+    docContentsRef,
+    setSavedContents,
+  });
 
   /* ---- Hydrate library-scoped data from IDB ---- */
   useEffect(() => {
@@ -446,17 +405,23 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     const store = storeRef.current;
     if (!store) return;
     void (async () => {
-      const [chars, locs, world, sessions, storyRows] = await Promise.all([
+      const [chars, locs, world, sessions, storyRows, aiSettings, localRuns] = await Promise.all([
         store.getCharactersByLibrary(libraryId),
         store.getLocationsByLibrary(libraryId),
         store.getWorldEntriesByLibrary(libraryId),
         store.listChatSessionsByLibrary(libraryId),
         store.getStoriesByLibrary(libraryId),
+        store.getAiLibrarySettings(libraryId),
+        store.listResearchRunsByLibrary(libraryId),
       ]);
       setCharacters(chars.map((c) => ({ id: c.id, libraryId: c.libraryId, name: c.name, role: c.role, notes: c.notes })));
       setLocations(locs.map((l) => ({ id: l.id, libraryId: l.libraryId, name: l.name, description: l.description })));
       setWorldEntries(world.map((w) => ({ id: w.id, libraryId: w.libraryId, title: w.title, category: w.category, notes: w.notes })));
       setStories(storyRows.map((s) => ({ id: s.id, libraryId: s.libraryId, title: s.title, synopsis: s.synopsis, genre: s.genre, status: s.status, createdAt: s.createdAt })));
+      setAiModeState(aiSettings?.executionMode ?? "local");
+      setCloudProviderConfigState(aiSettings?.providerConfig ?? DEFAULT_PROVIDER_CONFIG);
+      setDefaultRunBudgetState(aiSettings?.defaultBudget ?? DEFAULT_RUN_BUDGET);
+      setResearchRuns(localRuns);
 
       if (sessions.length > 0) {
         const sessionObjects: ChatSession[] = sessions.map((s) => ({
@@ -484,41 +449,54 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
         setActiveChatId(id);
         void store.putChatSession({ id, libraryId, title: "New Thread", preview: "", createdAt: now, updatedAt: now });
       }
+
+      await refreshResearchRuns();
     })();
-  }, [storeReady, storeRef, libraryId, initialChatId]);
+  }, [
+    storeReady,
+    storeRef,
+    libraryId,
+    initialChatId,
+    refreshResearchRuns,
+    setCharacters,
+    setLocations,
+    setWorldEntries,
+    setChats,
+    setActiveChatId,
+    setChatMessages,
+  ]);
 
   /* ---- Build RAG context for chat ---- */
   const buildContext = useCallback(async (query: string): Promise<string> => {
     const store = storeRef.current;
     if (!store) return "";
     const nodes = Object.values(ragNodesRef.current);
-    return buildRAGContext(query, nodes, store, systemStatus.embedModel ?? "nomic-embed-text");
-  }, [storeRef, systemStatus.embedModel]);
+    return buildRAGContext(
+      query,
+      nodes,
+      store,
+      systemStatus.embedModel ?? "nomic-embed-text",
+      5,
+      workerRef.current ?? undefined,
+    );
+  }, [storeRef, systemStatus.embedModel, ragNodesRef, workerRef]);
+
+  /* ---- Stable chat messages callback (prevents infinite-loop from inline arrow in JSX) ---- */
+  const handleMessagesChange = useCallback(
+    (msgs: { role: "user" | "assistant"; content: string }[]) => {
+      if (activeChatId) updateChatMessages(activeChatId, msgs);
+    },
+    [activeChatId, updateChatMessages],
+  );
 
   /* ---- Document content handlers ---- */
-  const initDoc = useCallback((id: string, title: string, content: string) => {
-    setDocContents((prev) => {
-      if (prev[id]) return prev; // already loaded
-      return { ...prev, [id]: { title, content } };
-    });
-    setSavedContents((prev) => {
-      if (prev[id] !== undefined) return prev;
-      return { ...prev, [id]: content };
-    });
-  }, []);
-
   const handleContentChange = useCallback((chapterId: string, content: string) => {
     setDocContents((prev) => {
       if (!prev[chapterId]) return prev;
       return { ...prev, [chapterId]: { ...prev[chapterId], content } };
     });
-    const worker = workerRef.current;
-    if (worker) {
-      setIndexingCount((c) => c + 1);
-      const request: RagWorkerRequest = { type: "hash", fragment: { fragmentId: chapterId, content } };
-      worker.postMessage(request);
-    }
-  }, []);
+    queueHash(chapterId, content);
+  }, [queueHash]);
 
   const handleTitleChange = useCallback((chapterId: string, title: string) => {
     setDocContents((prev) => {
@@ -528,239 +506,32 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     setOpenTabs((prev) => prev.map((t) => (t.id === chapterId ? { ...t, title } : t)));
     const node = ragNodesRef.current[chapterId];
     if (node) putRagNode({ ...node, title, updatedAt: Date.now() });
-  }, [putRagNode]);
+  }, [putRagNode, ragNodesRef]);
 
   /* ---- AI ChangeSets ---- */
-
-  /**
-   * All change sets keyed by fileTargetKey.
-   * e.g. "__active__", "character:Elena", "location:Harbortown"
-   */
-  const [changeSets, setChangeSets] = useState<Record<string, ChangeSet[]>>({});
-  const [entityDrafts, setEntityDrafts] = useState<Record<string, string>>({});
-
-  const resolveEntityBaseText = useCallback((key: string): string => {
-    if (key.startsWith("character:")) {
-      const name = key.slice("character:".length);
-      return characters.find((c) => c.name === name)?.notes ?? "";
-    }
-    if (key.startsWith("location:")) {
-      const name = key.slice("location:".length);
-      return locations.find((l) => l.name === name)?.description ?? "";
-    }
-    if (key.startsWith("world:")) {
-      const title = key.slice("world:".length);
-      return worldEntries.find((w) => w.title === title)?.notes ?? "";
-    }
-    return "";
-  }, [characters, locations, worldEntries]);
-
-  const commitEntityDraft = useCallback((key: string) => {
-    const draft = entityDrafts[key];
-    if (draft === undefined) return;
-    const now = Date.now();
-
-    if (key.startsWith("character:")) {
-      const name = key.slice("character:".length);
-      setCharacters((prev) =>
-        prev.map((c) => {
-          if (c.name !== name) return c;
-          const updated = { ...c, notes: draft };
-          void storeRef.current?.putCharacter({ ...updated, updatedAt: now });
-          return updated;
-        }),
-      );
-    } else if (key.startsWith("location:")) {
-      const name = key.slice("location:".length);
-      setLocations((prev) =>
-        prev.map((l) => {
-          if (l.name !== name) return l;
-          const updated = { ...l, description: draft };
-          void storeRef.current?.putLocation({ ...updated, updatedAt: now });
-          return updated;
-        }),
-      );
-    } else if (key.startsWith("world:")) {
-      const title = key.slice("world:".length);
-      setWorldEntries((prev) =>
-        prev.map((w) => {
-          if (w.title !== title) return w;
-          const updated = { ...w, notes: draft };
-          void storeRef.current?.putWorldEntry({ ...updated, updatedAt: now });
-          return updated;
-        }),
-      );
-    }
-
-    setEntityDrafts((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  }, [entityDrafts, storeRef]);
-
-  const revertEntityDraft = useCallback((key: string) => {
-    setEntityDrafts((prev) => {
-      if (!(key in prev)) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  }, []);
-
-  /**
-   * Handle an edit block emitted by the AI stream.
-   * Applies it to the appropriate working copy and records a pending ChangeSet.
-   */
-  const applyIncomingEdit = useCallback(
-    (csOrEvent: ChangeSet) => {
-      const cs = csOrEvent;
-      const key = fileTargetKey(cs.fileTarget);
-
-      // Update changeSets registry
-      setChangeSets((prev) => {
-        const list = prev[key] ?? [];
-        return { ...prev, [key]: [...list, cs] };
-      });
-
-      // Apply the edits to the working copy
-      if (key === "__active__" && activeTabId) {
-        setWorkingContents((prev) => {
-          const base = prev[activeTabId] ?? docContents[activeTabId]?.content ?? "";
-          return { ...prev, [activeTabId]: applyEdits(base, cs.edits) };
-        });
-      } else {
-        setEntityDrafts((prev) => {
-          const base = prev[key] ?? resolveEntityBaseText(key);
-          return { ...prev, [key]: applyEdits(base, cs.edits) };
-        });
-      }
-    },
-    [activeTabId, docContents, resolveEntityBaseText]
-  );
-
-  const acceptChange = useCallback(
-    (changeSetId: string) => {
-      let acceptedKey: string | null = null;
-      setChangeSets((prev) => {
-        const next: Record<string, ChangeSet[]> = {};
-        for (const [key, list] of Object.entries(prev)) {
-          const cs = list.find((c) => c.id === changeSetId);
-          if (cs) {
-            acceptedKey = key;
-            // Commit working copy to docContents for chapter targets
-            if (key === "__active__" && activeTabId) {
-              setWorkingContents((wc) => {
-                const committed = wc[activeTabId];
-                if (committed !== undefined) {
-                  setDocContents((dc) => ({
-                    ...dc,
-                    [activeTabId]: { ...dc[activeTabId], content: committed },
-                  }));
-                }
-                return wc;
-              });
-            }
-            next[key] = list.map((c) =>
-              c.id === changeSetId ? { ...c, status: "accepted" as const } : c
-            );
-          } else {
-            next[key] = list;
-          }
-        }
-        return next;
-      });
-      if (acceptedKey && acceptedKey !== "__active__") {
-        commitEntityDraft(acceptedKey);
-      }
-    },
-    [activeTabId, commitEntityDraft]
-  );
-
-  const rejectChange = useCallback(
-    (changeSetId: string) => {
-      let targetKey: string | null = null;
-      let updatedList: ChangeSet[] = [];
-      setChangeSets((prev) => {
-        const next: Record<string, ChangeSet[]> = {};
-        for (const [key, list] of Object.entries(prev)) {
-          if (list.some((c) => c.id === changeSetId)) {
-            const updated = list.map((c) =>
-              c.id === changeSetId ? { ...c, status: "rejected" as const } : c
-            );
-            targetKey = key;
-            updatedList = updated;
-            // Rebuild working copy from remaining pending sets
-            if (key === "__active__" && activeTabId) {
-              const base = docContents[activeTabId]?.content ?? "";
-              const remaining = updated.filter((c) => c.status === "pending");
-              const rebuilt = remaining.reduce(
-                (acc, cs) => applyEdits(acc, cs.edits),
-                base
-              );
-              setWorkingContents((wc) => ({ ...wc, [activeTabId]: rebuilt }));
-            }
-            next[key] = updated;
-          } else {
-            next[key] = list;
-          }
-        }
-        return next;
-      });
-      if (targetKey && targetKey !== "__active__") {
-        const remaining = updatedList.filter((c) => c.status === "pending");
-        if (remaining.length === 0) {
-          revertEntityDraft(targetKey);
-        } else {
-          const base = resolveEntityBaseText(targetKey);
-          const rebuilt = remaining.reduce((acc, cs) => applyEdits(acc, cs.edits), base);
-          setEntityDrafts((prev) => ({ ...prev, [targetKey!]: rebuilt }));
-        }
-      }
-    },
-    [activeTabId, docContents, resolveEntityBaseText, revertEntityDraft]
-  );
-
-  const acceptAllChanges = useCallback(
-    (key: string) => {
-      setChangeSets((prev) => ({
-        ...prev,
-        [key]: (prev[key] ?? []).map((c) =>
-          c.status === "pending" ? { ...c, status: "accepted" as const } : c
-        ),
-      }));
-      if (key === "__active__" && activeTabId) {
-        setWorkingContents((wc) => {
-          const committed = wc[activeTabId];
-          if (committed !== undefined) {
-            setDocContents((dc) => ({
-              ...dc,
-              [activeTabId]: { ...dc[activeTabId], content: committed },
-            }));
-          }
-          return wc;
-        });
-      }
-      if (key !== "__active__") commitEntityDraft(key);
-    },
-    [activeTabId, commitEntityDraft]
-  );
-
-  const rejectAllChanges = useCallback(
-    (key: string) => {
-      setChangeSets((prev) => ({
-        ...prev,
-        [key]: (prev[key] ?? []).map((c) =>
-          c.status === "pending" ? { ...c, status: "rejected" as const } : c
-        ),
-      }));
-      if (key === "__active__" && activeTabId) {
-        setWorkingContents((wc) => ({ ...wc, [activeTabId]: docContents[activeTabId]?.content ?? "" }));
-      }
-      if (key !== "__active__") revertEntityDraft(key);
-    },
-    [activeTabId, docContents, revertEntityDraft]
-  );
+  const {
+    changeSets,
+    entityDrafts,
+    applyIncomingEdit,
+    acceptChange,
+    rejectChange,
+    acceptAllChanges,
+    rejectAllChanges,
+    commitEntityDraft,
+    revertEntityDraft,
+  } = useChangeSetMachine({
+    activeTabId,
+    docContents,
+    setDocContents,
+    setWorkingContents,
+    characters,
+    setCharacters,
+    locations,
+    setLocations,
+    worldEntries,
+    setWorldEntries,
+    storeRef,
+  });
 
   /** Handles a raw EditBlockEvent from Chat's parseEditStream. Constructs a ChangeSet and calls applyIncomingEdit. */
   const handleEditBlock = useCallback(
@@ -776,6 +547,38 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       applyIncomingEdit(cs);
     },
     [applyIncomingEdit]
+  );
+
+  /** Open a chapter doc in the editor.
+   * Moves content into docContents and, if any __active__ AI edits arrived before this
+   * tab was opened, immediately applies them to workingContents so they are not lost.
+   */
+  const initDoc = useCallback(
+    (id: string, title: string, content: string) => {
+      setDocContents((prev) => {
+        if (prev[id]) return prev; // already loaded
+        return { ...prev, [id]: { title, content } };
+      });
+      setSavedContents((prev) => {
+        if (prev[id] !== undefined) return prev;
+        return { ...prev, [id]: content };
+      });
+      // Apply any pending __active__ changesets that arrived before this tab was opened
+      const pendingSets = (changeSets["__active__"] ?? []).filter(
+        (cs) => cs.status === "pending",
+      );
+      if (pendingSets.length > 0) {
+        setWorkingContents((prev) => {
+          if (prev[id] !== undefined) return prev; // already has a working copy
+          const rebuilt = pendingSets.reduce(
+            (acc, cs) => applyEdits(acc, cs.edits),
+            content,
+          );
+          return { ...prev, [id]: rebuilt };
+        });
+      }
+    },
+    [changeSets, setWorkingContents],
   );
 
   /* ---- Resize chat panel ---- */
@@ -802,7 +605,12 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     };
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
-  }, []);
+  }, [chatPanelWidthRef, dragStartWidthRef, dragStartXRef, isDraggingRef, setChatPanelWidth]);
+
+  // Keep the ref in sync so external setChatPanelWidth calls don't cause a position jump on next drag
+  useEffect(() => {
+    chatPanelWidthRef.current = chatPanelWidth;
+  }, [chatPanelWidth, chatPanelWidthRef]);
 
   /* ---- Active sub-nav segment ---- */
   const activeSegment = useMemo(() => {
@@ -812,47 +620,16 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
 
   /* ---- Chat context for AI ---- */
   const chatContext = useMemo(() => {
-    const lines: string[] = [];
-    lines.push(`### Library: ${libraryTitle}`);
-
-    // Active document context
-    if (activeTabId && docContents[activeTabId]) {
-      const doc = docContents[activeTabId];
-      lines.push(`\n### Active Document: ${doc.title}`);
-      const content = workingContents[activeTabId] ?? doc.content;
-      if (content) {
-        lines.push("```");
-        lines.push(content.slice(0, 3000));
-        if (content.length > 3000) lines.push("… (truncated)");
-        lines.push("```");
-      }
-    }
-
-    if (characters.length > 0) {
-      lines.push(`\n### Characters (editable via file=character:<name>)`);
-      characters.slice(0, 15).forEach((c) => {
-        const notes = entityDrafts[`character:${c.name}`] ?? c.notes;
-        const parts = [c.name || "Unnamed"];
-        if (c.role) parts.push(`(${c.role})`);
-        if (notes) parts.push(`— ${notes.slice(0, 120)}`);
-        lines.push(`- ${parts.join(" ")}`);
-      });
-    }
-    if (locations.length > 0) {
-      lines.push(`\n### Locations (editable via file=location:<name>)`);
-      locations.slice(0, 10).forEach((l) => {
-        const description = entityDrafts[`location:${l.name}`] ?? l.description;
-        lines.push(`- ${l.name || "Unnamed"}${description ? ` — ${description.slice(0, 120)}` : ""}`.trimEnd());
-      });
-    }
-    if (worldEntries.length > 0) {
-      lines.push(`\n### World (editable via file=world:<title>)`);
-      worldEntries.slice(0, 10).forEach((w) => {
-        const notes = entityDrafts[`world:${w.title}`] ?? w.notes;
-        lines.push(`- ${w.title || "Untitled"}${w.category ? ` (${w.category})` : ""}${notes ? ` — ${notes.slice(0, 120)}` : ""}`.trimEnd());
-      });
-    }
-    return lines.join("\n");
+    return createChatContext({
+      libraryTitle,
+      activeTabId,
+      docContents,
+      workingContents,
+      characters,
+      locations,
+      worldEntries,
+      entityDrafts,
+    });
   }, [libraryTitle, activeTabId, docContents, workingContents, characters, locations, worldEntries, entityDrafts]);
 
   /* ---- Persist library ID in localStorage ---- */
@@ -869,6 +646,14 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     setLibraryTitle,
     setLibraryDescription,
     setLibraryStatus,
+    aiMode: aiModeState,
+    setAiMode,
+    cloudProviderConfig: cloudProviderConfigState,
+    setCloudProviderConfig,
+    defaultRunBudget: defaultRunBudgetState,
+    setDefaultRunBudget,
+    researchRuns,
+    refreshResearchRuns,
     stories,
     activeStoryId,
     addStory,
@@ -927,7 +712,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     revertEntityDraft,
     buildContext,
     storeRef,
-    workerRef,
     storeReady,
     indexingCount,
   };
@@ -991,6 +775,21 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
                   <span className="library-chat-panel-title-accent">✦</span>
                   Quilliam AI
                 </span>
+                <div className="library-chat-panel-mode">
+                  <label htmlFor="ql-ai-mode" className="library-chat-panel-mode-label">
+                    Mode
+                  </label>
+                  <select
+                    id="ql-ai-mode"
+                    className="library-chat-panel-mode-select"
+                    value={aiModeState}
+                    onChange={(e) => setAiMode(e.target.value as AiExecutionMode)}
+                  >
+                    <option value="local">Local</option>
+                    <option value="assisted_cloud">Assisted Cloud</option>
+                    <option value="deep_research">Deep Research</option>
+                  </select>
+                </div>
                 <div className="library-chat-panel-actions">
                   <button
                     className="library-chat-panel-btn"
@@ -1017,13 +816,16 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
                   <Chat
                     key={activeChatId}
                     chatId={activeChatId}
-                    model={systemStatus.model}
-                    mode={systemStatus.mode}
+                    libraryId={libraryId}
+                    executionMode={aiModeState}
+                    providerConfig={cloudProviderConfigState}
+                    runBudget={defaultRunBudgetState}
                     context={chatContext}
                     initialMessages={activeChatMessages}
-                    onMessagesChange={(msgs) => updateChatMessages(activeChatId, msgs)}
+                    onMessagesChange={handleMessagesChange}
                     onBuildContext={buildContext}
                     onEditBlock={handleEditBlock}
+                    onResearchRunChange={refreshResearchRuns}
                   />
                 )}
               </div>
@@ -1033,10 +835,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
 
         {/* Status bar */}
         <StatusBar
-          model={systemStatus.model}
-          mode={systemStatus.mode}
-          ollamaReady={systemStatus.ollamaReady}
-          embeddingReady={systemStatus.embedModelAvailable}
+          executionMode={aiModeState}
           indexing={indexingCount > 0}
           onToggleChat={() => setBottomPanelOpen((v) => !v)}
           bottomPanelOpen={bottomPanelOpen}

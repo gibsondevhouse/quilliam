@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import type { WorldEntry } from "@/lib/types";
 import type { ChangeSet } from "@/lib/changeSets";
 import { EntityChangePanel } from "@/components/Editor/EntityChangePanel";
@@ -45,12 +45,6 @@ export function WorldEditor({
   const pending = pendingChangeSets.filter((cs) => cs.status === "pending");
   const hasPending = pending.length > 0;
   const visibleNotes = hasPending ? draftText ?? notes : notes;
-
-  useEffect(() => {
-    setTitle(entry.title);
-    setCategory(entry.category);
-    setNotes(entry.notes);
-  }, [entry]);
 
   const update = useCallback(
     (patch: Partial<WorldEntry>) => {

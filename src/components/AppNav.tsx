@@ -21,7 +21,6 @@ export interface AppNavProps {
   onToggleExpand: (id: string) => void;
   onMoveNode: (dragId: string, targetId: string) => void;
   dirtyIds: Set<string>;
-  pathname: string | null;
 }
 
 /* ================================================================

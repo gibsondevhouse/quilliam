@@ -4,6 +4,12 @@
  */
 
 import type { RAGNode } from "@/lib/rag/hierarchy";
+import type {
+  AiLibrarySettings,
+  ResearchArtifact,
+  ResearchRunRecord,
+  UsageMeter,
+} from "@/lib/types";
 
 /**
  * Persisted RAG node representation suitable for IndexedDB storage.
@@ -97,6 +103,22 @@ export interface PersistedLibraryMeta {
   updatedAt: number;
 }
 
+/** Per-library AI execution and provider preferences. */
+export type PersistedAiLibrarySettings = AiLibrarySettings;
+
+/** Durable research run state used by the Deep Research monitor. */
+export type PersistedResearchRun = ResearchRunRecord;
+
+/** Persisted research artifact emitted by deep-research phases. */
+export type PersistedResearchArtifact = ResearchArtifact;
+
+/** Persisted usage meter snapshots keyed by run id. */
+export interface PersistedUsageLedger {
+  runId: string;
+  usage: UsageMeter;
+  updatedAt: number;
+}
+
 /**
  * Individual chat message keyed by session.
  */
@@ -154,6 +176,18 @@ export interface RAGStore {
   putLibraryMeta(entry: PersistedLibraryMeta): Promise<void>;
   getLibraryMeta(libraryId: string): Promise<PersistedLibraryMeta | null>;
   deleteLibraryMeta(libraryId: string): Promise<void>;
+  // AI settings
+  putAiLibrarySettings(entry: PersistedAiLibrarySettings): Promise<void>;
+  getAiLibrarySettings(libraryId: string): Promise<PersistedAiLibrarySettings | null>;
+  deleteAiLibrarySettings(libraryId: string): Promise<void>;
+  // Deep research runs / artifacts / usage
+  putResearchRun(entry: PersistedResearchRun): Promise<void>;
+  getResearchRun(id: string): Promise<PersistedResearchRun | null>;
+  listResearchRunsByLibrary(libraryId: string): Promise<PersistedResearchRun[]>;
+  putResearchArtifact(entry: PersistedResearchArtifact): Promise<void>;
+  listResearchArtifacts(runId: string): Promise<PersistedResearchArtifact[]>;
+  putUsageLedger(entry: PersistedUsageLedger): Promise<void>;
+  getUsageLedger(runId: string): Promise<PersistedUsageLedger | null>;
 }
 
 /**

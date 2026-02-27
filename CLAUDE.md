@@ -9,8 +9,9 @@ Quilliam is a local-first writing IDE with two clients in one repo:
 - Web app: Next.js 16 + React 19 (`src/`)
 - Native app: SwiftUI + SwiftData (`Quilliam/`)
 - Local inference: Ollama at `http://localhost:11434`
+- Optional cloud tiers: Anthropic (assist/refactor) + Tavily (deep research), opt-in only
 
-No manuscript data should leave the local machine.
+By default manuscript data stays local. Cloud/deep-research requests require explicit user opt-in before any external API call.
 
 ## Development Commands
 
@@ -21,10 +22,10 @@ npm run lint
 npm run build
 ```
 
-Run Ollama in a separate terminal:
+Run Ollama in a separate terminal (with Metal/GPU tuning):
 
 ```bash
-ollama serve
+./scripts/start-ollama.sh
 ```
 
 ## Web App Architecture (`src/`)
@@ -45,7 +46,7 @@ ollama serve
 
 ## Non-Negotiables
 
-1. Keep inference local through Ollama only.
-2. Do not call external AI APIs.
-3. Preserve streaming behavior for chat responses.
+1. Local mode must remain fully local through Ollama.
+2. Cloud/deep-research calls must require explicit user consent and run via server API routes.
+3. Preserve streaming behavior for local chat responses.
 4. Keep TypeScript strict-mode clean and lint/build green.

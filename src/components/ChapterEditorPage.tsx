@@ -21,6 +21,8 @@ export function ChapterEditorPage({ chapterId }: ChapterEditorPageProps) {
     workingContents,
     acceptChange,
     rejectChange,
+    acceptAllChanges,
+    rejectAllChanges,
   } = useLibraryContext();
   const { ragNodes, storeRef } = useRAGContext();
 
@@ -83,6 +85,8 @@ export function ChapterEditorPage({ chapterId }: ChapterEditorPageProps) {
       pendingChangeSets={pendingChangeSets}
       onAcceptHunk={(id) => acceptChange(id)}
       onRejectHunk={(id) => rejectChange(id)}
+      onAcceptAll={() => acceptAllChanges("__active__")}
+      onRejectAll={() => rejectAllChanges("__active__")}
     />
   );
 }

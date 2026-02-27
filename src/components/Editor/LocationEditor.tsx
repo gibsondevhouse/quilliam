@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import type { LocationEntry } from "@/lib/types";
 import type { ChangeSet } from "@/lib/changeSets";
 import { EntityChangePanel } from "@/components/Editor/EntityChangePanel";
@@ -31,11 +31,6 @@ export function LocationEditor({
   const pending = pendingChangeSets.filter((cs) => cs.status === "pending");
   const hasPending = pending.length > 0;
   const visibleDescription = hasPending ? draftText ?? description : description;
-
-  useEffect(() => {
-    setName(location.name);
-    setDescription(location.description);
-  }, [location]);
 
   const update = useCallback(
     (patch: Partial<LocationEntry>) => {

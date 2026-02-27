@@ -13,6 +13,10 @@ final class ChatViewModel {
     var selectedModel: String = "gemma3:4b"
     var isLoading: Bool = false
     var errorMessage: String?
+    var executionMode: AIExecutionMode = .local
+    var cloudProviderConfig = CloudProviderConfig()
+    var runBudget = RunBudget()
+    var researchRuns: [ResearchRunRecord] = []
 
     let availableModels = ["gemma3:4b", "llama3.2", "mistral", "phi4"]
 
@@ -82,6 +86,9 @@ final class ChatViewModel {
     // MARK: - Private
 
     private let service = OllamaService()
+    private let cloudAssistService = CloudAssistService()
+    private let deepResearchActor = DeepResearchRunActor()
+    private let cloudSecretsStore = CloudSecretsStore()
 
     // MARK: - Core send
 
@@ -93,89 +100,145 @@ final class ChatViewModel {
         isLoading = true
         errorMessage = nil
 
-        let userMessage = Message(role: .user, content: text)
-        messages.append(userMessage)
-
-        let assistantMessage = Message(role: .assistant, content: "")
-        messages.append(assistantMessage)
-        let assistantIndex = messages.count - 1
+        messages.append(Message(role: .user, content: text))
 
         do {
-            // Build history: system doc-context + conversation (drop empty placeholder)
-            var history = Array(messages.dropLast())
-            if let doc = currentDocument, !doc.workingText.isEmpty {
-                history.insert(buildDocumentSystemPrompt(for: doc), at: 0)
+            switch executionMode {
+            case .local:
+                try await sendLocalMessage()
+            case .assistedCloud:
+                try await sendAssistedCloudMessage(query: text)
+            case .deepResearch:
+                try await startDeepResearchRun(query: text)
             }
-
-            let rawStream = await service.chat(messages: history, model: selectedModel)
-            let parsedStream = EditParser.parse(rawStream)
-
-            // Track one ChangeSet per file target per AI response
-            var changeSetsCreated: Set<String> = []
-
-            for try await event in parsedStream {
-                switch event {
-                case .token(let chunk):
-                    guard assistantIndex < messages.count else { break }
-                    messages[assistantIndex].content += chunk
-
-                case .editBlock(let edit, let fileTarget):
-                    let key = fileTarget.key
-
-                    // Apply edit live (preview)
-                    switch fileTarget {
-                    case .activeDocument:
-                        if let doc = currentDocument {
-                            doc.workingText = doc.apply(lineEdits: [edit])
-                        }
-                    default:
-                        if let entity = entityDocuments[key] {
-                            var updated = entity
-                            if entityCommittedText[key] == nil {
-                                entityCommittedText[key] = entity.editableText
-                            }
-                            let patched = patchText(entity.editableText, with: edit)
-                            updated.editableText = patched
-                            entityDocuments[key] = updated
-                        }
-                    }
-
-                    // Create or extend the ChangeSet for this file target this turn
-                    if changeSetsCreated.contains(key),
-                       var list = changeSets[key],
-                       !list.isEmpty {
-                        list[list.count - 1].edits.append(edit)
-                        changeSets[key] = list
-                    } else {
-                        let cs = ChangeSet(edits: [edit])
-                        changeSets[key, default: []].append(cs)
-                        changeSetsCreated.insert(key)
-                    }
-
-                    // If this is an entity target, auto-open that entity tab
-                    if fileTarget != .activeDocument && activeEntityKey == nil {
-                        activeEntityKey = key
-                    }
-                }
-            }
-
-            // Stamp all new ChangeSets with the assistant's commentary
-            let commentary = messages[assistantIndex].content
-            for key in changeSetsCreated {
-                if var list = changeSets[key], !list.isEmpty {
-                    list[list.count - 1].commentary = commentary
-                    changeSets[key] = list
-                }
-            }
-
         } catch {
-            if assistantIndex < messages.count {
-                messages[assistantIndex].content = "Error: \(error.localizedDescription)"
-            }
+            messages.append(Message(role: .assistant, content: "Error: \(error.localizedDescription)"))
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    private func sendLocalMessage() async throws {
+        let assistantMessage = Message(role: .assistant, content: "")
+        messages.append(assistantMessage)
+        let assistantIndex = messages.count - 1
+
+        // Build history: system doc-context + conversation (drop empty placeholder)
+        var history = Array(messages.dropLast())
+        if let doc = currentDocument, !doc.workingText.isEmpty {
+            history.insert(buildDocumentSystemPrompt(for: doc), at: 0)
+        }
+
+        let rawStream = await service.chat(messages: history, model: selectedModel)
+        let parsedStream = EditParser.parse(rawStream)
+
+        // Track one ChangeSet per file target per AI response
+        var changeSetsCreated: Set<String> = []
+
+        for try await event in parsedStream {
+            switch event {
+            case .token(let chunk):
+                guard assistantIndex < messages.count else { break }
+                messages[assistantIndex].content += chunk
+
+            case .editBlock(let edit, let fileTarget):
+                applyIncomingEdit(edit, fileTarget: fileTarget, changeSetsCreated: &changeSetsCreated)
+            }
+        }
+
+        // Stamp all new ChangeSets with the assistant's commentary
+        let commentary = messages[assistantIndex].content
+        for key in changeSetsCreated {
+            if var list = changeSets[key], !list.isEmpty {
+                list[list.count - 1].commentary = commentary
+                changeSets[key] = list
+            }
+        }
+    }
+
+    private func sendAssistedCloudMessage(query: String) async throws {
+        guard let anthropicKey = try cloudSecretsStore.get(.anthropic), !anthropicKey.isEmpty else {
+            throw DeepResearchError.missingAnthropicKey
+        }
+
+        let context = buildCloudContext()
+        let response = try await cloudAssistService.assist(
+            query: query,
+            context: context,
+            messages: messages,
+            providerConfig: cloudProviderConfig,
+            budget: runBudget,
+            anthropicApiKey: anthropicKey
+        )
+
+        let assistantText = response.message
+        messages.append(Message(role: .assistant, content: assistantText))
+
+        var changeSetsCreated: Set<String> = []
+        for patch in response.patches {
+            let fileTarget = fileTarget(from: patch)
+            for edit in patch.edits {
+                applyIncomingEdit(edit.toLineEdit(), fileTarget: fileTarget, changeSetsCreated: &changeSetsCreated)
+            }
+        }
+
+        for key in changeSetsCreated {
+            if var list = changeSets[key], !list.isEmpty {
+                list[list.count - 1].commentary = assistantText
+                changeSets[key] = list
+            }
+        }
+    }
+
+    private func startDeepResearchRun(query: String) async throws {
+        let anthropic = try cloudSecretsStore.get(.anthropic)
+        let tavily = try cloudSecretsStore.get(.tavily)
+        let context = buildCloudContext()
+
+        let run = try await deepResearchActor.startRun(
+            query: query,
+            context: context,
+            providerConfig: cloudProviderConfig,
+            budget: runBudget,
+            anthropicApiKey: anthropic,
+            tavilyApiKey: tavily
+        )
+
+        messages.append(Message(
+            role: .assistant,
+            content: "Deep research run started (\(run.id.prefix(8))). I’ll post results when the run finishes."
+        ))
+
+        Task {
+            do {
+                while true {
+                    try await Task.sleep(for: .seconds(2))
+                    let latest = try await deepResearchActor.getRun(id: run.id)
+                    await MainActor.run {
+                        if let idx = researchRuns.firstIndex(where: { $0.id == latest.id }) {
+                            researchRuns[idx] = latest
+                        } else {
+                            researchRuns.insert(latest, at: 0)
+                        }
+                    }
+
+                    switch latest.status {
+                    case .completed, .cancelled, .failed, .budgetExceeded:
+                        await MainActor.run {
+                            messages.append(Message(role: .assistant, content: formatRunSummary(latest)))
+                        }
+                        return
+                    case .queued, .running:
+                        continue
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
 
     // MARK: - Change management
@@ -325,7 +388,141 @@ final class ChatViewModel {
         entityCommittedText = [:]
     }
 
+    // MARK: - Cloud settings / secrets
+
+    func saveAnthropicKey(_ value: String) throws {
+        try cloudSecretsStore.set(value, for: .anthropic)
+    }
+
+    func saveTavilyKey(_ value: String) throws {
+        try cloudSecretsStore.set(value, for: .tavily)
+    }
+
+    func removeAnthropicKey() throws {
+        try cloudSecretsStore.remove(.anthropic)
+    }
+
+    func removeTavilyKey() throws {
+        try cloudSecretsStore.remove(.tavily)
+    }
+
+    func hasAnthropicKey() -> Bool {
+        if let maybeKey = try? cloudSecretsStore.get(.anthropic), let key = maybeKey {
+            return !key.isEmpty
+        }
+        return false
+    }
+
+    func hasTavilyKey() -> Bool {
+        if let maybeKey = try? cloudSecretsStore.get(.tavily), let key = maybeKey {
+            return !key.isEmpty
+        }
+        return false
+    }
+
+    func refreshResearchRuns() async {
+        do {
+            researchRuns = try await deepResearchActor.listRuns()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     // MARK: - Private helpers
+
+    private func applyIncomingEdit(
+        _ edit: LineEdit,
+        fileTarget: FileTarget,
+        changeSetsCreated: inout Set<String>
+    ) {
+        let key = fileTarget.key
+
+        // Apply edit live (preview)
+        switch fileTarget {
+        case .activeDocument:
+            if let doc = currentDocument {
+                doc.workingText = doc.apply(lineEdits: [edit])
+            }
+        default:
+            if let entity = entityDocuments[key] {
+                var updated = entity
+                if entityCommittedText[key] == nil {
+                    entityCommittedText[key] = entity.editableText
+                }
+                let patched = patchText(entity.editableText, with: edit)
+                updated.editableText = patched
+                entityDocuments[key] = updated
+            }
+        }
+
+        // Create or extend the ChangeSet for this file target this turn
+        if changeSetsCreated.contains(key),
+           var list = changeSets[key],
+           !list.isEmpty {
+            list[list.count - 1].edits.append(edit)
+            changeSets[key] = list
+        } else {
+            let cs = ChangeSet(edits: [edit])
+            changeSets[key, default: []].append(cs)
+            changeSetsCreated.insert(key)
+        }
+
+        // If this is an entity target, auto-open that entity tab
+        if fileTarget != .activeDocument && activeEntityKey == nil {
+            activeEntityKey = key
+        }
+    }
+
+    private func fileTarget(from patch: ProposedPatchBatch) -> FileTarget {
+        switch patch.targetKind {
+        case .character:
+            let key = patch.targetKey ?? "character:\(patch.targetId)"
+            let name = key.replacingOccurrences(of: "character:", with: "")
+            return .character(name: name)
+        case .location:
+            let key = patch.targetKey ?? "location:\(patch.targetId)"
+            let name = key.replacingOccurrences(of: "location:", with: "")
+            return .location(name: name)
+        case .world:
+            let key = patch.targetKey ?? "world:\(patch.targetId)"
+            let worldKey = key.replacingOccurrences(of: "world:", with: "")
+            return .world(key: worldKey)
+        case .active, .chapter:
+            return .activeDocument
+        }
+    }
+
+    private func buildCloudContext() -> String {
+        var lines: [String] = []
+        if let doc = currentDocument {
+            lines.append("## Active Document: \(doc.title)")
+            lines.append(String(doc.workingText.prefix(3000)))
+        }
+
+        if !entityDocuments.isEmpty {
+            lines.append("\n## Entity Context")
+            for (key, entity) in entityDocuments {
+                lines.append("- \(key): \(String(entity.editableText.prefix(240)))")
+            }
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func formatRunSummary(_ run: ResearchRunRecord) -> String {
+        let title = "Deep Research \(run.status.rawValue.replacingOccurrences(of: "_", with: " ")) (\(run.id.prefix(8)))"
+        if run.status != .completed {
+            return "\(title)\nPhase: \(run.phase.rawValue)\n\(run.error ?? "No additional details.")"
+        }
+
+        let artifactText = run.artifacts
+            .prefix(2)
+            .map { artifact in
+                "### \(artifact.kind.capitalized)\n\(artifact.content)"
+            }
+            .joined(separator: "\n\n")
+        return "\(title)\n\n\(artifactText)"
+    }
 
     /// Apply a single `LineEdit` to a plain text string and return the result.
     private func patchText(_ text: String, with edit: LineEdit) -> String {

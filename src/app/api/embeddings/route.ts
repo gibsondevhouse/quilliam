@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSystemInfo } from "@/lib/system";
-
-const OLLAMA_BASE = process.env.OLLAMA_API_URL || "http://localhost:11434";
+import { OLLAMA_BASE_URL } from "@/lib/ollama";
 
 interface EmbeddingRequestBody {
   input: string;
@@ -21,10 +20,17 @@ export async function POST(request: NextRequest) {
     // Default to the dedicated embedding model, not the generative model
     const model = typeof body.model === "string" ? body.model : systemInfo.embedModel;
 
-    const response = await fetch(`${OLLAMA_BASE}/api/embeddings`, {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model, input }),
+      body: JSON.stringify({
+        model,
+        input,
+        // nomic-embed-text defaults to 2048-token context in Ollama;
+        // the model supports 8192 — explicitly request it so longer passages
+        // are embedded correctly without silent truncation.
+        options: { num_ctx: 8192 },
+      }),
     });
 
     if (!response.ok) {

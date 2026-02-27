@@ -1,29 +1,39 @@
 "use client";
 
+import type { AiExecutionMode } from "@/lib/types";
+import { useSystemContext } from "@/lib/context/SystemContext";
+
 interface StatusBarProps {
-  model: string;
-  mode: string;
-  ollamaReady: boolean;
+  executionMode?: AiExecutionMode;
   /** True while the RAG worker is processing document hashes */
   indexing?: boolean;
-  /** Whether the dedicated embedding model is available in Ollama */
-  embeddingReady?: boolean;
   onToggleChat?: () => void;
   bottomPanelOpen?: boolean;
 }
 
-export function StatusBar({ model, mode, ollamaReady, indexing, embeddingReady, onToggleChat, bottomPanelOpen }: StatusBarProps) {
+export function StatusBar({
+  executionMode = "local",
+  indexing,
+  onToggleChat,
+  bottomPanelOpen,
+}: StatusBarProps) {
+  const { status } = useSystemContext();
+
   return (
     <footer className="status-bar">
       <div className="status-bar-left">
         <span className="status-bar-item">
-          <span className={`status-dot ${ollamaReady ? "connected" : "disconnected"}`} />
+          <span className={`status-dot ${status.ollamaReady ? "connected" : "disconnected"}`} />
           Ollama
         </span>
         <span className="status-bar-separator">·</span>
-        <span className="status-bar-item">{model}</span>
+        <span className="status-bar-item">{status.model}</span>
         <span className="status-bar-separator">·</span>
-        <span className="status-bar-item">{mode}</span>
+        <span className="status-bar-item">{status.mode}</span>
+        <span className="status-bar-separator">·</span>
+        <span className="status-bar-item" title="AI execution tier">
+          {executionMode.replace(/_/g, " ")}
+        </span>
         {indexing && (
           <>
             <span className="status-bar-separator">·</span>
@@ -32,7 +42,7 @@ export function StatusBar({ model, mode, ollamaReady, indexing, embeddingReady, 
             </span>
           </>
         )}
-        {embeddingReady === false && (
+        {status.embedModelAvailable === false && (
           <>
             <span className="status-bar-separator">·</span>
             <span

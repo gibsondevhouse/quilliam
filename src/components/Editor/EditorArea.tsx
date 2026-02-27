@@ -28,6 +28,10 @@ export interface EditorAreaProps {
   onAcceptHunk?: (changeSetId: string) => void;
   /** Called when the user rejects a single hunk (changeSetId). */
   onRejectHunk?: (changeSetId: string) => void;
+  /** Called when the user accepts all pending hunks. */
+  onAcceptAll?: () => void;
+  /** Called when the user rejects all pending hunks. */
+  onRejectAll?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +58,8 @@ export function EditorArea({
   pendingChangeSets = [],
   onAcceptHunk,
   onRejectHunk,
+  onAcceptAll,
+  onRejectAll,
 }: EditorAreaProps) {
   const [title, setTitle] = useState(documentTitle);
   const [wordCount, setWordCount] = useState(0);
@@ -284,6 +290,28 @@ export function EditorArea({
           placeholder="Untitled"
           spellCheck={false}
         />
+        {pendingCount > 0 && (
+          <div className="editor-title-actions">
+            {onAcceptAll && (
+              <button
+                type="button"
+                className="editor-title-btn accept"
+                onClick={onAcceptAll}
+              >
+                Accept All
+              </button>
+            )}
+            {onRejectAll && (
+              <button
+                type="button"
+                className="editor-title-btn reject"
+                onClick={onRejectAll}
+              >
+                Reject All
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Monaco writing surface */}
@@ -296,11 +324,13 @@ export function EditorArea({
             lineHeight: 28,
             fontFamily: "var(--font-sans, 'Georgia', serif)",
             wordWrap: "on",
+            wrappingStrategy: "advanced",
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
+            renderValidationDecorations: "off",
             overviewRulerLanes: 0,
             renderLineHighlight: "line",
-            lineNumbers: "on",
+            lineNumbers: "off",
             glyphMargin: false,
             folding: false,
             lineDecorationsWidth: 6,

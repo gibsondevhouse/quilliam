@@ -120,8 +120,10 @@
 
 .library-content {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* ---- Right-side AI chat panel (Copilot-style) ---- */
@@ -182,6 +184,31 @@
 .library-chat-panel-title-accent {
   color: var(--accent);
   font-size: 13px;
+}
+
+.library-chat-panel-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.library-chat-panel-mode-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+
+.library-chat-panel-mode-select {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-radius: 5px;
+  font-size: 11px;
+  padding: 2px 6px;
+  max-width: 132px;
 }
 
 .library-chat-panel-actions {
@@ -529,6 +556,38 @@
   font-size: 14px;
 }
 
+.library-card {
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.systems-page {
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+}
+
+.systems-page h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.systems-page p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.systems-page input,
+.systems-page select {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
 /* Split page: list on left, editor on right */
 .split-page {
   display: flex;
@@ -784,4 +843,3 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-

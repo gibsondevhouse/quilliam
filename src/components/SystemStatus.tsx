@@ -88,7 +88,7 @@ export function SystemStatus({ onReady }: SystemStatusProps) {
       <div className="startup-card">
         <div className="startup-card-inner">
           <h1 className="startup-brand">Quilliam</h1>
-          <p className="startup-tagline">Local-first IDE for writers</p>
+          <p className="startup-tagline">Local-first IDE for writers with opt-in cloud modes</p>
 
           {/* Status checks */}
           <div className="startup-checks">

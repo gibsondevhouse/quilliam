@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" ry="96" fill="#0a0a0a"/>
+  <!-- Quill feather -->
+  <g transform="translate(256,256)">
+    <!-- Feather body -->
+    <path d="M 40,-160 C 120,-80 130,40 60,130 C 40,155 10,165 -10,160 C 30,100 50,30 10,-40 C -20,-90 -60,-120 -80,-140 C -20,-180 20,-180 40,-160 Z"
+          fill="#e8e0d0" opacity="0.95"/>
+    <!-- Feather spine -->
+    <line x1="40" y1="-160" x2="-10" y2="160"
+          stroke="#c8b89a" stroke-width="3" stroke-linecap="round"/>
+    <!-- Feather barbs left -->
+    <line x1="28" y1="-120" x2="-30" y2="-80" stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="20" y1="-80"  x2="-35" y2="-40" stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="10" y1="-40"  x2="-38" y2="0"   stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="0"  y1="0"    x2="-38" y2="40"  stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-10" y1="40"  x2="-34" y2="80"  stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Feather barbs right -->
+    <line x1="28" y1="-120" x2="90" y2="-100" stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="20" y1="-80"  x2="100" y2="-55" stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="10" y1="-40"  x2="105" y2="-10" stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="0"  y1="0"    x2="100" y2="40"  stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-8" y1="40"   x2="80"  y2="90"  stroke="#c8b89a" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- Ink nib dot -->
+    <circle cx="-10" cy="160" r="6" fill="#5b8af0" opacity="0.9"/>
+    <!-- Ink trail -->
+    <path d="M -10,160 Q -40,185 -70,175" stroke="#5b8af0" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+  </g>
+</svg>

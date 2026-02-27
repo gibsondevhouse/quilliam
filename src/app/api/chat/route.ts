@@ -1,20 +1,23 @@
 import { NextRequest } from "next/server";
 import { getSystemInfo } from "@/lib/system";
-
-const OLLAMA_BASE = process.env.OLLAMA_API_URL || "http://localhost:11434";
+import { OLLAMA_BASE_URL } from "@/lib/ollama";
 
 export async function POST(request: NextRequest) {
   try {
     const { messages } = await request.json();
     const systemInfo = getSystemInfo();
 
-    const response = await fetch(`${OLLAMA_BASE}/api/chat`, {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: systemInfo.model,
         messages,
         stream: true,
+        keep_alive: "24h",
+        options: {
+          num_batch: 128,
+        },
       }),
     });
 

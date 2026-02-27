@@ -6,7 +6,7 @@ import { WorldEditor } from "@/components/Editor/WorldEditor";
 export default function WorldPage() {
   const lib = useLibraryContext();
   const active = lib.worldEntries.find((w) => w.id === lib.activeWorldEntryId);
-  const activeKey = active ? `world:${active.title}` : null;
+  const activeKey = active ? `world:${active.title.trim().toLowerCase()}` : null;
   const activePending = activeKey
     ? (lib.changeSets[activeKey] ?? []).filter((cs) => cs.status === "pending")
     : [];
@@ -29,7 +29,7 @@ export default function WorldPage() {
         ) : (
           <ul className="library-item-list">
             {lib.worldEntries.map((w) => {
-              const key = `world:${w.title}`;
+              const key = `world:${w.title.trim().toLowerCase()}`;
               const hasPending = (lib.changeSets[key] ?? []).some((cs) => cs.status === "pending");
               return (
                 <li key={w.id} className="library-item-row">

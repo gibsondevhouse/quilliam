@@ -1,7 +1,18 @@
 "use client";
 
 import { createContext, useContext, type RefObject } from "react";
-import type { CharacterEntry, LocationEntry, WorldEntry, ChatSession, ChatMessageEntry, Story } from "@/lib/types";
+import type {
+  AiExecutionMode,
+  CharacterEntry,
+  ChatMessageEntry,
+  ChatSession,
+  CloudProviderConfig,
+  LocationEntry,
+  ResearchRunRecord,
+  RunBudget,
+  Story,
+  WorldEntry,
+} from "@/lib/types";
 import type { EditorTab } from "@/components/Editor/TabBar";
 import type { RAGStore } from "@/lib/rag/store";
 import type { ChangeSet } from "@/lib/changeSets";
@@ -14,6 +25,14 @@ export interface LibraryContextValue {
   setLibraryTitle: (title: string) => void;
   setLibraryDescription: (desc: string) => void;
   setLibraryStatus: (status: "drafting" | "editing" | "archived") => void;
+  aiMode: AiExecutionMode;
+  setAiMode: (mode: AiExecutionMode) => void;
+  cloudProviderConfig: CloudProviderConfig;
+  setCloudProviderConfig: (cfg: CloudProviderConfig) => void;
+  defaultRunBudget: RunBudget;
+  setDefaultRunBudget: (budget: RunBudget) => void;
+  researchRuns: ResearchRunRecord[];
+  refreshResearchRuns: () => Promise<void>;
 
   // Stories (Library → Story → Chapter)
   stories: Story[];
@@ -99,7 +118,6 @@ export interface LibraryContextValue {
   // RAG
   buildContext: (query: string) => Promise<string>;
   storeRef: RefObject<RAGStore | null>;
-  workerRef: RefObject<Worker | null>;
   storeReady: boolean;
   indexingCount: number;
 }

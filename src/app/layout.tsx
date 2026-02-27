@@ -15,8 +15,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Quilliam",
-  description: "Local-first IDE for writers, powered by Gemma 3 via Ollama",
+  description: "Local-first IDE for writers with opt-in cloud assistance and deep research",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -37,4 +41,3 @@ export default function RootLayout({
     </html>
   );
 }
-

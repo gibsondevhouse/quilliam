@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import type { CharacterEntry } from "@/lib/types";
 import type { ChangeSet } from "@/lib/changeSets";
 import { EntityChangePanel } from "@/components/Editor/EntityChangePanel";
@@ -43,12 +43,6 @@ export function CharacterEditor({
   const pending = pendingChangeSets.filter((cs) => cs.status === "pending");
   const hasPending = pending.length > 0;
   const visibleNotes = hasPending ? draftText ?? notes : notes;
-
-  useEffect(() => {
-    setName(character.name);
-    setRole(character.role);
-    setNotes(character.notes);
-  }, [character]);
 
   const update = useCallback(
     (patch: Partial<CharacterEntry>) => {

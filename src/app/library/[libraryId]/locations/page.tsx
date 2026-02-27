@@ -6,7 +6,7 @@ import { LocationEditor } from "@/components/Editor/LocationEditor";
 export default function LocationsPage() {
   const lib = useLibraryContext();
   const active = lib.locations.find((l) => l.id === lib.activeLocationId);
-  const activeKey = active ? `location:${active.name}` : null;
+  const activeKey = active ? `location:${active.name.trim().toLowerCase()}` : null;
   const activePending = activeKey
     ? (lib.changeSets[activeKey] ?? []).filter((cs) => cs.status === "pending")
     : [];
@@ -29,7 +29,7 @@ export default function LocationsPage() {
         ) : (
           <ul className="library-item-list">
             {lib.locations.map((l) => {
-              const key = `location:${l.name}`;
+              const key = `location:${l.name.trim().toLowerCase()}`;
               const hasPending = (lib.changeSets[key] ?? []).some((cs) => cs.status === "pending");
               return (
                 <li key={l.id} className="library-item-row">

@@ -226,6 +226,9 @@
 }
 
 .editor-title-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 16px 48px 8px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-primary);
@@ -245,6 +248,34 @@
 
 .editor-title-input::placeholder {
   color: var(--text-muted);
+}
+
+.editor-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.editor-title-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.editor-title-btn.accept {
+  border-color: rgba(74, 222, 128, 0.55);
+  color: #95f2b5;
+}
+
+.editor-title-btn.reject {
+  border-color: rgba(248, 113, 113, 0.55);
+  color: #f8a3a3;
 }
 
 .editor-surface {

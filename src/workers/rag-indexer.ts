@@ -2,12 +2,15 @@
 
 import { hashFragment } from "@/lib/rag/hasher";
 import { estimateTokenCount } from "@/lib/rag/hierarchy";
+import { cosineSimilarity } from "@/lib/rag/search";
 import type {
   HashBatchRequest,
   HashBatchResultMessage,
   HashRequest,
   HashResultMessage,
   RagWorkerRequest,
+  RankSimilarityRequest,
+  RankSimilarityResultMessage,
 } from "@/lib/rag/messages";
 
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
@@ -38,6 +41,15 @@ async function handleHashBatch(request: HashBatchRequest): Promise<HashBatchResu
   };
 }
 
+function handleRankSimilarity(request: RankSimilarityRequest): RankSimilarityResultMessage {
+  const { requestId, queryVector, items, limit } = request;
+  const scored = items
+    .map(({ id, vector }) => ({ id, score: cosineSimilarity(queryVector, vector) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(0, limit));
+  return { type: "rank-similarity-result", requestId, results: scored };
+}
+
 ctx.onmessage = async (event: MessageEvent<RagWorkerRequest>) => {
   const data = event.data;
 
@@ -49,6 +61,11 @@ ctx.onmessage = async (event: MessageEvent<RagWorkerRequest>) => {
     }
     case "hash-batch": {
       const message = await handleHashBatch(data);
+      ctx.postMessage(message);
+      break;
+    }
+    case "rank-similarity": {
+      const message = handleRankSimilarity(data);
       ctx.postMessage(message);
       break;
     }

@@ -275,8 +275,38 @@
 
 .home-chat-page {
   display: flex;
+  flex-direction: column;
   height: 100%;
   width: 100%;
+}
+
+.home-mode-guard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(124, 111, 239, 0.08), rgba(124, 111, 239, 0));
+}
+
+.home-mode-guard-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.home-mode-guard-select {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.home-mode-guard-hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 /* Landing variant base layout */
@@ -327,4 +357,3 @@
   border-top: 1px solid var(--border);
   transform: none;
 }
-

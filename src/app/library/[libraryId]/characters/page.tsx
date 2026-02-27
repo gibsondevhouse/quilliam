@@ -7,7 +7,7 @@ export default function CharactersPage() {
   const lib = useLibraryContext();
 
   const active = lib.characters.find((c) => c.id === lib.activeCharacterId);
-  const activeKey = active ? `character:${active.name}` : null;
+  const activeKey = active ? `character:${active.name.trim().toLowerCase()}` : null;
   const activePending = activeKey
     ? (lib.changeSets[activeKey] ?? []).filter((cs) => cs.status === "pending")
     : [];
@@ -31,7 +31,7 @@ export default function CharactersPage() {
         ) : (
           <ul className="library-item-list">
             {lib.characters.map((c) => {
-              const key = `character:${c.name}`;
+              const key = `character:${c.name.trim().toLowerCase()}`;
               const hasPending = (lib.changeSets[key] ?? []).some((cs) => cs.status === "pending");
               return (
                 <li key={c.id} className="library-item-row">

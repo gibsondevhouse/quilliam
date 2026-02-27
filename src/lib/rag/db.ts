@@ -9,11 +9,15 @@ import {
   materializeEmbedding,
   materializeNode,
   serializeNode,
+  type PersistedAiLibrarySettings,
   type PersistedChatMessage,
   type PersistedChatSession,
   type PersistedCharacter,
   type PersistedLibraryMeta,
   type PersistedLocation,
+  type PersistedResearchArtifact,
+  type PersistedResearchRun,
+  type PersistedUsageLedger,
   type PersistedWorldEntry,
   type PersistedStory,
   type PersistedRAGNode,
@@ -70,6 +74,26 @@ interface RAGDBSchema extends DBSchema {
     value: PersistedStory;
     indexes: { by_library: string };
   };
+  aiSettings: {
+    key: string;
+    value: PersistedAiLibrarySettings;
+    indexes: { by_updated: number };
+  };
+  researchRuns: {
+    key: string;
+    value: PersistedResearchRun;
+    indexes: { by_library: string; by_status: string; by_updated: number };
+  };
+  researchArtifacts: {
+    key: string;
+    value: PersistedResearchArtifact;
+    indexes: { by_run: string };
+  };
+  usageLedgers: {
+    key: string;
+    value: PersistedUsageLedger;
+    indexes: { by_updated: number };
+  };
 }
 
 interface PersistedEmbedding extends StoredEmbedding {
@@ -82,14 +106,14 @@ function libraryMetaKey(libraryId: string): string {
 }
 
 const DB_NAME = "quilliam-rag";
-const DB_VERSION = 4;
+const DB_VERSION = 6;
 
 let dbPromise: Promise<IDBPDatabase<RAGDBSchema>> | null = null;
 
 function getDb(): Promise<IDBPDatabase<RAGDBSchema>> {
   if (!dbPromise) {
     dbPromise = openDB<RAGDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(database, oldVersion, _newVersion, transaction) {
+      async upgrade(database, oldVersion, _newVersion, transaction) {
         // --- v1/v2 stores (always ensure they exist) ---
         if (!database.objectStoreNames.contains("nodes")) {
           const nodes = database.createObjectStore("nodes", { keyPath: "id" });
@@ -146,6 +170,51 @@ function getDb(): Promise<IDBPDatabase<RAGDBSchema>> {
           if (!database.objectStoreNames.contains("stories")) {
             const stories = database.createObjectStore("stories", { keyPath: "id" });
             stories.createIndex("by_library", "libraryId");
+          }
+        }
+
+        // --- v5 new stores ---
+        if (oldVersion < 5) {
+          if (!database.objectStoreNames.contains("aiSettings")) {
+            const settings = database.createObjectStore("aiSettings", { keyPath: "libraryId" });
+            settings.createIndex("by_updated", "updatedAt");
+          }
+
+          if (!database.objectStoreNames.contains("researchRuns")) {
+            const runs = database.createObjectStore("researchRuns", { keyPath: "id" });
+            runs.createIndex("by_library", "libraryId");
+            runs.createIndex("by_status", "status");
+            runs.createIndex("by_updated", "updatedAt");
+          }
+
+          if (!database.objectStoreNames.contains("researchArtifacts")) {
+            const artifacts = database.createObjectStore("researchArtifacts", { keyPath: "id" });
+            artifacts.createIndex("by_run", "runId");
+          }
+
+          if (!database.objectStoreNames.contains("usageLedgers")) {
+            const ledgers = database.createObjectStore("usageLedgers", { keyPath: "runId" });
+            ledgers.createIndex("by_updated", "updatedAt");
+          }
+        }
+
+        // --- v6: clear stale fragments + all embeddings for re-index ---
+        // Adaptive semantic chunking (Phase 2) produces different chunk
+        // boundaries, so old fragment nodes and their embeddings are invalid.
+        // Embeddings are purely derived data; clearing them forces a re-embed
+        // with the corrected num_ctx: 8192 setting (also new in this release).
+        if (oldVersion < 6) {
+          if (database.objectStoreNames.contains("nodes")) {
+            const nodeStore = transaction.objectStore("nodes");
+            let cursor = await nodeStore.openCursor();
+            while (cursor) {
+              const node = cursor.value as { type?: string };
+              if (node.type === "fragment") await cursor.delete();
+              cursor = await cursor.continue();
+            }
+          }
+          if (database.objectStoreNames.contains("embeddings")) {
+            await transaction.objectStore("embeddings").clear();
           }
         }
       },
@@ -426,7 +495,21 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
   const db = await getDb();
   const nodeIds = await collectCascadeNodeIds(db, libraryId);
   const tx = db.transaction(
-    ["nodes", "embeddings", "metadata", "chatSessions", "chatMessages", "characters", "locations", "worldEntries", "stories"],
+    [
+      "nodes",
+      "embeddings",
+      "metadata",
+      "chatSessions",
+      "chatMessages",
+      "characters",
+      "locations",
+      "worldEntries",
+      "stories",
+      "aiSettings",
+      "researchRuns",
+      "researchArtifacts",
+      "usageLedgers",
+    ],
     "readwrite",
   );
 
@@ -436,6 +519,7 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
   }
 
   await tx.objectStore("metadata").delete(libraryMetaKey(libraryId));
+  await tx.objectStore("aiSettings").delete(libraryId);
 
   const sessionsByLibrary = tx.objectStore("chatSessions").index("by_library");
   let sessionCursor = await sessionsByLibrary.openCursor(libraryId);
@@ -466,6 +550,22 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
   await deleteByLibrary("worldEntries");
   await deleteByLibrary("stories");
 
+  const runsByLibrary = tx.objectStore("researchRuns").index("by_library");
+  let runCursor = await runsByLibrary.openCursor(libraryId);
+  while (runCursor) {
+    const runId = runCursor.value.id;
+    await runCursor.delete();
+    await tx.objectStore("usageLedgers").delete(runId);
+
+    const artifactsByRun = tx.objectStore("researchArtifacts").index("by_run");
+    let artifactCursor = await artifactsByRun.openCursor(runId);
+    while (artifactCursor) {
+      await artifactCursor.delete();
+      artifactCursor = await artifactCursor.continue();
+    }
+    runCursor = await runCursor.continue();
+  }
+
   await tx.done;
 }
 
@@ -484,6 +584,151 @@ export async function getLibraryMeta(libraryId: string): Promise<PersistedLibrar
 export async function deleteLibraryMeta(libraryId: string): Promise<void> {
   const db = await getDb();
   await db.delete("metadata", libraryMetaKey(libraryId));
+}
+
+/* ==============================================================
+   AI settings / research persistence
+   ============================================================== */
+
+export async function putAiLibrarySettings(entry: PersistedAiLibrarySettings): Promise<void> {
+  const db = await getDb();
+  await db.put("aiSettings", { ...entry, updatedAt: entry.updatedAt ?? Date.now() });
+}
+
+export async function getAiLibrarySettings(libraryId: string): Promise<PersistedAiLibrarySettings | null> {
+  const db = await getDb();
+  const record = await db.get("aiSettings", libraryId);
+  return record ?? null;
+}
+
+export async function deleteAiLibrarySettings(libraryId: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("aiSettings", libraryId);
+}
+
+export async function putResearchRun(entry: PersistedResearchRun): Promise<void> {
+  const db = await getDb();
+  await db.put("researchRuns", { ...entry, updatedAt: entry.updatedAt ?? Date.now() });
+}
+
+export async function getResearchRun(id: string): Promise<PersistedResearchRun | null> {
+  const db = await getDb();
+  const record = await db.get("researchRuns", id);
+  return record ?? null;
+}
+
+export async function listResearchRunsByLibrary(libraryId: string): Promise<PersistedResearchRun[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("researchRuns", "by_library", libraryId);
+  return all.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function putResearchArtifact(entry: PersistedResearchArtifact): Promise<void> {
+  const db = await getDb();
+  await db.put("researchArtifacts", entry);
+}
+
+export async function listResearchArtifacts(runId: string): Promise<PersistedResearchArtifact[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("researchArtifacts", "by_run", runId);
+  return all.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export async function putUsageLedger(entry: PersistedUsageLedger): Promise<void> {
+  const db = await getDb();
+  await db.put("usageLedgers", { ...entry, updatedAt: entry.updatedAt ?? Date.now() });
+}
+
+export async function getUsageLedger(runId: string): Promise<PersistedUsageLedger | null> {
+  const db = await getDb();
+  const record = await db.get("usageLedgers", runId);
+  return record ?? null;
+}
+
+/* ==============================================================
+   Storage health & corpus-scale utilities
+   (Phase 3 — IndexedDB performance ceiling, run001 research)
+   ============================================================== */
+
+/**
+ * Record counts and estimated byte sizes for the IDB corpus.
+ *
+ * `navigator.storage.estimate()` is NOT used because Safari does not implement
+ * it reliably. Instead we count records and estimate sizes from known shapes:
+ * - Each embedding vector is 768 × 4 bytes (Float32) = 3 072 bytes
+ * - Each RAG node is ~2 KB of JSON on average
+ *
+ * Performance cliff reference: Safari's IDB (SQLite-backed) shows >50 ms
+ * transaction latency at ~10 000+ records, corresponding to ~500k words.
+ */
+export interface CorpusStats {
+  nodeCount: number;
+  fragmentCount: number;
+  embeddingCount: number;
+  estimatedBytes: number;
+  /** True when fragment + embedding counts approach the 10k-record threshold. */
+  nearPerformanceCliff: boolean;
+}
+
+export async function getCorpusStats(): Promise<CorpusStats> {
+  const db = await getDb();
+  const [nodeCount, embeddingCount] = await Promise.all([
+    db.count("nodes"),
+    db.count("embeddings"),
+  ]);
+
+  // Count fragment sub-nodes via the by_parent index — all non-null parentIds
+  const allNodes = await db.getAll("nodes");
+  const fragmentCount = allNodes.filter((n) => n.type === "fragment").length;
+
+  // Rough size estimate:
+  //   embeddings: 768 dims × 4 bytes (float32) + ~100 bytes metadata
+  //   nodes: ~2 KB JSON average
+  const estimatedBytes =
+    embeddingCount * (768 * 4 + 100) +
+    nodeCount * 2048;
+
+  // Warn at 70 % of the 10k cliff (≈7 000 combined fragment + embedding records)
+  const nearPerformanceCliff = fragmentCount + embeddingCount > 7_000;
+
+  return { nodeCount, fragmentCount, embeddingCount, estimatedBytes, nearPerformanceCliff };
+}
+
+/**
+ * Attempts to detect private-browsing mode and verify that IndexedDB is writable.
+ *
+ * Safari in private browsing sets IDB quota to **zero** — any write immediately
+ * throws `QuotaExceededError`. This function performs a cheap probe write so callers
+ * can surface a warning before the user loses indexing progress.
+ *
+ * `navigator.storage.estimate()` is intentionally NOT called — it is unsupported
+ * on Safari (returns `undefined` rather than throwing, making it silently useless).
+ *
+ * Returns:
+ * - `ok`: IDB is writable and available.
+ * - `privateMode`: write was rejected with QuotaExceededError — likely private browsing.
+ * - `unavailable`: IDB itself is absent (SSR, WebWorker without IDB, sandboxed iframe).
+ */
+export type StorageHealthStatus = "ok" | "privateMode" | "unavailable";
+
+export async function checkStorageHealth(): Promise<StorageHealthStatus> {
+  if (typeof indexedDB === "undefined") return "unavailable";
+
+  try {
+    const db = await getDb();
+    // A metadata upsert is idempotent and tiny — safe as a probe.
+    await db.put("metadata", {
+      key: "__storage-health-probe__",
+      value: 1,
+      updatedAt: Date.now(),
+    });
+    return "ok";
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "QuotaExceededError") {
+      return "privateMode";
+    }
+    return "unavailable";
+  }
 }
 
 /**
@@ -525,5 +770,15 @@ export async function createRAGStore(): Promise<RAGStore> {
     putLibraryMeta,
     getLibraryMeta,
     deleteLibraryMeta,
+    putAiLibrarySettings,
+    getAiLibrarySettings,
+    deleteAiLibrarySettings,
+    putResearchRun,
+    getResearchRun,
+    listResearchRunsByLibrary,
+    putResearchArtifact,
+    listResearchArtifacts,
+    putUsageLedger,
+    getUsageLedger,
   };
 }

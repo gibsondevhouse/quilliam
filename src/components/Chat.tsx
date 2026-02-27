@@ -1,7 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { parseEditStream, type EditBlockEvent } from "@/lib/editParser";
+import type { FileTarget } from "@/lib/changeSets";
+import { useSystemContext } from "@/lib/context/SystemContext";
+import type {
+  AiExecutionMode,
+  CloudProviderConfig,
+  ProposedPatchBatch,
+  ResearchRunRecord,
+  RunBudget,
+} from "@/lib/types";
+import { DEFAULT_PROVIDER_CONFIG, DEFAULT_RUN_BUDGET } from "@/lib/types";
 
 /* ================================================================
    Types
@@ -26,8 +44,10 @@ interface ParsedAssistantMessage {
 }
 
 interface ChatProps {
-  model: string;
-  mode: string;
+  libraryId?: string;
+  executionMode?: AiExecutionMode;
+  providerConfig?: CloudProviderConfig;
+  runBudget?: RunBudget;
   chatId?: string;
   variant?: "panel" | "landing";
   /** Manuscript context injected into the system prompt. Built from active doc + world data. */
@@ -44,6 +64,7 @@ interface ChatProps {
    * The parent (library layout) picks it up and applies it to the appropriate document.
    */
   onEditBlock?: (event: EditBlockEvent) => void;
+  onResearchRunChange?: () => void;
   initialMessages?: { role: "user" | "assistant"; content: string }[];
   onMessagesChange?: (messages: { role: "user" | "assistant"; content: string }[]) => void;
 }
@@ -52,37 +73,17 @@ interface ChatProps {
    System prompt — enforces the Modular Architect pattern
    ================================================================ */
 
-const SYSTEM_PROMPT = `You are Quilliam, a local writing assistant for authors and journalists. You run entirely on the user's machine — their work never leaves their device.
+const SYSTEM_PROMPT_LOCAL = `You are Quilliam, a writing assistant for authors and journalists. In Local mode, processing remains on-device via Ollama.
 
-## RESPONSE FORMAT — MANDATORY
+## RESPONSE FORMAT
 
-You MUST structure EVERY response in exactly two sections:
+Keep your conversational reply brief — 1 to 3 short sentences. Never ask clarifying questions; if the request is ambiguous, make a reasonable creative choice and proceed.
 
-### Section 1: VIBE
-A brief, conversational reply — 1 to 3 short sentences max. This is the core of what you want to say. No questions here. No lists of options. Just the essence.
+## DOCUMENT EDITING AND WRITING
 
-### Section 2: WORKSPACE
-If you need more information from the user, list each question as a separate line starting with [Q] — one question per line, no grouping, no paragraphs. Each question should be self-contained and answerable independently. If you have no questions, omit this section entirely.
+**Whenever the user asks you to write, draft, create, or generate any content meant for the document — always deliver it via an edit block, not as plain chat text.** This includes articles, chapters, sections, paragraphs, outlines, or any other textual content. If the document is empty, use \`line=1+\` to insert at the start.
 
-### Example output:
-
-Love the noir direction — a rain-soaked coastal town with a disappearing lighthouse keeper has real potential. Let me help shape this.
-
-[Q] What era should this be set in — modern day, mid-century, or historical?
-[Q] Is the protagonist a local or an outsider arriving in town?
-[Q] Should the tone lean hardboiled or more literary/atmospheric?
-[Q] Any themes you want woven in — grief, corruption, family secrets?
-
-### Rules:
-- NEVER put questions inside the vibe section.
-- NEVER group multiple questions into one [Q] line.
-- NEVER number the questions — just use [Q] prefix.
-- Keep the vibe SHORT. The workspace does the heavy lifting.
-- If the user's request is clear and complete, just respond with the vibe — no workspace needed.
-
-## DOCUMENT EDITING
-
-When asked to edit or improve text, propose changes using fenced edit blocks. Lines are 1-based.
+When asked to edit or improve existing text, also use fenced edit blocks. Lines are 1-based.
 
 Replace lines 3–5:
 \`\`\`edit line=3-5
@@ -113,6 +114,12 @@ Updated world entry
 \`\`\`
 
 Outside edit fences, write plain commentary. Never nest fence markers.`;
+
+const SYSTEM_PROMPT_ASSISTED =
+  "You are Quilliam Assisted Cloud. Return concise guidance and conservative, review-first edits only.";
+
+const SYSTEM_PROMPT_DEEP_RESEARCH =
+  "You are Quilliam Deep Research. Every substantive claim must include at least one citation with URL + quote.";
 
 
 /* ================================================================
@@ -155,6 +162,312 @@ function parseAssistantMessage(content: string): ParsedAssistantMessage {
     vibe: vibeLines.join("\n").trim(),
     questions,
   };
+}
+
+function patchTargetToFileTarget(patch: ProposedPatchBatch): FileTarget {
+  if (patch.targetKind === "character") {
+    const name = patch.targetKey?.startsWith("character:")
+      ? patch.targetKey.slice("character:".length)
+      : patch.targetId;
+    return { kind: "character", name };
+  }
+  if (patch.targetKind === "location") {
+    const name = patch.targetKey?.startsWith("location:")
+      ? patch.targetKey.slice("location:".length)
+      : patch.targetId;
+    return { kind: "location", name };
+  }
+  if (patch.targetKind === "world") {
+    const key = patch.targetKey?.startsWith("world:")
+      ? patch.targetKey.slice("world:".length)
+      : patch.targetId;
+    return { kind: "world", key };
+  }
+  return { kind: "active" };
+}
+
+function formatResearchRunSummary(run: ResearchRunRecord): string {
+  const header = `Deep Research ${run.status.replace(/_/g, " ")} (${run.id.slice(0, 8)})`;
+  if (run.status !== "completed") {
+    return `${header}\nPhase: ${run.phase}\n${run.error ?? "No additional details."}`;
+  }
+
+  const outline = run.artifacts.find((a) => a.kind === "outline")?.content ?? "";
+  const claims = run.artifacts.find((a) => a.kind === "claims");
+  const citations = claims?.citations ?? [];
+  const citationLines = citations
+    .slice(0, 6)
+    .map((c) => `- [${c.title}](${c.url}) — "${c.quote.slice(0, 120)}"`);
+
+  const sections = [header];
+  if (outline) {
+    sections.push(`\n${outline}`);
+  }
+  if (citationLines.length > 0) {
+    sections.push(`\nCitations:\n${citationLines.join("\n")}`);
+  }
+  return sections.join("\n");
+}
+
+function useLocalChat(params: {
+  onEditBlock?: (event: EditBlockEvent) => void;
+  initQuestionStates: (msgIndex: number, content: string) => void;
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
+  setStreamingContent: Dispatch<SetStateAction<string>>;
+}) {
+  const { onEditBlock, initQuestionStates, setMessages, setStreamingContent } = params;
+
+  return useCallback(
+    async ({
+      apiMessages,
+      newMessages,
+    }: {
+      apiMessages: { role: "system" | "user" | "assistant"; content: string }[];
+      newMessages: ChatMessage[];
+    }) => {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: apiMessages }),
+      });
+
+      if (!response.ok) {
+        const err = await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error || response.statusText);
+      }
+
+      if (!response.body) throw new Error("No response stream");
+
+      let fullContent = "";
+
+      for await (const event of parseEditStream(response.body)) {
+        if (event.type === "token") {
+          fullContent += event.text;
+          setStreamingContent(fullContent);
+        } else if (event.type === "editBlock") {
+          onEditBlock?.(event);
+        }
+      }
+
+      const assistantIndex = newMessages.length;
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant" as const, content: fullContent },
+      ]);
+      initQuestionStates(assistantIndex, fullContent);
+      setStreamingContent("");
+    },
+    [initQuestionStates, onEditBlock, setMessages, setStreamingContent],
+  );
+}
+
+function useAssistedCloud(params: {
+  providerConfig: CloudProviderConfig;
+  runBudget: RunBudget;
+  initQuestionStates: (msgIndex: number, content: string) => void;
+  onEditBlock?: (event: EditBlockEvent) => void;
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
+}) {
+  const { providerConfig, runBudget, initQuestionStates, onEditBlock, setMessages } = params;
+
+  return useCallback(
+    async ({
+      trimmed,
+      systemContent,
+      apiMessages,
+      newMessages,
+    }: {
+      trimmed: string;
+      systemContent: string;
+      apiMessages: { role: "system" | "user" | "assistant"; content: string }[];
+      newMessages: ChatMessage[];
+    }) => {
+      const response = await fetch("/api/cloud/assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: trimmed,
+          context: systemContent,
+          messages: apiMessages,
+          providerConfig,
+          budget: runBudget,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        patches?: ProposedPatchBatch[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || response.statusText);
+      }
+
+      const fullContent = payload.message ?? "Assisted cloud run completed.";
+      const patches = Array.isArray(payload.patches) ? payload.patches : [];
+      for (const patch of patches) {
+        const fileTarget = patchTargetToFileTarget(patch);
+        for (const edit of patch.edits) {
+          onEditBlock?.({
+            type: "editBlock",
+            edit,
+            fileTarget,
+            commentary: patch.rationale || fullContent,
+          });
+        }
+      }
+
+      const assistantIndex = newMessages.length;
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant" as const, content: fullContent },
+      ]);
+      initQuestionStates(assistantIndex, fullContent);
+    },
+    [initQuestionStates, onEditBlock, providerConfig, runBudget, setMessages],
+  );
+}
+
+function useDeepResearch(params: {
+  libraryId?: string;
+  providerConfig: CloudProviderConfig;
+  runBudget: RunBudget;
+  onResearchRunChange?: () => void;
+  setActiveResearchRun: Dispatch<SetStateAction<ResearchRunRecord | null>>;
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
+  pollingControllerRef: RefObject<AbortController | null>;
+}) {
+  const {
+    libraryId,
+    providerConfig,
+    runBudget,
+    onResearchRunChange,
+    setActiveResearchRun,
+    setMessages,
+    pollingControllerRef,
+  } = params;
+
+  return useCallback(
+    async ({ trimmed, systemContent }: { trimmed: string; systemContent: string }) => {
+      if (!libraryId) throw new Error("Deep research mode requires a library context.");
+
+      const response = await fetch("/api/research/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          libraryId,
+          query: trimmed,
+          context: systemContent,
+          providerConfig,
+          budget: runBudget,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        run?: ResearchRunRecord;
+        error?: string;
+      };
+      if (!response.ok || !payload.run) {
+        throw new Error(payload.error || response.statusText);
+      }
+
+      const run = payload.run;
+      setActiveResearchRun(run);
+      onResearchRunChange?.();
+      const startedMessage = `Deep research run started (${run.id.slice(0, 8)}). I will update this thread when it finishes.`;
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant" as const, content: startedMessage },
+      ]);
+
+      const terminal = new Set(["completed", "cancelled", "failed", "budget_exceeded"]);
+      pollingControllerRef.current?.abort();
+      const controller = new AbortController();
+      pollingControllerRef.current = controller;
+
+      void (async () => {
+        let failures = 0;
+        let lastKnown = run;
+
+        const wait = async (ms: number) =>
+          new Promise<void>((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+              controller.signal.removeEventListener("abort", onAbort);
+              resolve();
+            }, ms);
+            const onAbort = () => {
+              window.clearTimeout(timeout);
+              reject(new DOMException("Polling aborted", "AbortError"));
+            };
+            controller.signal.addEventListener("abort", onAbort, { once: true });
+          });
+
+        while (!controller.signal.aborted) {
+          try {
+            await wait(2500);
+            const runResponse = await fetch(`/api/research/runs/${run.id}`, {
+              signal: controller.signal,
+            });
+            if (!runResponse.ok) {
+              throw new Error(`Polling failed (${runResponse.status})`);
+            }
+            const runPayload = (await runResponse.json()) as { run?: ResearchRunRecord };
+            const latestRun = runPayload.run;
+            if (!latestRun) {
+              throw new Error("Polling response missing run payload");
+            }
+
+            failures = 0;
+            lastKnown = latestRun;
+            setActiveResearchRun(latestRun);
+            if (terminal.has(latestRun.status)) {
+              onResearchRunChange?.();
+              setMessages((prev) => [
+                ...prev,
+                { role: "assistant" as const, content: formatResearchRunSummary(latestRun) },
+              ]);
+              return;
+            }
+          } catch (error) {
+            if (controller.signal.aborted) return;
+            failures += 1;
+            if (failures >= 3) {
+              const detail =
+                error instanceof Error ? error.message : "Unknown polling error";
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant" as const,
+                  content:
+                    `⚠ Deep research updates stopped before completion. ` +
+                    `Last status: ${lastKnown.status} (phase ${lastKnown.phase}). ${detail}`,
+                },
+              ]);
+              return;
+            }
+            const retryDelay = 400 * 2 ** (failures - 1);
+            try {
+              await wait(retryDelay);
+            } catch {
+              return;
+            }
+          }
+        }
+      })();
+    },
+    [
+      libraryId,
+      onResearchRunChange,
+      pollingControllerRef,
+      providerConfig,
+      runBudget,
+      setActiveResearchRun,
+      setMessages,
+    ],
+  );
 }
 
 /* ================================================================
@@ -270,7 +583,21 @@ function AssistantMessage({
    Chat component
    ================================================================ */
 
-export function Chat({ model, mode, chatId, variant = "panel", context, onBuildContext, onEditBlock, initialMessages, onMessagesChange }: ChatProps) {
+export function Chat({
+  libraryId,
+  executionMode = "local",
+  providerConfig = DEFAULT_PROVIDER_CONFIG,
+  runBudget = DEFAULT_RUN_BUDGET,
+  chatId,
+  variant = "panel",
+  context,
+  onBuildContext,
+  onEditBlock,
+  onResearchRunChange,
+  initialMessages,
+  onMessagesChange,
+}: ChatProps) {
+  const { status: systemStatus } = useSystemContext();
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (initialMessages && initialMessages.length > 0) {
       return initialMessages.map((m) => ({ role: m.role, content: m.content }));
@@ -278,13 +605,25 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
     return [];
   });
   const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [activeResearchRun, setActiveResearchRun] = useState<ResearchRunRecord | null>(null);
   const [questionStates, setQuestionStates] = useState<
     Map<number, QuestionCard[]>
   >(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pollingControllerRef = useRef<AbortController | null>(null);
+  // Ref so handleSubmitReply can call sendMessage even though it is defined later
+  const sendMessageRef = useRef<((overrideInput?: string) => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    const pollingRef = pollingControllerRef;
+    return () => {
+      pollingRef.current?.abort();
+    };
+  }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -380,32 +719,73 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
       // Send the answer as a user message to continue the conversation
       if (questionText && replyText) {
         const answerMessage = `Re: "${questionText}"\n${replyText}`;
-        setInput(answerMessage);
+        sendMessageRef.current?.(answerMessage);
       }
     },
     []
   );
 
+  const runLocalChat = useLocalChat({
+    onEditBlock,
+    initQuestionStates,
+    setMessages,
+    setStreamingContent,
+  });
+
+  const runAssistedCloud = useAssistedCloud({
+    providerConfig,
+    runBudget,
+    initQuestionStates,
+    onEditBlock,
+    setMessages,
+  });
+
+  const runDeepResearch = useDeepResearch({
+    libraryId,
+    providerConfig,
+    runBudget,
+    onResearchRunChange,
+    setActiveResearchRun,
+    setMessages,
+    pollingControllerRef,
+  });
+
   /* -- Send message -- */
-  const sendMessage = useCallback(async () => {
-    const trimmed = input.trim();
-    if (!trimmed || streaming) return;
+  const sendMessage = useCallback(async (overrideInput?: string) => {
+    const trimmed = (overrideInput ?? input).trim();
+    if (!trimmed || isSending) return;
+
+    if (executionMode !== "local" && typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        executionMode === "assisted_cloud"
+          ? `This action will use Assisted Cloud (${providerConfig.anthropicModel}) and your BYO API key. Proceed?`
+          : `This action will start a Deep Research run with hard caps (up to $${runBudget.maxUsd}, ${runBudget.maxMinutes} min, ${runBudget.maxSources} sources). Proceed?`,
+      );
+      if (!confirmed) return;
+    }
 
     const userMessage: ChatMessage = { role: "user", content: trimmed };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
-    setStreaming(true);
+    setIsSending(true);
+    setStreaming(executionMode === "local");
     setStreamingContent("");
 
     try {
       // Build base context block (static — stays prefix-cached by Ollama)
+      const basePrompt =
+        executionMode === "local"
+          ? SYSTEM_PROMPT_LOCAL
+          : executionMode === "assisted_cloud"
+            ? SYSTEM_PROMPT_ASSISTED
+            : SYSTEM_PROMPT_DEEP_RESEARCH;
       let systemContent = context
-        ? `${SYSTEM_PROMPT}\n\n## ACTIVE MANUSCRIPT CONTEXT\n\n${context}\n---\nUse this context to give specific, grounded responses about the author's actual work. Always prefer this over general advice.`
-        : SYSTEM_PROMPT;
+        ? `${basePrompt}\n\n## ACTIVE MANUSCRIPT CONTEXT\n\n${context}\n---\nUse this context to give specific, grounded responses about the author's actual work. Always prefer this over general advice.`
+        : basePrompt;
 
       // Append dynamic RAG passages at the end (after static prefix, so cache is preserved)
-      if (onBuildContext) {
+      if (onBuildContext && executionMode !== "deep_research") {
         const ragContext = await onBuildContext(trimmed);
         if (ragContext) {
           systemContent += `\n\n${ragContext}`;
@@ -417,43 +797,20 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
         ...newMessages,
       ];
 
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages }),
-      });
-
-      if (!response.ok) {
-        const err = await response
-          .json()
-          .catch(() => ({ error: "Unknown error" }));
-        throw new Error(err.error || response.statusText);
+      if (executionMode === "local") {
+        await runLocalChat({ apiMessages, newMessages });
+      } else if (executionMode === "assisted_cloud") {
+        setStreaming(false);
+        await runAssistedCloud({
+          trimmed,
+          systemContent,
+          apiMessages,
+          newMessages,
+        });
+      } else {
+        setStreaming(false);
+        await runDeepResearch({ trimmed, systemContent });
       }
-
-      if (!response.body) throw new Error("No response stream");
-
-      let fullContent = "";
-
-      for await (const event of parseEditStream(response.body)) {
-        if (event.type === "token") {
-          fullContent += event.text;
-          setStreamingContent(fullContent);
-        } else if (event.type === "editBlock") {
-          // Lift edit block to parent (library layout) for application
-          onEditBlock?.(event);
-        }
-      }
-
-      const assistantIndex = newMessages.length; // index in the messages array
-      setMessages((prev) => {
-        const updated = [
-          ...prev,
-          { role: "assistant" as const, content: fullContent },
-        ];
-        return updated;
-      });
-      initQuestionStates(assistantIndex, fullContent);
-      setStreamingContent("");
     } catch (error) {
       const errMsg =
         error instanceof Error ? error.message : "Something went wrong";
@@ -463,9 +820,25 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
       ]);
       setStreamingContent("");
     } finally {
+      setIsSending(false);
       setStreaming(false);
     }
-  }, [input, messages, streaming, context, onBuildContext, onEditBlock, initQuestionStates]);
+  }, [
+    input,
+    isSending,
+    executionMode,
+    providerConfig,
+    runBudget,
+    messages,
+    context,
+    onBuildContext,
+    runLocalChat,
+    runAssistedCloud,
+    runDeepResearch,
+  ]);
+
+  // Keep the ref current so handleSubmitReply can forward to this callback
+  sendMessageRef.current = sendMessage;
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -502,7 +875,7 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
             <div className="chat-welcome-inner">
               <h1 className="chat-welcome-brand">Quilliam</h1>
               <p className="chat-welcome-tagline">
-                Your local writing assistant
+                Local-by-default writing assistant with opt-in cloud power
               </p>
               <div className="chat-welcome-chips">
                 <button
@@ -547,9 +920,10 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
                 </button>
               </div>
               <p className="chat-welcome-hint">
-                <span className="chat-model-badge">{model}</span>
-                <span className="chat-mode-badge">{mode}</span>
-                — running locally on your machine
+                <span className="chat-model-badge">{systemStatus.model}</span>
+                <span className="chat-mode-badge">{systemStatus.mode}</span>
+                <span className="chat-mode-badge">{executionMode.replace(/_/g, " ")}</span>
+                — local by default, cloud on explicit approval
               </p>
             </div>
           </div>
@@ -614,22 +988,35 @@ export function Chat({ model, mode, chatId, variant = "panel", context, onBuildC
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Quilliam anything about your writing..."
+            placeholder={
+              executionMode === "local"
+                ? "Ask Quilliam anything about your writing..."
+                : executionMode === "assisted_cloud"
+                  ? "Cloud-assisted prompt (opt-in per send)..."
+                  : "Start a deep research run (opt-in per send)..."
+            }
             rows={1}
-            disabled={streaming}
+            disabled={isSending}
           />
           <button
             className="chat-send"
-            onClick={sendMessage}
-            disabled={streaming || !input.trim()}
+            onClick={() => {
+              void sendMessage();
+            }}
+            disabled={isSending || !input.trim()}
             title="Send (Enter)"
           >
             ↑
           </button>
         </div>
         <p className="chat-input-hint">
-          Shift+Enter for new line · All processing happens locally
+          Shift+Enter for new line · {executionMode === "local" ? "Processing stays local." : "Cloud actions require explicit confirmation."}
         </p>
+        {activeResearchRun && (
+          <p className="chat-input-hint">
+            Deep Research: {activeResearchRun.status} · phase {activeResearchRun.phase}
+          </p>
+        )}
       </div>
     </div>
   );

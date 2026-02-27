@@ -134,7 +134,7 @@ export function computeLineStates(
 /** Return a stable document key string from a FileTarget. */
 export function fileTargetKey(target: FileTarget): string {
   if (target.kind === "active") return "__active__";
-  if (target.kind === "character") return `character:${target.name}`;
-  if (target.kind === "location") return `location:${target.name}`;
-  return `world:${target.key}`;
+  if (target.kind === "character") return `character:${target.name.trim().toLowerCase()}`;
+  if (target.kind === "location") return `location:${target.name.trim().toLowerCase()}`;
+  return `world:${target.key.trim().toLowerCase()}`;
 }

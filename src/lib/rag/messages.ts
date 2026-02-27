@@ -17,7 +17,29 @@ export interface HashBatchRequest {
   fragments: HashFragmentPayload[];
 }
 
-export type RagWorkerRequest = HashRequest | HashBatchRequest;
+/** A single item to rank: its id plus its pre-hydrated embedding vector. */
+export interface RankItem {
+  id: string;
+  vector: Float32Array;
+}
+
+/**
+ * Ask the worker to rank `items` by cosine similarity to `queryVector`
+ * and return the top `limit` results.
+ *
+ * Arrays use structured clone (not Transferable) so the main thread retains
+ * the vectors for potential follow-up use.
+ */
+export interface RankSimilarityRequest {
+  type: "rank-similarity";
+  /** Unique identifier for correlating the response to this request. */
+  requestId: string;
+  queryVector: Float32Array;
+  items: RankItem[];
+  limit: number;
+}
+
+export type RagWorkerRequest = HashRequest | HashBatchRequest | RankSimilarityRequest;
 
 export interface HashResult {
   fragmentId: string;
@@ -35,4 +57,15 @@ export interface HashBatchResultMessage {
   results: HashResult[];
 }
 
-export type RagWorkerResponse = HashResultMessage | HashBatchResultMessage;
+export interface RankResult {
+  id: string;
+  score: number;
+}
+
+export interface RankSimilarityResultMessage {
+  type: "rank-similarity-result";
+  requestId: string;
+  results: RankResult[];
+}
+
+export type RagWorkerResponse = HashResultMessage | HashBatchResultMessage | RankSimilarityResultMessage;

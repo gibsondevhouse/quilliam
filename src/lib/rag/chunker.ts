@@ -21,12 +21,24 @@
 import { FRAGMENT_TARGET_TOKENS, estimateTokenCount, createRAGNode } from "./hierarchy";
 import type { RAGNode } from "./hierarchy";
 import { hashFragment } from "./hasher";
+import { cosineSimilarity } from "./search";
 
 /** Multiplier above target at which we bother splitting (avoids micro-chunks). */
 export const CHUNK_SPLIT_THRESHOLD = 1.5;
 
-/** Overlap in characters prepended to each new chunk for context continuity. */
-const OVERLAP_CHARS = 200;
+/**
+ * Bumped whenever the chunking algorithm changes in a way that invalidates
+ * existing embeddings. The DB migration checks this via the stored metadata
+ * key `chunkStrategyVersion` and triggers a re-index when it differs.
+ */
+export const CHUNK_STRATEGY_VERSION = "v2";
+
+/**
+ * Minimum cosine similarity between consecutive sentences to keep them in
+ * the same chunk. Below this value a semantic boundary is detected and a
+ * new chunk is started.
+ */
+const SEMANTIC_BOUNDARY_THRESHOLD = 0.8;
 
 /**
  * Returns a deterministic sub-fragment ID for a given parent + chunk index.
@@ -44,14 +56,13 @@ export function needsChunking(content: string): boolean {
 }
 
 /**
- * Splits `content` into an array of overlapping text chunks.
- * Each chunk targets `FRAGMENT_TARGET_TOKENS` tokens (~500).
- * Returns a single-element array (the full content) when no split is needed.
+ * Fallback: split on blank-line paragraph boundaries, 200-char overlap.
+ * Used when no `embedFn` is supplied to `chunkScene`.
  */
-function splitContent(content: string): string[] {
+function paragraphSplitContent(content: string): string[] {
   const targetChars = FRAGMENT_TARGET_TOKENS * 4;
+  const overlapChars = 200;
 
-  // Split on blank-line paragraph boundaries; keep the separator
   const paragraphs = content.split(/(\n\n+)/);
   const chunks: string[] = [];
   let current = "";
@@ -59,16 +70,96 @@ function splitContent(content: string): string[] {
   for (const segment of paragraphs) {
     if (current.length + segment.length > targetChars && current.trim()) {
       chunks.push(current.trimEnd());
-      // Seed the next chunk with the overlap tail of the previous one
-      const overlap = current.length > OVERLAP_CHARS ? current.slice(-OVERLAP_CHARS) : current;
+      const overlap = current.length > overlapChars ? current.slice(-overlapChars) : current;
       current = overlap + segment;
     } else {
       current += segment;
     }
   }
+  if (current.trim()) chunks.push(current.trimEnd());
+  return chunks.length ? chunks : [content];
+}
 
-  if (current.trim()) {
-    chunks.push(current.trimEnd());
+/**
+ * Splits prose text into individual sentences on `.`, `!`, `?` boundaries.
+ * Consecutive short fragments (< 4 words) are merged into the previous
+ * sentence to avoid micro-embeddings from e.g. "Mr." or dialogue beats.
+ */
+export function splitSentences(text: string): string[] {
+  const raw = text
+    .split(/(?<=[.!?]["']?)\s+(?=[A-Z"])/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const merged: string[] = [];
+  for (const s of raw) {
+    const wordCount = s.split(/\s+/).length;
+    if (merged.length > 0 && wordCount < 4) {
+      merged[merged.length - 1] += " " + s;
+    } else {
+      merged.push(s);
+    }
+  }
+  return merged.length ? merged : [text];
+}
+
+/**
+ * Adaptive semantic chunking.
+ *
+ * Grows each chunk sentence-by-sentence; starts a new chunk when:
+ * - The cosine similarity between the current sentence and its predecessor
+ *   drops below `SEMANTIC_BOUNDARY_THRESHOLD` (0.80) — topic shift detected.
+ * - OR the running token count would exceed `FRAGMENT_TARGET_TOKENS` (~500).
+ *
+ * Each new chunk prepends the last sentence of the previous chunk as a
+ * 1-sentence overlap to preserve narrative continuity.
+ *
+ * The chunking step embeds every sentence individually, making it ~3–5×
+ * slower than paragraph splitting — acceptable for background indexing.
+ *
+ * @param content  Raw prose text to split.
+ * @param embedFn  Async function that returns a Float32Array embedding for a string.
+ */
+async function semanticSplitContent(
+  content: string,
+  embedFn: (text: string) => Promise<Float32Array>,
+): Promise<string[]> {
+  const sentences = splitSentences(content);
+  if (sentences.length <= 1) return [content];
+
+  const targetTokens = FRAGMENT_TARGET_TOKENS;
+
+  // Embed all sentences in parallel (Ollama serialises internally)
+  const embeddings = await Promise.all(sentences.map((s) => embedFn(s)));
+
+  const chunks: string[] = [];
+  let currentSentences: string[] = [sentences[0]];
+  let currentTokens = estimateTokenCount(sentences[0]);
+  let prevEmbedding = embeddings[0];
+
+  for (let i = 1; i < sentences.length; i++) {
+    const s = sentences[i];
+    const sTokens = estimateTokenCount(s);
+    const sim = cosineSimilarity(prevEmbedding, embeddings[i]);
+
+    const tokenOverflow = currentTokens + sTokens > targetTokens;
+    const semanticBreak = sim < SEMANTIC_BOUNDARY_THRESHOLD;
+
+    if (tokenOverflow || semanticBreak) {
+      chunks.push(currentSentences.join(" "));
+      // 1-sentence overlap for continuity
+      const overlapSentence = currentSentences[currentSentences.length - 1];
+      currentSentences = [overlapSentence, s];
+      currentTokens = estimateTokenCount(overlapSentence) + sTokens;
+    } else {
+      currentSentences.push(s);
+      currentTokens += sTokens;
+    }
+    prevEmbedding = embeddings[i];
+  }
+
+  if (currentSentences.length > 0) {
+    chunks.push(currentSentences.join(" "));
   }
 
   return chunks.length ? chunks : [content];
@@ -91,8 +182,11 @@ export async function chunkScene(
   parentId: string,
   parentTitle: string,
   content: string,
+  embedFn?: (text: string) => Promise<Float32Array>,
 ): Promise<RAGNode[]> {
-  const texts = splitContent(content);
+  const texts = embedFn
+    ? await semanticSplitContent(content, embedFn)
+    : paragraphSplitContent(content);
   const total = texts.length;
 
   const hashes = await Promise.all(texts.map((t) => hashFragment(t)));
