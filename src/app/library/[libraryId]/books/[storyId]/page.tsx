@@ -3,13 +3,13 @@
 import { useCallback, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLibraryContext } from "@/lib/context/LibraryContext";
-import { useRAGContext } from "@/lib/context/RAGContext";
+import { useWorkspaceContext } from "@/lib/context/WorkspaceContext";
 
 export default function BookDashboardPage() {
   const params = useParams<{ libraryId: string; storyId: string }>();
   const { libraryId, storyId } = params;
   const lib = useLibraryContext();
-  const { ragNodes, addNode } = useRAGContext();
+  const { ragNodes, addNode } = useWorkspaceContext();
   const router = useRouter();
 
   const story = lib.stories.find((s) => s.id === storyId);

@@ -19,13 +19,13 @@
  */
 
 import type { RAGStore } from "@/lib/rag/store";
-import type { CanonicalDoc, CanonicalType, Relationship, SourceRef } from "@/lib/types";
+import type { Entry, EntryType, Relationship, SourceRef } from "@/lib/types";
 
 /* ----------------------------------------------------------------
    Helpers
    ---------------------------------------------------------------- */
 
-const TYPE_PREFIX: Record<CanonicalType, string> = {
+const TYPE_PREFIX: Record<EntryType, string> = {
   character:      "char",
   location:       "loc",
   culture:        "cul",
@@ -44,7 +44,7 @@ const TYPE_PREFIX: Record<CanonicalType, string> = {
   timeline_event: "evt",
 };
 
-function makeDocId(type: CanonicalType, legacyId: string): string {
+function makeDocId(type: EntryType, legacyId: string): string {
   return `${TYPE_PREFIX[type]}_mig_${legacyId.replace(/[^a-z0-9]/gi, "_").slice(0, 40)}`;
 }
 
@@ -96,7 +96,7 @@ async function stepA(
     if (!char.notes && !char.role) {
       warnings.push(`Character "${char.name}" had no notes or role; left blank.`);
     }
-    const doc: CanonicalDoc = {
+    const doc: Entry = {
       id:            docId,
       type:          "character",
       universeId:    libraryId,
@@ -128,7 +128,7 @@ async function stepA(
     if (!loc.description) {
       warnings.push(`Location "${loc.name}" had no description; left blank.`);
     }
-    const doc: CanonicalDoc = {
+    const doc: Entry = {
       id:            docId,
       type:          "location",
       universeId:    libraryId,
@@ -160,7 +160,7 @@ async function stepA(
     if (!entry.notes) {
       warnings.push(`World entry "${entry.title}" had no notes; left blank.`);
     }
-    const doc: CanonicalDoc = {
+    const doc: Entry = {
       id:            docId,
       type:          "lore_entry",
       universeId:    libraryId,
@@ -265,7 +265,7 @@ async function stepC(store: RAGStore, libraryId: string, runId: string, onProgre
     const existing = await store.getDocById(docId);
     if (existing) continue;
 
-    const doc: CanonicalDoc = {
+    const doc: Entry = {
       id:            docId,
       type:          "scene",
       universeId:    libraryId,

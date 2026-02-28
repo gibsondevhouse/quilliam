@@ -151,6 +151,10 @@ export function Chat({
     setStreamingContent,
     onPatchesExtracted,
     existingEntries,
+    // Enable entity extraction only on cloud-assisted paths where structured
+    // output quality is reliable. Local Ollama (7B/13B) skips extraction
+    // entirely to avoid token overhead and low-quality JSON fences.
+    extractionEnabled: executionMode !== "local",
   });
 
   const runAssistedCloud = useAssistedCloud({

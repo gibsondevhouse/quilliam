@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLibraryContext } from "@/lib/context/LibraryContext";
+import { useStore } from "@/lib/context/useStore";
 import {
   finalizeImp002Migration,
   getImp002MigrationState,
@@ -30,6 +31,7 @@ const BUDGET_FIELDS: Array<keyof RunBudget> = [
 
 export default function SettingsPage() {
   const lib = useLibraryContext();
+  const store = useStore();
 
   const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null);
   const [passphrase, setPassphrase] = useState("");
@@ -75,8 +77,6 @@ export default function SettingsPage() {
   }, [lib.defaultRunBudget]);
 
   useEffect(() => {
-    const store = lib.storeRef.current;
-    if (!store || !lib.storeReady) return;
     void (async () => {
       const state = await getImp002MigrationState(store, lib.libraryId);
       const report = await store.getMetadata<Imp002MigrationReport>(
@@ -89,7 +89,7 @@ export default function SettingsPage() {
         setWizardStep("done");
       }
     })();
-  }, [lib.libraryId, lib.storeReady, lib.storeRef]);
+  }, [lib.libraryId, store]);
 
   const sortedRuns = useMemo(
     () => [...lib.researchRuns].sort((a, b) => b.updatedAt - a.updatedAt),
@@ -202,8 +202,6 @@ export default function SettingsPage() {
   }, [budgetDraft, lib]);
 
   const handleMigratePreview = useCallback(async () => {
-    const store = lib.storeRef.current;
-    if (!store) return;
     setWizardStep("previewing");
     try {
       const [characters, locations, worldEntries, scenes, allNodes] = await Promise.all([
@@ -227,11 +225,9 @@ export default function SettingsPage() {
       setMigrationError(err instanceof Error ? err.message : String(err));
       setWizardStep("error");
     }
-  }, [lib.libraryId, lib.storeRef]);
+  }, [lib.libraryId, store]);
 
   const handleMigrateRun = useCallback(async () => {
-    const store = lib.storeRef.current;
-    if (!store) return;
     setWizardStep("running");
     setMigrationProgress({ step: "snapshot", pct: 5 });
     setMigrationError(null);
@@ -245,11 +241,9 @@ export default function SettingsPage() {
       setMigrationError(err instanceof Error ? err.message : String(err));
       setWizardStep("error");
     }
-  }, [lib.libraryId, lib.storeRef]);
+  }, [lib.libraryId, store]);
 
   const handleMigrateConfirm = useCallback(async () => {
-    const store = lib.storeRef.current;
-    if (!store) return;
     setWizardStep("confirming");
     try {
       await finalizeImp002Migration(store, lib.libraryId);
@@ -258,7 +252,7 @@ export default function SettingsPage() {
       setMigrationError(err instanceof Error ? err.message : String(err));
       setWizardStep("error");
     }
-  }, [lib.libraryId, lib.storeRef]);
+  }, [lib.libraryId, store]);
 
   const handleMigrateRollback = useCallback(() => {
     // Non-destructive: migration is staged but not finalized.

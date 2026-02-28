@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { useRAGContext } from "@/lib/context/RAGContext";
+import { useStore } from "@/lib/context/useStore";
 import { makeId } from "@/lib/domain/idUtils";
 import type { Era, Event, Timeline } from "@/lib/types";
 import type { EraWithEvents } from "../timelineTypes";
@@ -27,7 +27,7 @@ export interface UseTimelineDataReturn {
 }
 
 export function useTimelineData(): UseTimelineDataReturn {
-  const { storeRef, storeReady } = useRAGContext();
+  const store = useStore();
   const params = useParams<{ libraryId: string }>();
   const universeId = params.libraryId;
 
@@ -43,8 +43,6 @@ export function useTimelineData(): UseTimelineDataReturn {
   const [newEventDesc, setNewEventDesc] = useState("");
 
   const loadData = useCallback(async () => {
-    const store = storeRef.current;
-    if (!store) return;
     const timelines = await store.listTimelinesByUniverse(universeId);
     const master = timelines.find((t) => t.timelineType === "master") ?? null;
     setMasterTimeline(master);
@@ -63,18 +61,16 @@ export function useTimelineData(): UseTimelineDataReturn {
     );
     setEraData(eraRows);
     setLoading(false);
-  }, [storeRef, universeId]);
+  }, [store, universeId]);
 
   useEffect(() => {
-    if (!storeReady || loadedRef.current) return;
+    if (loadedRef.current) return;
     loadedRef.current = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData();
-  }, [storeReady, loadData]);
+  }, [loadData]);
 
   const handleCreateTimeline = useCallback(async () => {
-    const store = storeRef.current;
-    if (!store) return;
     const now = Date.now();
     const tl: Timeline = {
       id: makeId("tl"),
@@ -87,12 +83,10 @@ export function useTimelineData(): UseTimelineDataReturn {
     await store.putTimeline(tl);
     setMasterTimeline(tl);
     setEraData([]);
-  }, [storeRef, universeId]);
+  }, [store, universeId]);
 
   const handleAddEra = useCallback(async () => {
     if (!masterTimeline || !newEraName.trim()) return;
-    const store = storeRef.current;
-    if (!store) return;
     const now = Date.now();
     const era: Era = {
       id: makeId("era"),
@@ -104,12 +98,10 @@ export function useTimelineData(): UseTimelineDataReturn {
     await store.putEra(era);
     setEraData((prev) => [...prev, { era, events: [] }]);
     setNewEraName("");
-  }, [masterTimeline, newEraName, storeRef]);
+  }, [masterTimeline, newEraName, store]);
 
   const handleAddEvent = useCallback(async (eraId: string) => {
     if (!newEventName.trim() || !masterTimeline) return;
-    const store = storeRef.current;
-    if (!store) return;
     const now = Date.now();
     const anchorId = makeId("ta");
     const defaultCalendars = await store.listCalendarsByUniverse(universeId);
@@ -145,7 +137,7 @@ export function useTimelineData(): UseTimelineDataReturn {
     setNewEventName("");
     setNewEventDesc("");
     setAddingToEra(null);
-  }, [masterTimeline, newEventName, newEventType, newEventDesc, storeRef, universeId]);
+  }, [masterTimeline, newEventName, newEventType, newEventDesc, store, universeId]);
 
   return {
     masterTimeline,

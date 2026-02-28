@@ -1,13 +1,11 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useRAGContext } from "@/lib/context/RAGContext";
 import { NewMapForm } from "./NewMapForm";
 import { MapCanvas } from "./MapCanvas";
 import { useMapData } from "./hooks/useMapData";
 
 export function MapsPage() {
-  const { storeRef, storeReady } = useRAGContext();
   const params = useParams<{ libraryId: string }>();
   const universeId = params.libraryId;
 
@@ -37,7 +35,7 @@ export function MapsPage() {
     handleMapClick,
     handleConfirmPin,
     handlePinClick,
-  } = useMapData({ universeId, storeRef, storeReady });
+  } = useMapData({ universeId });
 
   if (loading) {
     return <div className="library-page"><p className="library-loading">Loading maps…</p></div>;

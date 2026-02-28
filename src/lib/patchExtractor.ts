@@ -9,6 +9,7 @@ import { OLLAMA_BASE_URL } from "@/lib/ollama";
 import { getSystemInfo } from "@/lib/system";
 import { applyEntryPatch, type EntryPatchStore } from "@/lib/domain/patch";
 import { applyCultureDetails, createDefaultCultureDetails } from "@/lib/domain/culture";
+import type { ExtractionFence } from "@/lib/fenceParser";
 import type {
   Entry,
   EntryPatch,
@@ -355,6 +356,141 @@ export async function extractPatches(
   }
 
   for (const rel of extraction.relationships) {
+    const fromName = (rel.from ?? "").toLowerCase();
+    const toName = (rel.to ?? "").toLowerCase();
+    const fromId = resolvedIds.get(fromName);
+    const toId = resolvedIds.get(toName);
+    if (!fromId || !toId) continue;
+
+    const relation: Omit<Relationship, "id" | "createdAt"> = {
+      from: fromId,
+      to: toId,
+      type: rel.relType ?? "related_to",
+      metadata: {},
+      sources: [sourceRef],
+    };
+
+    const bothExistAlready = existingByName.has(fromName) && existingByName.has(toName);
+    if (bothExistAlready) {
+      autoOps.push({ op: "add-relation", relation });
+    } else {
+      reviewOps.push({ op: "add-relation", relation });
+    }
+  }
+
+  const patches: EntryPatch[] = [];
+
+  if (autoOps.length > 0) {
+    patches.push({
+      id: makeId("epatch"),
+      status: "pending",
+      operations: autoOps,
+      sourceRef,
+      confidence: 0.9,
+      autoCommit: true,
+      createdAt: Date.now(),
+    });
+  }
+
+  if (reviewOps.length > 0) {
+    patches.push({
+      id: makeId("epatch"),
+      status: "pending",
+      operations: reviewOps,
+      sourceRef,
+      confidence: 0.65,
+      autoCommit: false,
+      createdAt: Date.now(),
+    });
+  }
+
+  return patches;
+}
+
+/**
+ * Pure conversion: turn an already-parsed `ExtractionFence` (from the inline
+ * `canonical_extraction` block in the model's response) into `EntryPatch[]`
+ * without making any further network calls.
+ *
+ * Use this instead of `extractPatches` when the model was asked to emit the
+ * fence inline (i.e. `extractCanonical: true` was sent to `/api/chat`).
+ */
+export function buildPatchesFromExtraction(
+  fence: ExtractionFence,
+  existingEntries: Entry[],
+  sourceRef: SourceRef,
+): EntryPatch[] {
+  const existingByName = new Map<string, Entry>();
+  for (const entry of existingEntries) {
+    existingByName.set(entry.name.toLowerCase(), entry);
+    for (const alias of entry.aliases ?? []) {
+      existingByName.set(alias.toLowerCase(), entry);
+    }
+  }
+
+  const resolvedIds = new Map<string, string>();
+  for (const [name, entry] of existingByName) {
+    resolvedIds.set(name, entry.id);
+  }
+
+  const autoOps: EntryPatchOperation[] = [];
+  const reviewOps: EntryPatchOperation[] = [];
+
+  for (const entity of fence.entities) {
+    const rawType = entity.type?.toLowerCase().replace(/ /g, "_") ?? "";
+    if (!VALID_TYPES.has(rawType)) continue;
+
+    const entryType = mapRawType(rawType);
+    const name = entity.name?.trim() ?? "";
+    if (!entryType || !name) continue;
+
+    const key = name.toLowerCase();
+    const existing = existingByName.get(key);
+
+    if (existing) {
+      const incomingSummary = entity.summary?.trim() ?? "";
+      if (incomingSummary && incomingSummary !== existing.summary.trim()) {
+        reviewOps.push({
+          op: "update-entry",
+          entryId: existing.id,
+          field: "summary",
+          oldValue: existing.summary,
+          newValue: incomingSummary,
+        });
+      }
+      resolvedIds.set(key, existing.id);
+      continue;
+    }
+
+    const entryId = makeDocId(entryType, name);
+    resolvedIds.set(key, entryId);
+
+    const now = Date.now();
+    reviewOps.push({
+      op: "create-entry",
+      entryType,
+      entry: {
+        id: entryId,
+        entryType,
+        type: entryType,
+        name,
+        slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
+        summary: entity.summary?.trim() ?? "",
+        bodyMd: "",
+        canonStatus: "draft",
+        status: "draft",
+        visibility: "private",
+        details: defaultEntryDetails(entryType),
+        sources: [sourceRef],
+        relationships: [],
+        lastVerified: 0,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+  }
+
+  for (const rel of fence.relationships) {
     const fromName = (rel.from ?? "").toLowerCase();
     const toName = (rel.to ?? "").toLowerCase();
     const fromId = resolvedIds.get(fromName);

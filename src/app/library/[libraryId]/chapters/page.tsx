@@ -2,13 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useLibraryContext } from "@/lib/context/LibraryContext";
-import { useRAGContext } from "@/lib/context/RAGContext";
+import { useWorkspaceContext } from "@/lib/context/WorkspaceContext";
 import type { SidebarNode } from "@/lib/navigation";
 import type { NodeType } from "@/lib/rag/hierarchy";
 
 export default function ChaptersPage() {
   const { libraryId } = useLibraryContext();
-  const { tree, addNode } = useRAGContext();
+  const { tree, addNode } = useWorkspaceContext();
   const router = useRouter();
 
   const libraryNode = tree.find((n) => n.id === libraryId);

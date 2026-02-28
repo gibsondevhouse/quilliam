@@ -1,15 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { RefObject } from "react";
 import type { CultureMembership, CultureMembershipKind, EntryType } from "@/lib/types";
-import type { RAGStore } from "@/lib/rag/store";
+import { useStore } from "@/lib/context/useStore";
 import type { CultureMemberRow, SceneAppearanceRow, LinkedCultureRow } from "../types";
 
 interface UseEntryRelatedDataParams {
   activeId: string | null;
-  storeRef: RefObject<RAGStore | null>;
-  storeReady: boolean;
   type: EntryType;
 }
 
@@ -23,18 +20,15 @@ interface UseEntryRelatedDataReturn {
 
 export function useEntryRelatedData({
   activeId,
-  storeRef,
-  storeReady,
   type,
 }: UseEntryRelatedDataParams): UseEntryRelatedDataReturn {
+  const store = useStore();
   const [members, setMembers] = useState<CultureMemberRow[]>([]);
   const [appearances, setAppearances] = useState<SceneAppearanceRow[]>([]);
   const [linkedCultures, setLinkedCultures] = useState<LinkedCultureRow[]>([]);
 
   useEffect(() => {
-    if (!activeId || !storeReady) return;
-    const store = storeRef.current;
-    if (!store) return;
+    if (!activeId) return;
     void (async () => {
       if (type === "culture") {
         const memberships = await store.listCultureMembershipsByCulture(activeId);
@@ -73,15 +67,13 @@ export function useEntryRelatedData({
         setLinkedCultures(linked.map((c) => ({ entryId: c.id, name: c.name })));
       }
     })();
-  }, [activeId, storeReady, storeRef, type]);
+  }, [activeId, store, type]);
 
   const handleAddMember = useCallback(async (
     characterEntryId: string,
     kind: CultureMembershipKind,
   ) => {
     if (!activeId) return;
-    const store = storeRef.current;
-    if (!store) return;
     const now = Date.now();
     const membership: CultureMembership = {
       id: `cmem_${now.toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
@@ -97,7 +89,7 @@ export function useEntryRelatedData({
       ...prev,
       { membership, characterName: charEntry?.name ?? characterEntryId },
     ]);
-  }, [activeId, storeRef]);
+  }, [activeId, store]);
 
   const handleRemoveMember = useCallback((_membershipId: string) => {
     setMembers((prev) => prev.filter((r) => r.membership.id !== _membershipId));

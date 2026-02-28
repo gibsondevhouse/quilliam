@@ -1,6 +1,5 @@
 import {
   type Dispatch,
-  type RefObject,
   type SetStateAction,
   useCallback,
   useState,
@@ -20,7 +19,7 @@ interface UseChangeSetMachineParams {
   setLocations: Dispatch<SetStateAction<LocationEntry[]>>;
   worldEntries: WorldEntry[];
   setWorldEntries: Dispatch<SetStateAction<WorldEntry[]>>;
-  storeRef: RefObject<RAGStore | null>;
+  store: RAGStore | null;
 }
 
 export function useChangeSetMachine(params: UseChangeSetMachineParams) {
@@ -35,7 +34,7 @@ export function useChangeSetMachine(params: UseChangeSetMachineParams) {
     setLocations,
     worldEntries,
     setWorldEntries,
-    storeRef,
+    store,
   } = params;
 
   const [changeSets, setChangeSets] = useState<Record<string, ChangeSet[]>>({});
@@ -72,7 +71,7 @@ export function useChangeSetMachine(params: UseChangeSetMachineParams) {
           prev.map((character) => {
             if (character.name.trim().toLowerCase() !== name) return character;
             const updated = { ...character, notes: draft };
-            void storeRef.current?.putCharacter({ ...updated, updatedAt: now });
+            void store?.putCharacter({ ...updated, updatedAt: now });
             return updated;
           }),
         );
@@ -82,7 +81,7 @@ export function useChangeSetMachine(params: UseChangeSetMachineParams) {
           prev.map((location) => {
             if (location.name.trim().toLowerCase() !== name) return location;
             const updated = { ...location, description: draft };
-            void storeRef.current?.putLocation({ ...updated, updatedAt: now });
+            void store?.putLocation({ ...updated, updatedAt: now });
             return updated;
           }),
         );
@@ -92,7 +91,7 @@ export function useChangeSetMachine(params: UseChangeSetMachineParams) {
           prev.map((entry) => {
             if (entry.title.trim().toLowerCase() !== title) return entry;
             const updated = { ...entry, notes: draft };
-            void storeRef.current?.putWorldEntry({ ...updated, updatedAt: now });
+            void store?.putWorldEntry({ ...updated, updatedAt: now });
             return updated;
           }),
         );
@@ -104,7 +103,7 @@ export function useChangeSetMachine(params: UseChangeSetMachineParams) {
         return next;
       });
     },
-    [entityDrafts, setCharacters, setLocations, setWorldEntries, storeRef],
+    [entityDrafts, setCharacters, setLocations, setWorldEntries, store],
   );
 
   const revertEntityDraft = useCallback((key: string) => {

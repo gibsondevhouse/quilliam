@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRAGContext } from "@/lib/context/RAGContext";
+import { useStore } from "@/lib/context/useStore";
 import type { Entry, Scene as SceneRecord } from "@/lib/types";
 
 interface SceneMetaPanelProps {
@@ -17,7 +17,7 @@ interface SceneMetaPanelProps {
 }
 
 export function SceneMetaPanel({ sceneNodeId, chapterId }: SceneMetaPanelProps) {
-  const { storeRef, storeReady } = useRAGContext();
+  const store = useStore();
 
   const [scene, setScene] = useState<SceneRecord | null>(null);
   const [locationEntries, setLocationEntries] = useState<Entry[]>([]);
@@ -28,10 +28,8 @@ export function SceneMetaPanel({ sceneNodeId, chapterId }: SceneMetaPanelProps) 
   const [localAlignedEventId, setLocalAlignedEventId] = useState("");
 
   useEffect(() => {
-    if (!storeReady || loadedRef.current) return;
+    if (loadedRef.current) return;
     loadedRef.current = true;
-    const store = storeRef.current;
-    if (!store) return;
     void (async () => {
       const existing = await store.getSceneById(sceneNodeId);
       if (existing) {
@@ -42,11 +40,9 @@ export function SceneMetaPanel({ sceneNodeId, chapterId }: SceneMetaPanelProps) 
       const locs = await store.queryEntriesByType("location");
       setLocationEntries(locs);
     })();
-  }, [storeReady, storeRef, sceneNodeId]);
+  }, [store, sceneNodeId]);
 
   const handleSave = useCallback(async () => {
-    const store = storeRef.current;
-    if (!store) return;
     setSaving(true);
     const now = Date.now();
     const next: SceneRecord = scene ?? {
@@ -66,7 +62,7 @@ export function SceneMetaPanel({ sceneNodeId, chapterId }: SceneMetaPanelProps) 
     await store.putScene(saved);
     setScene(saved);
     setSaving(false);
-  }, [storeRef, scene, sceneNodeId, chapterId, localLocationId, localAlignedEventId]);
+  }, [store, scene, sceneNodeId, chapterId, localLocationId, localAlignedEventId]);
 
   const isDirty =
     localLocationId !== (scene?.locationEntryId ?? "") ||

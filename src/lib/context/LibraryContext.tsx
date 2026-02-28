@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, type RefObject } from "react";
+import { createContext, useContext } from "react";
 import type {
   AiExecutionMode,
   CharacterEntry,
@@ -14,7 +14,6 @@ import type {
   WorldEntry,
 } from "@/lib/types";
 import type { EditorTab } from "@/components/Editor/TabBar";
-import type { RAGStore } from "@/lib/rag/store";
 import type { ChangeSet } from "@/lib/changeSets";
 
 export interface LibraryContextValue {
@@ -117,8 +116,6 @@ export interface LibraryContextValue {
 
   // RAG
   buildContext: (query: string) => Promise<string>;
-  storeRef: RefObject<RAGStore | null>;
-  storeReady: boolean;
   indexingCount: number;
 }
 

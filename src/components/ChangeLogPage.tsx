@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { useRAGContext } from "@/lib/context/RAGContext";
+import { useStore } from "@/lib/context/useStore";
 import { opSummary } from "@/lib/domain/patch";
 import type { EntryPatch } from "@/lib/types";
 
@@ -20,7 +20,7 @@ const STATUS_COLORS: Record<string, string> = {
 type StatusFilter = "all" | "pending" | "accepted" | "rejected";
 
 export function ChangeLogPage() {
-  const { storeRef, storeReady } = useRAGContext();
+  const store = useStore();
   const [patches, setPatches] = useState<EntryPatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -28,17 +28,15 @@ export function ChangeLogPage() {
   const loadedRef = useRef(false);
 
   useEffect(() => {
-    if (!storeReady || loadedRef.current) return;
+    if (loadedRef.current) return;
     loadedRef.current = true;
     void (async () => {
-      const store = storeRef.current;
-      if (!store) return;
       const all = await store.listAllEntryPatches();
       // Sort newest first
       setPatches(all.sort((a, b) => b.createdAt - a.createdAt));
       setLoading(false);
     })();
-  }, [storeReady, storeRef]);
+  }, [store]);
 
   const displayedPatches =
     statusFilter === "all"

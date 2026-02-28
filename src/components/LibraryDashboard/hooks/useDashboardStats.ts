@@ -1,18 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { RefObject } from "react";
 import { applyCultureDetails, createDefaultCultureDetails } from "@/lib/domain/culture";
 import { makeEntryId } from "@/lib/domain/entryUtils";
 import type { Entry, EntryType, Story } from "@/lib/types";
-import type { RAGStore } from "@/lib/rag/store";
+import { useStore } from "@/lib/context/useStore";
 import type { BookCardStat, ModuleStat } from "../types";
 import { buildIssueHeatmap, newest } from "../dashboardUtils";
 
 interface UseDashboardStatsParams {
   libraryId: string;
-  storeRef: RefObject<RAGStore | null>;
-  storeReady: boolean;
   stories: Story[];
 }
 
@@ -25,19 +22,14 @@ interface UseDashboardStatsReturn {
 
 export function useDashboardStats({
   libraryId,
-  storeRef,
-  storeReady,
   stories,
 }: UseDashboardStatsParams): UseDashboardStatsReturn {
+  const store = useStore();
   const [moduleStats, setModuleStats] = useState<Record<string, ModuleStat>>({});
   const [bookCards, setBookCards] = useState<BookCardStat[]>([]);
   const [entryIndex, setEntryIndex] = useState<Entry[]>([]);
 
   const loadDashboardData = useCallback(async () => {
-    if (!storeReady) return;
-    const store = storeRef.current;
-    if (!store) return;
-
     const [
       characters, locations, cultures, religions, languages, economics,
       organizations, factions, lineages, items, rules, scenes, timeline,
@@ -135,7 +127,7 @@ export function useDashboardStats({
 
     setBookCards(bookRows.sort((a, b) => b.lastEdited - a.lastEdited));
     setEntryIndex(allEntries.sort((a, b) => b.updatedAt - a.updatedAt));
-  }, [libraryId, stories, storeReady, storeRef]);
+  }, [libraryId, stories, store]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadDashboardData(); }, 0);
@@ -149,17 +141,14 @@ export function useDashboardStats({
 
 export function useQuickCreate({
   libraryId,
-  storeRef,
   reload,
 }: {
   libraryId: string;
-  storeRef: RefObject<RAGStore | null>;
   reload: () => void;
 }) {
+  const store = useStore();
   return useCallback(
     async (entryType: EntryType, label: string): Promise<string> => {
-      const store = storeRef.current;
-      if (!store) return "";
       const now = Date.now();
       const id = makeEntryId(entryType, `${label}-${now}`);
       const details = entryType === "culture"
@@ -190,6 +179,6 @@ export function useQuickCreate({
       reload();
       return id;
     },
-    [libraryId, storeRef, reload],
+    [libraryId, store, reload],
   );
 }

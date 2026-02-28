@@ -1,18 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
 import { applyEntryPatch } from "@/lib/domain/patch";
 import { makeId } from "@/lib/domain/idUtils";
 import { syncContinuityIssues, type ContinuitySyncReport } from "@/lib/rag/continuity";
 import type { ContinuityIssue, EntryPatch, Revision } from "@/lib/types";
 import type { RAGStore } from "@/lib/rag/store";
+import { useStore } from "@/lib/context/useStore";
 import { groupBySource, issueSort, type ResolvedPatch } from "../buildFeedUtils";
 
 interface UseBuildFeedActionsParams {
   libraryId: string;
-  storeRef: RefObject<RAGStore | null>;
-  storeReady: boolean;
 }
 
 interface UseBuildFeedActionsReturn {
@@ -36,9 +34,8 @@ interface UseBuildFeedActionsReturn {
 
 export function useBuildFeedActions({
   libraryId,
-  storeRef,
-  storeReady,
 }: UseBuildFeedActionsParams): UseBuildFeedActionsReturn {
+  const store = useStore();
   const [patches, setPatches] = useState<EntryPatch[]>([]);
   const [resolvedPatches, setResolvedPatches] = useState<ResolvedPatch[]>([]);
   const [issues, setIssues] = useState<ContinuityIssue[]>([]);
@@ -75,24 +72,22 @@ export function useBuildFeedActions({
   );
 
   const loadFeedData = useCallback(async () => {
-    const store = storeRef.current;
-    if (!store) return;
     const [pending, continuity] = await Promise.all([
       store.getPendingPatches(),
       store.listContinuityIssuesByUniverse(libraryId),
     ]);
     setPatches(pending.sort((a, b) => b.createdAt - a.createdAt));
     setIssues(continuity.sort(issueSort));
-  }, [libraryId, storeRef]);
+  }, [libraryId, store]);
 
   useEffect(() => {
-    if (!storeReady || loadedRef.current) return;
+    if (loadedRef.current) return;
     loadedRef.current = true;
     void (async () => {
       await loadFeedData();
       setLoading(false);
     })();
-  }, [loadFeedData, storeReady]);
+  }, [loadFeedData]);
 
   const groups = useMemo(() => groupBySource(patches), [patches]);
   const openIssues = useMemo(
@@ -123,18 +118,14 @@ export function useBuildFeedActions({
   }, [recordRevision]);
 
   const handleAccept = useCallback(async (patchId: string) => {
-    const store = storeRef.current;
-    if (!store) return;
     const patch = patches.find((p) => p.id === patchId);
     if (!patch) return;
     await acceptPatch(store, patch);
     setPatches((prev) => prev.filter((p) => p.id !== patchId));
     setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "accepted" }]);
-  }, [acceptPatch, patches, storeRef]);
+  }, [acceptPatch, patches, store]);
 
   const handleReject = useCallback(async (patchId: string) => {
-    const store = storeRef.current;
-    if (!store) return;
     const patch = patches.find((p) => p.id === patchId);
     if (!patch) return;
     await store.updatePatchStatus(patchId, "rejected");
@@ -145,11 +136,9 @@ export function useBuildFeedActions({
     );
     setPatches((prev) => prev.filter((p) => p.id !== patchId));
     setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "rejected" }]);
-  }, [patches, recordRevision, storeRef]);
+  }, [patches, recordRevision, store]);
 
   const handleAcceptAll = useCallback(async (sourceKey: string) => {
-    const store = storeRef.current;
-    if (!store) return;
     const group = groups.get(sourceKey) ?? [];
     const newlyResolved: ResolvedPatch[] = [];
     for (const patch of group) {
@@ -158,11 +147,9 @@ export function useBuildFeedActions({
     }
     setPatches((prev) => prev.filter((p) => `${p.sourceRef.kind}:${p.sourceRef.id}` !== sourceKey));
     setResolvedPatches((prev) => [...prev, ...newlyResolved]);
-  }, [acceptPatch, groups, storeRef]);
+  }, [acceptPatch, groups, store]);
 
   const handleRejectAll = useCallback(async (sourceKey: string) => {
-    const store = storeRef.current;
-    if (!store) return;
     const group = groups.get(sourceKey) ?? [];
     const newlyResolved: ResolvedPatch[] = [];
     for (const patch of group) {
@@ -176,11 +163,9 @@ export function useBuildFeedActions({
     }
     setPatches((prev) => prev.filter((p) => `${p.sourceRef.kind}:${p.sourceRef.id}` !== sourceKey));
     setResolvedPatches((prev) => [...prev, ...newlyResolved]);
-  }, [groups, recordRevision, storeRef]);
+  }, [groups, recordRevision, store]);
 
   const handleRunChecks = useCallback(async () => {
-    const store = storeRef.current;
-    if (!store) return;
     setScanPending(true);
     setIssueError(null);
     try {
@@ -193,14 +178,12 @@ export function useBuildFeedActions({
     } finally {
       setScanPending(false);
     }
-  }, [libraryId, storeRef]);
+  }, [libraryId, store]);
 
   const handleSetIssueStatus = useCallback(async (
     issue: ContinuityIssue,
     status: ContinuityIssue["status"],
   ) => {
-    const store = storeRef.current;
-    if (!store) return;
     setBusyIssueId(issue.id);
     setIssueError(null);
     try {
@@ -225,7 +208,7 @@ export function useBuildFeedActions({
     } finally {
       setBusyIssueId(null);
     }
-  }, [recordRevision, storeRef]);
+  }, [recordRevision, store]);
 
   return {
     patches,

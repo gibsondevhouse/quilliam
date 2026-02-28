@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
 import type { ChatMessageEntry, ChatSession } from "@/lib/types";
 import type { RAGStore } from "@/lib/rag/store";
 
@@ -9,13 +8,13 @@ function generateId() {
 
 interface UseChatStateParams {
   libraryId: string;
-  storeRef: RefObject<RAGStore | null>;
+  store: RAGStore | null;
   onNavigateToChat: (chatId: string) => void;
 }
 
 export function useChatState({
   libraryId,
-  storeRef,
+  store,
   onNavigateToChat,
 }: UseChatStateParams) {
   const initialChatId = useMemo(() => generateId(), []);
@@ -37,7 +36,7 @@ export function useChatState({
     setChatMessages((prev) => ({ ...prev, [id]: [] }));
     setActiveChatId(id);
     setBottomPanelOpen(true);
-    void storeRef.current?.putChatSession({
+    void store?.putChatSession({
       id,
       libraryId,
       title: "New Thread",
@@ -46,7 +45,7 @@ export function useChatState({
       updatedAt: now,
     });
     return id;
-  }, [libraryId, storeRef]);
+  }, [libraryId, store]);
 
   const selectChat = useCallback(
     (id: string) => {
@@ -59,7 +58,7 @@ export function useChatState({
 
   const deleteChat = useCallback(
     (id: string) => {
-      void storeRef.current?.deleteChatSession(id);
+      void store?.deleteChatSession(id);
       setChats((prev) => {
         const remaining = prev.filter((chat) => chat.id !== id);
         if (activeChatId === id) {
@@ -73,7 +72,7 @@ export function useChatState({
         return next;
       });
     },
-    [activeChatId, storeRef],
+    [activeChatId, store],
   );
 
   const updateChatMessages = useCallback(
@@ -89,12 +88,12 @@ export function useChatState({
           prev.map((chat) => (chat.id === chatId ? { ...chat, title, preview } : chat)),
         );
       }
-      void storeRef.current?.putChatMessages(chatId, messages);
+      void store?.putChatMessages(chatId, messages);
       const now = Date.now();
-      void storeRef.current?.listChatSessionsByLibrary(libraryId).then((sessions) => {
+      void store?.listChatSessionsByLibrary(libraryId).then((sessions) => {
         const existing = sessions.find((session) => session.id === chatId);
         if (existing) {
-          void storeRef.current?.putChatSession({
+          void store?.putChatSession({
             ...existing,
             libraryId,
             title,
@@ -104,7 +103,7 @@ export function useChatState({
         }
       });
     },
-    [libraryId, storeRef],
+    [libraryId, store],
   );
 
   return {

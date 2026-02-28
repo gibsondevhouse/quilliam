@@ -776,22 +776,3 @@ export interface EntryPatch {
   createdAt: number;
   resolvedAt?: number;
 }
-
-// ---------------------------------------------------------------------------
-// Compatibility aliases (one release cycle)
-// ---------------------------------------------------------------------------
-
-/** @deprecated Use EntryType. */
-export type CanonicalType = EntryType;
-/** @deprecated Use Entry. */
-export type CanonicalDoc = Entry;
-/** @deprecated Use Relationship (same runtime shape). */
-export type CanonicalRelationship = Relationship;
-/** @deprecated Use EntryPatchOperation. */
-export type PatchOperation = EntryPatchOperation;
-/** @deprecated Use EntryPatchOperation. */
-export type PatchOp = EntryPatchOperation;
-/** @deprecated Use EntryPatch. */
-export type CanonicalPatch = EntryPatch;
-/** @deprecated Use EntryPatch. */
-export type Patch = EntryPatch;

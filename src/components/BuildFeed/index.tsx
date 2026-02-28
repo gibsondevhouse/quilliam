@@ -1,7 +1,6 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useRAGContext } from "@/lib/context/RAGContext";
 import { PatchCard } from "./PatchCard";
 import { ContinuityIssueCard } from "./ContinuityIssueCard";
 import { sourceLabel } from "./buildFeedUtils";
@@ -10,7 +9,6 @@ import { useBuildFeedActions } from "./hooks/useBuildFeedActions";
 export function BuildFeed() {
   const params = useParams<{ libraryId: string }>();
   const libraryId = params.libraryId;
-  const { storeRef, storeReady } = useRAGContext();
 
   const {
     patches,
@@ -28,7 +26,7 @@ export function BuildFeed() {
     handleRejectAll,
     handleRunChecks,
     handleSetIssueStatus,
-  } = useBuildFeedActions({ libraryId, storeRef, storeReady });
+  } = useBuildFeedActions({ libraryId });
 
   if (loading) {
     return (

@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
 import { applyCultureDetails, createDefaultCultureDetails } from "@/lib/domain/culture";
 import type { Entry, EntryPatch, EntryType } from "@/lib/types";
-import type { RAGStore } from "@/lib/rag/store";
+import { useStore } from "@/lib/context/useStore";
 import type { DocFormSaveFields } from "../types";
 import { makeDocId, makePatchId } from "../cultureFormHelpers";
 
@@ -21,8 +20,6 @@ interface UseEntryDashboardParams {
   libraryId: string;
   type: EntryType;
   title: string;
-  storeRef: RefObject<RAGStore | null>;
-  storeReady: boolean;
   highlightId: string | null;
 }
 
@@ -46,10 +43,9 @@ export function useEntryDashboard({
   libraryId,
   type,
   title,
-  storeRef,
-  storeReady,
   highlightId,
 }: UseEntryDashboardParams): UseEntryDashboardReturn {
+  const store = useStore();
   const [docs, setDocs] = useState<Entry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,9 +54,7 @@ export function useEntryDashboard({
   const [sortOrder, setSortOrder] = useState<"name" | "updated">("name");
 
   useEffect(() => {
-    if (!storeReady || loadedRef.current) return;
-    const store = storeRef.current;
-    if (!store) return;
+    if (loadedRef.current) return;
     loadedRef.current = true;
     void (async () => {
       const entries = await store.queryEntriesByType(type);
@@ -71,7 +65,7 @@ export function useEntryDashboard({
         setActiveId(highlightId);
       }
     })();
-  }, [storeReady, storeRef, type, highlightId]);
+  }, [store, type, highlightId]);
 
   const activeDoc = useMemo(
     () => docs.find((d) => d.id === activeId) ?? null,
@@ -90,8 +84,6 @@ export function useEntryDashboard({
   }, [docs, statusFilter, sortOrder]);
 
   const handleAdd = useCallback(async () => {
-    const store = storeRef.current;
-    if (!store) return;
     const name = `New ${title.replace(/s$/, "")}`;
     const now = Date.now();
     const details = type === "culture"
@@ -121,12 +113,10 @@ export function useEntryDashboard({
     await store.addEntry(doc);
     setDocs((prev) => [...prev, doc].sort((a, b) => a.name.localeCompare(b.name)));
     setActiveId(doc.id);
-  }, [libraryId, storeRef, title, type]);
+  }, [libraryId, store, title, type]);
 
   const handleSave = useCallback(async (fields: DocFormSaveFields) => {
     if (!activeId) return;
-    const store = storeRef.current;
-    if (!store) return;
     const prev = docs.find((d) => d.id === activeId);
     if (!prev) return;
 
@@ -164,15 +154,13 @@ export function useEntryDashboard({
           : d,
       ),
     );
-  }, [activeId, docs, storeRef]);
+  }, [activeId, docs, store]);
 
   const handleDelete = useCallback(async (id: string) => {
-    const store = storeRef.current;
-    if (!store) return;
     await store.deleteEntry(id);
     setDocs((prev) => prev.filter((d) => d.id !== id));
     if (activeId === id) setActiveId(null);
-  }, [activeId, storeRef]);
+  }, [activeId, store]);
 
   return {
     docs,

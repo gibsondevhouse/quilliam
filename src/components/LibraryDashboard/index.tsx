@@ -44,13 +44,11 @@ export function LibraryDashboard() {
   // ---- Dashboard data -----------------------------------------------------
   const { moduleStats, bookCards, entryIndex, reload } = useDashboardStats({
     libraryId: lib.libraryId,
-    storeRef: lib.storeRef,
-    storeReady: lib.storeReady,
     stories: lib.stories,
   });
 
   // ---- Quick create -------------------------------------------------------
-  const quickCreate = useQuickCreate({ libraryId: lib.libraryId, storeRef: lib.storeRef, reload });
+  const quickCreate = useQuickCreate({ libraryId: lib.libraryId, reload });
 
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const quickAddRef = useRef<HTMLDivElement>(null);

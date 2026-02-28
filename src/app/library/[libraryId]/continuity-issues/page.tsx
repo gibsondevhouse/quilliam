@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { useRAGContext } from "@/lib/context/RAGContext";
+import { useStore } from "@/lib/context/useStore";
 import type { Entry, EntryType, Relationship } from "@/lib/types";
 
 const ALL_TYPES: EntryType[] = [
@@ -38,7 +38,7 @@ const PAGE_NOW_MS = Date.now();
 interface DocMap { [id: string]: Entry }
 
 export default function ContinuityPage() {
-  const { storeRef, storeReady } = useRAGContext();
+  const store = useStore();
   const [docs, setDocs] = useState<Entry[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   // Start with loading=true — avoids synchronous setState inside the effect.
@@ -48,9 +48,7 @@ export default function ContinuityPage() {
   const loadedRef = useRef(false);
 
   useEffect(() => {
-    if (!storeReady || loadedRef.current) return;
-    const store = storeRef.current;
-    if (!store) return;
+    if (loadedRef.current) return;
     loadedRef.current = true;
     void (async () => {
       const allDocs = (
@@ -74,7 +72,7 @@ export default function ContinuityPage() {
       setRelationships(relList);
       setLoading(false);
     })();
-  }, [storeReady, storeRef]);
+  }, [store]);
 
   const docMap: DocMap = Object.fromEntries(docs.map((d) => [d.id, d]));
   const filteredDocs = typeFilter === "all" ? docs : docs.filter((d) => d.entryType === typeFilter);

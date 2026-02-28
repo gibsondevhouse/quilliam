@@ -6,7 +6,9 @@ import {
   useCallback,
 } from "react";
 import { parseEditStream, type EditBlockEvent } from "@/lib/editParser";
-import type { Entry, EntryPatch } from "@/lib/types";
+import { extractFence } from "@/lib/fenceParser";
+import { buildPatchesFromExtraction } from "@/lib/patchExtractor";
+import type { Entry, EntryPatch, SourceRef } from "@/lib/types";
 import type { ChatMessage, QuestionCard } from "../types";
 
 export function useLocalChat(params: {
@@ -16,6 +18,8 @@ export function useLocalChat(params: {
   setStreamingContent: Dispatch<SetStateAction<string>>;
   onPatchesExtracted?: (patches: EntryPatch[]) => Promise<void>;
   existingEntries?: Entry[];
+  /** Gate extraction on this flag. Defaults to false (no extraction in local Ollama mode). */
+  extractionEnabled?: boolean;
 }) {
   const {
     onEditBlock,
@@ -24,6 +28,7 @@ export function useLocalChat(params: {
     setStreamingContent,
     onPatchesExtracted,
     existingEntries,
+    extractionEnabled = false,
   } = params;
 
   return useCallback(
@@ -36,6 +41,11 @@ export function useLocalChat(params: {
       newMessages: ChatMessage[];
       sourceId?: string;
     }) => {
+      // Only request extraction when explicitly enabled (cloud/assisted modes).
+      // Local Ollama mode leaves extractionEnabled=false to avoid token overhead
+      // and low-quality structured output from small models.
+      const wantExtraction = extractionEnabled && typeof onPatchesExtracted === "function";
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,41 +69,42 @@ export function useLocalChat(params: {
         }
       }
 
+      // Strip the canonical_extraction fence before displaying the message.
+      const { prose, fence } = extractFence(fullContent);
+      const displayContent = prose || fullContent;
+
       const assistantIndex = newMessages.length;
       setMessages((prev) => [
         ...prev,
-        { role: "assistant" as const, content: fullContent },
+        { role: "assistant" as const, content: displayContent },
       ]);
-      initQuestionStates(assistantIndex, fullContent);
+      initQuestionStates(assistantIndex, displayContent);
       setStreamingContent("");
 
-      if (onPatchesExtracted && fullContent.trim().length > 0) {
+      // Build patches locally from the inline fence — zero extra network calls.
+      if (wantExtraction && fence && fence.entities.length > 0) {
+        const sourceRef: SourceRef = {
+          kind: "chat_message",
+          id: sourceId ?? `chat_${Date.now()}`,
+        };
         try {
-          const res = await fetch("/api/extract-canonical", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              text: fullContent,
-              sourceType: "chat",
-              sourceId: sourceId ?? `chat_${Date.now()}`,
-              existingEntries: existingEntries ?? [],
-            }),
-          });
-          if (res.ok) {
-            const payload = (await res.json()) as { patches?: EntryPatch[] };
-            const patches = Array.isArray(payload.patches) ? payload.patches : [];
-            if (patches.length > 0) {
-              await onPatchesExtracted(patches);
-            }
+          const patches = buildPatchesFromExtraction(
+            fence,
+            existingEntries ?? [],
+            sourceRef,
+          );
+          if (patches.length > 0) {
+            await onPatchesExtracted!(patches);
           }
         } catch {
           // Best-effort — never block the chat flow
         }
       }
     },
-    [initQuestionStates, onEditBlock, onPatchesExtracted, existingEntries, setMessages, setStreamingContent],
+    [initQuestionStates, onEditBlock, onPatchesExtracted, existingEntries, extractionEnabled, setMessages, setStreamingContent],
   );
 }
 
 // Re-export QuestionCard so callers don't need a separate import
 export type { QuestionCard };
+

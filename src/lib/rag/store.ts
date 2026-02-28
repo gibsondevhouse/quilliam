@@ -9,15 +9,11 @@ import type {
   Book,
   Calendar,
   Chapter,
-  CanonicalDoc,
-  CanonicalPatch,
-  CanonicalType,
   ContinuityIssue,
   CultureMembership,
   CultureVersion,
   Entry,
   EntryPatch,
-  EntryType,
   Era,
   Event,
   ItemOwnership,
@@ -159,14 +155,14 @@ export interface PersistedUsageLedger {
 // Canonical document persistence types (Plan 001 — Phase 3)
 // ---------------------------------------------------------------------------
 
-/** Canonical document stored directly as-is — shape matches CanonicalDoc. */
-export type PersistedCanonicalDoc = CanonicalDoc;
+/** Canonical document stored directly as-is — shape matches Entry. */
+export type PersistedCanonicalDoc = Entry;
 
 /** Relationship edge stored directly as-is — shape matches Relationship. */
 export type PersistedRelationship = Relationship;
 
-/** Canonical patch stored directly as-is — shape matches CanonicalPatch. */
-export type PersistedCanonicalPatch = CanonicalPatch;
+/** Canonical patch stored directly as-is — shape matches EntryPatch. */
+export type PersistedCanonicalPatch = EntryPatch;
 
 /** Plan-002 universe-level records */
 export type PersistedUniverse = Universe;
@@ -218,7 +214,7 @@ export interface PersistedPatchByDocEntry {
   /** The patch ID that touches this doc in one of its operations. */
   patchId: string;
   /** Denormalised status for index-based filtering. */
-  status: CanonicalPatch["status"];
+  status: EntryPatch["status"];
 }
 
 /**
@@ -234,162 +230,37 @@ export interface PersistedChatMessage {
   createdAt: number;
 }
 
+import type { ChatStore } from "./store/ChatStore";
+import type { EntryStore } from "./store/EntryStore";
+import type { ManuscriptStore } from "./store/ManuscriptStore";
+import type { MediaStore } from "./store/MediaStore";
+import type { NodeStore } from "./store/NodeStore";
+import type { PatchStore } from "./store/PatchStore";
+import type { RelationStore } from "./store/RelationStore";
+import type { ResearchStore } from "./store/ResearchStore";
+import type { TimelineStore } from "./store/TimelineStore";
+
 /**
- * High-level storage interface to keep persistence concerns isolated.
+ * High-level storage interface — composed from domain sub-store interfaces.
+ * Defined here so all existing `import type { RAGStore } from "@/lib/rag/store"`
+ * imports continue to work without modification.
  */
-export interface RAGStore {
-  putNode(node: RAGNode): Promise<void>;
-  getNode(id: string): Promise<RAGNode | null>;
-  deleteNode(id: string): Promise<void>;
-  listChildren(parentId: string | null): Promise<RAGNode[]>;
-  listAllNodes(): Promise<RAGNode[]>;
-  putEmbedding(record: StoredEmbedding): Promise<void>;
-  getEmbeddingByFragment(fragmentId: string): Promise<StoredEmbedding | null>;
-  getEmbeddingByHash(hash: string, model: string): Promise<StoredEmbedding | null>;
-  setMetadata(entry: StoredMetadata): Promise<void>;
-  getMetadata<T = unknown>(key: string): Promise<T | null>;
-  // Chat persistence
-  putChatSession(session: PersistedChatSession): Promise<void>;
-  listChatSessions(): Promise<PersistedChatSession[]>;
-  listChatSessionsByLibrary(libraryId: string): Promise<PersistedChatSession[]>;
-  deleteChatSession(id: string): Promise<void>;
-  putChatMessages(sessionId: string, messages: { role: "user" | "assistant"; content: string }[]): Promise<void>;
-  listChatMessages(sessionId: string): Promise<PersistedChatMessage[]>;
-  // Characters
-  /** @deprecated Legacy store — use `canonicalDocs` via `queryDocsByType("character")`. Will be removed in the v9 IDB upgrade once migration is confirmed. */
-  putCharacter(entry: PersistedCharacter): Promise<void>;
-  /** @deprecated Legacy store — use `canonicalDocs` via `queryDocsByType("character")`. Will be removed in the v9 IDB upgrade once migration is confirmed. */
-  getCharactersByLibrary(libraryId: string): Promise<PersistedCharacter[]>;
-  /** @deprecated Legacy store — use `canonicalDocs` via `queryDocsByType("character")`. Will be removed in the v9 IDB upgrade once migration is confirmed. */
-  deleteCharacter(id: string): Promise<void>;
-  // Locations
-  /** @deprecated Legacy store — use `canonicalDocs` via `queryDocsByType("location")`. Will be removed in the v9 IDB upgrade once migration is confirmed. */
-  putLocation(entry: PersistedLocation): Promise<void>;
-  /** @deprecated Legacy store — use `canonicalDocs` via `queryDocsByType("location")`. Will be removed in the v9 IDB upgrade once migration is confirmed. */
-  getLocationsByLibrary(libraryId: string): Promise<PersistedLocation[]>;
-  /** @deprecated Legacy store — use `canonicalDocs` via `queryDocsByType("location")`. Will be removed in the v9 IDB upgrade once migration is confirmed. */
-  deleteLocation(id: string): Promise<void>;
-  // World entries
-  /** @deprecated Legacy store — use `canonicalDocs` via `queryDocsByType("lore_entry")`. Will be removed in the v9 IDB upgrade once migration is confirmed. */
-  putWorldEntry(entry: PersistedWorldEntry): Promise<void>;
-  /** @deprecated Legacy store — use `canonicalDocs` via `queryDocsByType("lore_entry")`. Will be removed in the v9 IDB upgrade once migration is confirmed. */
-  getWorldEntriesByLibrary(libraryId: string): Promise<PersistedWorldEntry[]>;
-  /** @deprecated Legacy store — use `canonicalDocs` via `queryDocsByType("lore_entry")`. Will be removed in the v9 IDB upgrade once migration is confirmed. */
-  deleteWorldEntry(id: string): Promise<void>;
-  // Stories
-  putStory(entry: PersistedStory): Promise<void>;
-  getStoriesByLibrary(libraryId: string): Promise<PersistedStory[]>;
-  getStory(id: string): Promise<PersistedStory | null>;
-  deleteStory(id: string): Promise<void>;
-  deleteStoryCascade(storyId: string): Promise<void>;
-  deleteLibraryCascade(libraryId: string): Promise<void>;
-  // Library metadata
-  putLibraryMeta(entry: PersistedLibraryMeta): Promise<void>;
-  getLibraryMeta(libraryId: string): Promise<PersistedLibraryMeta | null>;
-  deleteLibraryMeta(libraryId: string): Promise<void>;
-  // AI settings
-  putAiLibrarySettings(entry: PersistedAiLibrarySettings): Promise<void>;
-  getAiLibrarySettings(libraryId: string): Promise<PersistedAiLibrarySettings | null>;
-  deleteAiLibrarySettings(libraryId: string): Promise<void>;
-  // Deep research runs / artifacts / usage
-  putResearchRun(entry: PersistedResearchRun): Promise<void>;
-  getResearchRun(id: string): Promise<PersistedResearchRun | null>;
-  listResearchRunsByLibrary(libraryId: string): Promise<PersistedResearchRun[]>;
-  putResearchArtifact(entry: PersistedResearchArtifact): Promise<void>;
-  listResearchArtifacts(runId: string): Promise<PersistedResearchArtifact[]>;
-  putUsageLedger(entry: PersistedUsageLedger): Promise<void>;
-  getUsageLedger(runId: string): Promise<PersistedUsageLedger | null>;
-  // Plan-002 universe engine stores
-  putUniverse(universe: PersistedUniverse): Promise<void>;
-  getUniverse(id: string): Promise<PersistedUniverse | null>;
-  listUniverses(): Promise<PersistedUniverse[]>;
-  addEntry(entry: PersistedEntry): Promise<void>;
-  updateEntry(id: string, patch: Partial<PersistedEntry>): Promise<void>;
-  getEntryById(id: string): Promise<PersistedEntry | undefined>;
-  listEntriesByUniverse(universeId: string): Promise<PersistedEntry[]>;
-  queryEntriesByType(type: EntryType): Promise<PersistedEntry[]>;
-  deleteEntry(id: string): Promise<void>;
-  putSeries(entry: PersistedSeries): Promise<void>;
-  listSeriesByUniverse(universeId: string): Promise<PersistedSeries[]>;
-  putBook(entry: PersistedBook): Promise<void>;
-  listBooksBySeries(seriesId: string): Promise<PersistedBook[]>;
-  listBooksByUniverse(universeId: string): Promise<PersistedBook[]>;
-  putChapter(entry: PersistedChapter): Promise<void>;
-  listChaptersByBook(bookId: string): Promise<PersistedChapter[]>;
-  putScene(entry: PersistedScene): Promise<void>;
-  listScenesByChapter(chapterId: string): Promise<PersistedScene[]>;
-  getSceneById(id: string): Promise<PersistedScene | undefined>;
-  addEntryRelation(rel: PersistedRelationship): Promise<void>;
-  removeEntryRelation(id: string): Promise<void>;
-  getEntryRelationsForEntry(entryId: string): Promise<PersistedRelationship[]>;
-  putTimeline(entry: PersistedTimeline): Promise<void>;
-  listTimelinesByUniverse(universeId: string): Promise<PersistedTimeline[]>;
-  listTimelinesByBook(bookId: string): Promise<PersistedTimeline[]>;
-  putEra(entry: PersistedEra): Promise<void>;
-  listErasByTimeline(timelineId: string): Promise<PersistedEra[]>;
-  putEvent(entry: PersistedEvent): Promise<void>;
-  listEventsByUniverse(universeId: string): Promise<PersistedEvent[]>;
-  listEventsByEra(eraId: string): Promise<PersistedEvent[]>;
-  putCalendar(entry: PersistedCalendar): Promise<void>;
-  listCalendarsByUniverse(universeId: string): Promise<PersistedCalendar[]>;
-  putTimeAnchor(entry: PersistedTimeAnchor): Promise<void>;
-  getTimeAnchor(id: string): Promise<PersistedTimeAnchor | null>;
-  listTimeAnchorsByCalendar(calendarId: string): Promise<PersistedTimeAnchor[]>;
-  putMembership(entry: PersistedMembership): Promise<void>;
-  listMembershipsByCharacter(characterEntryId: string): Promise<PersistedMembership[]>;
-  listMembershipsByOrganization(organizationEntryId: string): Promise<PersistedMembership[]>;
-  putCultureMembership(entry: PersistedCultureMembership): Promise<void>;
-  listCultureMembershipsByCharacter(characterEntryId: string): Promise<PersistedCultureMembership[]>;
-  listCultureMembershipsByCulture(cultureEntryId: string): Promise<PersistedCultureMembership[]>;
-  putItemOwnership(entry: PersistedItemOwnership): Promise<void>;
-  listItemOwnershipByItem(itemEntryId: string): Promise<PersistedItemOwnership[]>;
-  listItemOwnershipByOwner(ownerEntryId: string): Promise<PersistedItemOwnership[]>;
-  putMention(entry: PersistedMention): Promise<void>;
-  listMentionsByScene(sceneId: string): Promise<PersistedMention[]>;
-  listMentionsByEntry(entryId: string): Promise<PersistedMention[]>;
-  putMedia(entry: PersistedMedia): Promise<void>;
-  listMediaByUniverse(universeId: string): Promise<PersistedMedia[]>;
-  putMap(entry: PersistedMap): Promise<void>;
-  listMapsByUniverse(universeId: string): Promise<PersistedMap[]>;
-  putMapPin(entry: PersistedMapPin): Promise<void>;
-  listMapPinsByMap(mapId: string): Promise<PersistedMapPin[]>;
-  listMapPinsByEntry(entryId: string): Promise<PersistedMapPin[]>;
-  addCultureVersion(entry: PersistedCultureVersion): Promise<void>;
-  listCultureVersionsByCulture(cultureEntryId: string): Promise<PersistedCultureVersion[]>;
-  addOrganizationVersion(entry: PersistedOrganizationVersion): Promise<void>;
-  listOrganizationVersionsByOrganization(organizationEntryId: string): Promise<PersistedOrganizationVersion[]>;
-  addReligionVersion(entry: PersistedReligionVersion): Promise<void>;
-  listReligionVersionsByReligion(religionEntryId: string): Promise<PersistedReligionVersion[]>;
-  addContinuityIssue(entry: PersistedContinuityIssue): Promise<void>;
-  listContinuityIssuesByUniverse(universeId: string): Promise<PersistedContinuityIssue[]>;
-  updateContinuityIssueStatus(id: string, status: PersistedContinuityIssue["status"], resolution?: string): Promise<void>;
-  addSuggestion(entry: PersistedSuggestion): Promise<void>;
-  listSuggestionsByUniverse(universeId: string): Promise<PersistedSuggestion[]>;
-  updateSuggestionStatus(id: string, status: PersistedSuggestion["status"]): Promise<void>;
-  addRevision(entry: PersistedRevision): Promise<void>;
-  listRevisionsForTarget(targetType: string, targetId: string): Promise<PersistedRevision[]>;
-  addEntryPatch(patch: PersistedEntryPatch): Promise<void>;
-  getPendingEntryPatches(): Promise<PersistedEntryPatch[]>;
-  listAllEntryPatches(): Promise<PersistedEntryPatch[]>;
-  getEntryPatchesForEntry(entryId: string): Promise<PersistedEntryPatch[]>;
-  // Canonical documents (Plan 001 — Phase 3)
-  addDoc(doc: PersistedCanonicalDoc): Promise<void>;
-  updateDoc(id: string, patch: Partial<PersistedCanonicalDoc>): Promise<void>;
-  getDocById(id: string): Promise<PersistedCanonicalDoc | undefined>;
-  queryDocsByType(type: CanonicalType): Promise<PersistedCanonicalDoc[]>;
-  deleteDoc(id: string): Promise<void>;
-  // Relationships
-  addRelationship(rel: PersistedRelationship): Promise<void>;
-  removeRelationship(id: string): Promise<void>;
-  getRelationsForDoc(docId: string): Promise<PersistedRelationship[]>;
-  // Patches
-  addPatch(patch: PersistedCanonicalPatch): Promise<void>;
-  updatePatchStatus(id: string, status: PersistedCanonicalPatch["status"]): Promise<void>;
-  getPendingPatches(): Promise<PersistedCanonicalPatch[]>;
-  getPatchesForDoc(docId: string): Promise<PersistedCanonicalPatch[]>;
-  // Schema version utilities
-  checkSchemaVersion(): Promise<{ needsMigration: boolean; storedVersion: number | null }>;
-}
+export type RAGStore = NodeStore &
+  ChatStore &
+  EntryStore &
+  ManuscriptStore &
+  TimelineStore &
+  RelationStore &
+  ResearchStore &
+  MediaStore &
+  PatchStore & {
+    /** Check whether the persisted schema version is behind the current DB version. */
+    checkSchemaVersion(): Promise<{ needsMigration: boolean; storedVersion: number | null }>;
+    /** Delete all data owned by a library, atomically across all stores. */
+    deleteLibraryCascade(libraryId: string): Promise<void>;
+    /** Delete a story and its RAG node tree. */
+    deleteStoryCascade(storyId: string): Promise<void>;
+  };
 
 /**
  * Helper to normalize a persisted node back to a runtime RAGNode.

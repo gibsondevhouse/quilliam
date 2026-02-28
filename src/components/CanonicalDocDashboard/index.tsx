@@ -1,7 +1,6 @@
 "use client";
 
 import { useSearchParams, useParams } from "next/navigation";
-import { useRAGContext } from "@/lib/context/RAGContext";
 import type { CanonicalDocDashboardProps } from "./types";
 import { DocForm } from "./DocForm";
 import { EntryRelatedPanel } from "./EntryRelatedPanel";
@@ -9,7 +8,6 @@ import { useEntryDashboard } from "./hooks/useEntryDashboard";
 import { useEntryRelatedData } from "./hooks/useEntryRelatedData";
 
 export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProps) {
-  const { storeRef, storeReady } = useRAGContext();
   const searchParams = useSearchParams();
   const params = useParams<{ libraryId: string }>();
   const libraryId = params.libraryId;
@@ -29,10 +27,10 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
     handleAdd,
     handleSave,
     handleDelete,
-  } = useEntryDashboard({ libraryId, type, title, storeRef, storeReady, highlightId });
+  } = useEntryDashboard({ libraryId, type, title, highlightId });
 
   const { members, appearances, linkedCultures, handleAddMember, handleRemoveMember } =
-    useEntryRelatedData({ activeId, storeRef, storeReady, type });
+    useEntryRelatedData({ activeId, type });
 
   return (
     <div className="library-page split-page">

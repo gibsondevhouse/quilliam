@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { EditorArea } from "@/components/Editor/EditorArea";
 import { SceneMetaPanel } from "@/components/SceneMetaPanel";
 import { useLibraryContext } from "@/lib/context/LibraryContext";
-import { useRAGContext } from "@/lib/context/RAGContext";
+import { useWorkspaceContext } from "@/lib/context/WorkspaceContext";
+import { useStore } from "@/lib/context/useStore";
 
 interface ChapterEditorPageProps {
   chapterId: string;
@@ -25,7 +26,8 @@ export function ChapterEditorPage({ chapterId }: ChapterEditorPageProps) {
     acceptAllChanges,
     rejectAllChanges,
   } = useLibraryContext();
-  const { ragNodes, storeRef } = useRAGContext();
+  const { ragNodes } = useWorkspaceContext();
+  const store = useStore();
 
   const ragNode = ragNodes[chapterId];
   const currentDoc = docContents[chapterId];
@@ -40,11 +42,6 @@ export function ChapterEditorPage({ chapterId }: ChapterEditorPageProps) {
 
     let cancelled = false;
     void (async () => {
-      const store = storeRef.current;
-      if (!store) {
-        if (!cancelled) initDoc(chapterId, "Untitled Chapter", "");
-        return;
-      }
       const stored = await store.getNode(chapterId);
       if (cancelled) return;
       if (stored) {
@@ -57,7 +54,7 @@ export function ChapterEditorPage({ chapterId }: ChapterEditorPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [chapterId, currentDoc, ragNode, initDoc, storeRef]);
+  }, [chapterId, currentDoc, ragNode, initDoc, store]);
 
   useEffect(() => {
     const title = docContents[chapterId]?.title ?? ragNode?.title;

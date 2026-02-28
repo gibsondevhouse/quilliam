@@ -16,10 +16,9 @@ import type { RAGStore } from "@/lib/rag/store";
 import type { StartupStatus } from "@/components/SystemStatus";
 
 interface UseRagWorkerParams {
-  storeReady: boolean;
+  store: RAGStore | null;
   ragNodes: Record<string, RAGNode>;
   putRagNode: (node: RAGNode) => void;
-  storeRef: RefObject<RAGStore | null>;
   systemStatus: StartupStatus;
   docContentsRef: RefObject<Record<string, { title: string; content: string }>>;
   setSavedContents: Dispatch<SetStateAction<Record<string, string>>>;
@@ -27,10 +26,9 @@ interface UseRagWorkerParams {
 
 export function useRagWorker(params: UseRagWorkerParams) {
   const {
-    storeReady,
+    store,
     ragNodes,
     putRagNode,
-    storeRef,
     systemStatus,
     docContentsRef,
     setSavedContents,
@@ -51,7 +49,7 @@ export function useRagWorker(params: UseRagWorkerParams) {
 
   useEffect(() => {
     let cancelled = false;
-    if (!storeReady) return;
+    if (!store) return;
 
     const worker = new Worker(new URL("../../workers/rag-indexer.ts", import.meta.url));
     workerRef.current = worker;
@@ -105,11 +103,11 @@ export function useRagWorker(params: UseRagWorkerParams) {
 
       if (prevChunkTotal > 0) {
         const staleIds = staleFragmentIds(fragmentId, prevChunkTotal);
-        for (const id of staleIds) void storeRef.current?.deleteNode(id);
+        for (const id of staleIds) void store?.deleteNode(id);
       }
 
       const embedModel = systemStatusRef.current?.embedModel ?? "nomic-embed-text";
-      if (shouldChunk && chunks.length > 0 && storeRef.current) {
+      if (shouldChunk && chunks.length > 0 && store) {
         for (const chunk of chunks) {
           putRagNode(chunk);
           void embedNode(
@@ -117,7 +115,7 @@ export function useRagWorker(params: UseRagWorkerParams) {
             chunk.content,
             chunk.contentHash,
             embedModel,
-            storeRef.current,
+            store,
           ).then((result) => {
             if (!result.ok && result.reason !== "empty_content") {
               console.error("Chunk embedding failed", {
@@ -129,13 +127,13 @@ export function useRagWorker(params: UseRagWorkerParams) {
             }
           });
         }
-      } else if (!shouldChunk && storeRef.current) {
+      } else if (!shouldChunk && store) {
         void embedNode(
           fragmentId,
           doc.content,
           contentHash,
           embedModel,
-          storeRef.current,
+          store,
         ).then((result) => {
           if (!result.ok && result.reason !== "empty_content") {
             console.error("Fragment embedding failed", {
@@ -154,7 +152,7 @@ export function useRagWorker(params: UseRagWorkerParams) {
       worker.terminate();
       workerRef.current = null;
     };
-  }, [docContentsRef, putRagNode, setSavedContents, storeReady, storeRef]);
+  }, [docContentsRef, putRagNode, setSavedContents, store]);
 
   const queueHash = useCallback((chapterId: string, content: string) => {
     const worker = workerRef.current;

@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import type { RefObject } from "react";
 import type { CharacterEntry, LocationEntry, WorldEntry } from "@/lib/types";
 import type { RAGStore } from "@/lib/rag/store";
 
@@ -9,10 +8,10 @@ function generateId() {
 
 interface UseEntityStateParams {
   libraryId: string;
-  storeRef: RefObject<RAGStore | null>;
+  store: RAGStore | null;
 }
 
-export function useEntityState({ libraryId, storeRef }: UseEntityStateParams) {
+export function useEntityState({ libraryId, store }: UseEntityStateParams) {
   const [characters, setCharacters] = useState<CharacterEntry[]>([]);
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
 
@@ -21,9 +20,9 @@ export function useEntityState({ libraryId, storeRef }: UseEntityStateParams) {
     const entry: CharacterEntry = { id, libraryId, name: "", role: "", notes: "" };
     setCharacters((prev) => [...prev, entry]);
     setActiveCharacterId(id);
-    void storeRef.current?.putCharacter({ ...entry, updatedAt: Date.now() });
+    void store?.putCharacter({ ...entry, updatedAt: Date.now() });
     return entry;
-  }, [libraryId, storeRef]);
+  }, [libraryId, store]);
 
   const selectCharacter = useCallback((id: string) => {
     setActiveCharacterId(id);
@@ -32,18 +31,18 @@ export function useEntityState({ libraryId, storeRef }: UseEntityStateParams) {
   const updateCharacter = useCallback(
     (entry: CharacterEntry) => {
       setCharacters((prev) => prev.map((character) => (character.id === entry.id ? entry : character)));
-      void storeRef.current?.putCharacter({ ...entry, updatedAt: Date.now() });
+      void store?.putCharacter({ ...entry, updatedAt: Date.now() });
     },
-    [storeRef],
+    [store],
   );
 
   const deleteCharacter = useCallback(
     (id: string) => {
       setCharacters((prev) => prev.filter((character) => character.id !== id));
       if (activeCharacterId === id) setActiveCharacterId(null);
-      void storeRef.current?.deleteCharacter(id);
+      void store?.deleteCharacter(id);
     },
-    [activeCharacterId, storeRef],
+    [activeCharacterId, store],
   );
 
   const [locations, setLocations] = useState<LocationEntry[]>([]);
@@ -54,9 +53,9 @@ export function useEntityState({ libraryId, storeRef }: UseEntityStateParams) {
     const entry: LocationEntry = { id, libraryId, name: "", description: "" };
     setLocations((prev) => [...prev, entry]);
     setActiveLocationId(id);
-    void storeRef.current?.putLocation({ ...entry, updatedAt: Date.now() });
+    void store?.putLocation({ ...entry, updatedAt: Date.now() });
     return entry;
-  }, [libraryId, storeRef]);
+  }, [libraryId, store]);
 
   const selectLocation = useCallback((id: string) => {
     setActiveLocationId(id);
@@ -65,18 +64,18 @@ export function useEntityState({ libraryId, storeRef }: UseEntityStateParams) {
   const updateLocation = useCallback(
     (entry: LocationEntry) => {
       setLocations((prev) => prev.map((location) => (location.id === entry.id ? entry : location)));
-      void storeRef.current?.putLocation({ ...entry, updatedAt: Date.now() });
+      void store?.putLocation({ ...entry, updatedAt: Date.now() });
     },
-    [storeRef],
+    [store],
   );
 
   const deleteLocation = useCallback(
     (id: string) => {
       setLocations((prev) => prev.filter((location) => location.id !== id));
       if (activeLocationId === id) setActiveLocationId(null);
-      void storeRef.current?.deleteLocation(id);
+      void store?.deleteLocation(id);
     },
-    [activeLocationId, storeRef],
+    [activeLocationId, store],
   );
 
   const [worldEntries, setWorldEntries] = useState<WorldEntry[]>([]);
@@ -87,9 +86,9 @@ export function useEntityState({ libraryId, storeRef }: UseEntityStateParams) {
     const entry: WorldEntry = { id, libraryId, title: "", category: "", notes: "" };
     setWorldEntries((prev) => [...prev, entry]);
     setActiveWorldEntryId(id);
-    void storeRef.current?.putWorldEntry({ ...entry, updatedAt: Date.now() });
+    void store?.putWorldEntry({ ...entry, updatedAt: Date.now() });
     return entry;
-  }, [libraryId, storeRef]);
+  }, [libraryId, store]);
 
   const selectWorldEntry = useCallback((id: string) => {
     setActiveWorldEntryId(id);
@@ -98,18 +97,18 @@ export function useEntityState({ libraryId, storeRef }: UseEntityStateParams) {
   const updateWorldEntry = useCallback(
     (entry: WorldEntry) => {
       setWorldEntries((prev) => prev.map((world) => (world.id === entry.id ? entry : world)));
-      void storeRef.current?.putWorldEntry({ ...entry, updatedAt: Date.now() });
+      void store?.putWorldEntry({ ...entry, updatedAt: Date.now() });
     },
-    [storeRef],
+    [store],
   );
 
   const deleteWorldEntry = useCallback(
     (id: string) => {
       setWorldEntries((prev) => prev.filter((world) => world.id !== id));
       if (activeWorldEntryId === id) setActiveWorldEntryId(null);
-      void storeRef.current?.deleteWorldEntry(id);
+      void store?.deleteWorldEntry(id);
     },
-    [activeWorldEntryId, storeRef],
+    [activeWorldEntryId, store],
   );
 
   return {

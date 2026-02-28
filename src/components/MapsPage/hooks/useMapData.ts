@@ -6,13 +6,11 @@ import { useRouter } from "next/navigation";
 import { makeId } from "@/lib/domain/idUtils";
 import { pathForEntryType } from "@/lib/domain/entryUtils";
 import type { Entry, EntryType, Map as WorldMap, MapPin, Media } from "@/lib/types";
-import type { RAGStore } from "@/lib/rag/store";
+import { useStore } from "@/lib/context/useStore";
 import { PIN_ENTRY_TYPES, type PinWithEntry, type AddPinState } from "../mapTypes";
 
 interface UseMapDataParams {
   universeId: string;
-  storeRef: RefObject<RAGStore | null>;
-  storeReady: boolean;
 }
 
 interface UseMapDataReturn {
@@ -45,8 +43,9 @@ interface UseMapDataReturn {
   handlePinClick: (e: React.MouseEvent, row: PinWithEntry) => void;
 }
 
-export function useMapData({ universeId, storeRef, storeReady }: UseMapDataParams): UseMapDataReturn {
+export function useMapData({ universeId }: UseMapDataParams): UseMapDataReturn {
   const router = useRouter();
+  const store = useStore();
   const [maps, setMaps] = useState<WorldMap[]>([]);
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [mapMedia, setMapMedia] = useState<Media | null>(null);
@@ -67,11 +66,9 @@ export function useMapData({ universeId, storeRef, storeReady }: UseMapDataParam
   const [addPinIcon, setAddPinIcon] = useState("📍");
 
   useEffect(() => {
-    if (!storeReady || loadedRef.current) return;
+    if (loadedRef.current) return;
     loadedRef.current = true;
     void (async () => {
-      const store = storeRef.current;
-      if (!store) return;
       const mapList = await store.listMapsByUniverse(universeId);
       setMaps(mapList);
       if (mapList.length > 0) setSelectedMapId(mapList[0].id);
@@ -80,12 +77,10 @@ export function useMapData({ universeId, storeRef, storeReady }: UseMapDataParam
       setAllEntries(entryGroups.flat());
       setLoading(false);
     })();
-  }, [storeReady, storeRef, universeId]);
+  }, [store, universeId]);
 
   useEffect(() => {
-    if (!selectedMapId || !storeReady) return;
-    const store = storeRef.current;
-    if (!store) return;
+    if (!selectedMapId) return;
     void (async () => {
       const pinList = await store.listMapPinsByMap(selectedMapId);
       const rows = pinList.map((pin) => {
@@ -102,12 +97,10 @@ export function useMapData({ universeId, storeRef, storeReady }: UseMapDataParam
         setMapMedia(null);
       }
     })();
-  }, [selectedMapId, storeReady, storeRef, maps, allEntries, universeId]);
+  }, [selectedMapId, store, maps, allEntries, universeId]);
 
   const handleCreateMap = useCallback(async () => {
     if (!newMapName.trim()) return;
-    const store = storeRef.current;
-    if (!store) return;
     const now = Date.now();
 
     let mediaId = "";
@@ -150,7 +143,7 @@ export function useMapData({ universeId, storeRef, storeReady }: UseMapDataParam
     setShowNewMapForm(false);
     setNewMapName("");
     setNewMapImageUri("");
-  }, [newMapName, newMapImageUri, storeRef, universeId]);
+  }, [newMapName, newMapImageUri, store, universeId]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -170,8 +163,6 @@ export function useMapData({ universeId, storeRef, storeReady }: UseMapDataParam
 
   const handleConfirmPin = useCallback(async () => {
     if (!addPin || !addPinEntryId.trim() || !selectedMapId) return;
-    const store = storeRef.current;
-    if (!store) return;
     const now = Date.now();
     const pin: MapPin = {
       id: makeId("pin"),
@@ -188,7 +179,7 @@ export function useMapData({ universeId, storeRef, storeReady }: UseMapDataParam
     setPins((prev) => [...prev, { pin, entry }]);
     setAddPin(null);
     setAddPinEntryId("");
-  }, [addPin, addPinEntryId, addPinIcon, selectedMapId, storeRef, allEntries]);
+  }, [addPin, addPinEntryId, addPinIcon, selectedMapId, store, allEntries]);
 
   const handlePinClick = useCallback(
     (e: React.MouseEvent, row: PinWithEntry) => {

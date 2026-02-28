@@ -1,4 +1,4 @@
-import type { CanonicalDoc, CharacterEntry, LocationEntry, WorldEntry } from "@/lib/types";
+import type { Entry, CharacterEntry, LocationEntry, WorldEntry } from "@/lib/types";
 
 interface BuildChatContextInput {
   libraryTitle: string;
@@ -14,7 +14,7 @@ interface BuildChatContextInput {
    * model can reference already-established facts and the patch extractor can
    * perform name-matching against the same entities.
    */
-  canonicalDocs?: CanonicalDoc[];
+  canonicalDocs?: Entry[];
 }
 
 export function buildChatContext(input: BuildChatContextInput): string {
@@ -79,7 +79,7 @@ export function buildChatContext(input: BuildChatContextInput): string {
   if (canonicalDocs && canonicalDocs.length > 0) {
     // Group by type and emit a compact roster so the model knows established entities.
     // Capped at 20 entries total to stay within prefix-cache budget.
-    const byType = new Map<string, CanonicalDoc[]>();
+    const byType = new Map<string, Entry[]>();
     for (const doc of canonicalDocs.slice(0, 20)) {
       const bucket = byType.get(doc.type) ?? [];
       bucket.push(doc);

@@ -10,7 +10,8 @@ import {
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { LibraryContext, type LibraryContextValue } from "@/lib/context/LibraryContext";
-import { useRAGContext } from "@/lib/context/RAGContext";
+import { useWorkspaceContext } from "@/lib/context/WorkspaceContext";
+import { StoreGate } from "@/lib/context/StoreGate";
 import { useSystemContext } from "@/lib/context/SystemContext";
 import { TabBar, type EditorTab } from "@/components/Editor/TabBar";
 import { Chat } from "@/components/Chat";
@@ -114,7 +115,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
 
-  const { storeRef, storeReady, ragNodes, putRagNode, addNode, deleteNode } = useRAGContext();
+  const { store, ragNodes, putRagNode, addNode, deleteNode } = useWorkspaceContext();
   const { status: systemStatus } = useSystemContext();
 
   /* ---- Library metadata ---- */
@@ -142,14 +143,12 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
         libraryId,
         updatedAt: Date.now(),
       };
-      void storeRef.current?.putLibraryMeta(next);
+      void store?.putLibraryMeta(next);
       return next;
     });
-  }, [libraryId, libraryRagNode?.title, storeRef]);
+  }, [libraryId, libraryRagNode?.title, store]);
 
   useEffect(() => {
-    if (!storeReady) return;
-    const store = storeRef.current;
     if (!store) return;
     let cancelled = false;
     void (async () => {
@@ -176,12 +175,10 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     return () => {
       cancelled = true;
     };
-  }, [libraryId, libraryRagNode?.title, storeReady, storeRef]);
+  }, [libraryId, libraryRagNode?.title, store]);
 
   /* ---- First-boot migration offer ---- */
   useEffect(() => {
-    if (!storeReady) return;
-    const store = storeRef.current;
     if (!store) return;
     void (async () => {
       // Check if we've already offered migration
@@ -200,7 +197,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       setShowMigrationBanner(true);
       await store.setMetadata({ key: "migrationOffered", value: true, updatedAt: Date.now() });
     })();
-  }, [libraryId, storeReady, storeRef]);
+  }, [libraryId, store]);
 
   const setLibraryTitle = useCallback((title: string) => {
     const node = ragNodes[libraryId];
@@ -229,7 +226,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       providerConfig: CloudProviderConfig;
       defaultBudget: RunBudget;
     }) => {
-      void storeRef.current?.putAiLibrarySettings({
+      void store?.putAiLibrarySettings({
         libraryId,
         executionMode: next.executionMode,
         providerConfig: next.providerConfig,
@@ -237,7 +234,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
         updatedAt: Date.now(),
       });
     },
-    [libraryId, storeRef],
+    [libraryId, store],
   );
 
   const setAiMode = useCallback(
@@ -284,7 +281,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       const runs = Array.isArray(payload.runs) ? payload.runs : [];
       setResearchRuns(runs);
 
-      const store = storeRef.current;
       if (store) {
         for (const run of runs) {
           await store.putResearchRun(run);
@@ -302,10 +298,9 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       console.error("Failed to refresh research runs", error);
       // Leave stale data intact when offline or route unavailable.
     }
-  }, [libraryId, storeRef]);
+  }, [libraryId, store]);
 
   const handlePatchesExtracted = useCallback(async (patches: EntryPatch[]) => {
-    const store = storeRef.current;
     if (!store || patches.length === 0) return;
 
     for (const patch of patches) {
@@ -331,7 +326,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
 
     const latest = await store.listEntriesByUniverse(libraryId);
     setExistingEntries(latest);
-  }, [libraryId, storeRef]);
+  }, [libraryId, store]);
 
   /**
    * Called by Chat when a deep research run completes.
@@ -436,7 +431,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     deleteWorldEntry,
   } = useEntityState({
     libraryId,
-    storeRef,
+    store,
   });
 
   /* ---- Stories ---- */
@@ -451,9 +446,9 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     const entry: Story = { id, libraryId, title: "Untitled Story", synopsis: "", genre: "", status: "drafting", createdAt: now };
     setStories((prev) => [...prev, entry]);
     setActiveStoryId(id);
-    void storeRef.current?.putStory({ ...entry, updatedAt: now });
+    void store?.putStory({ ...entry, updatedAt: now });
     return entry;
-  }, [libraryId, storeRef, addNode]);
+  }, [libraryId, store, addNode]);
 
   const selectStory = useCallback((id: string) => { setActiveStoryId(id); }, []);
 
@@ -462,8 +457,8 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     // Also sync the RAG node title
     const node = ragNodes[entry.id];
     if (node) putRagNode({ ...node, title: entry.title, updatedAt: Date.now() });
-    void storeRef.current?.putStory({ ...entry, updatedAt: Date.now() });
-  }, [storeRef, ragNodes, putRagNode]);
+    void store?.putStory({ ...entry, updatedAt: Date.now() });
+  }, [store, ragNodes, putRagNode]);
 
   const deleteStory = useCallback((id: string) => {
     const removedNodeIds = new Set<string>();
@@ -498,9 +493,9 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     const storyNodeExists = Boolean(ragNodes[id]);
     deleteNode(id);
     if (!storyNodeExists) {
-      void storeRef.current?.deleteStoryCascade(id);
+      void store?.deleteStoryCascade(id);
     }
-  }, [activeStoryId, activeTabId, deleteNode, ragNodes, storeRef]);
+  }, [activeStoryId, activeTabId, deleteNode, ragNodes, store]);
 
   /* ---- Chat / Threads ---- */
   const {
@@ -525,7 +520,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     dragStartWidthRef,
   } = useChatState({
     libraryId,
-    storeRef,
+    store,
     onNavigateToChat: (id) => {
       router.push(`/library/${libraryId}/threads/${id}`);
     },
@@ -540,10 +535,9 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     indexingCount,
     queueHash,
   } = useRagWorker({
-    storeReady,
+    store,
     ragNodes,
     putRagNode,
-    storeRef,
     systemStatus,
     docContentsRef,
     setSavedContents,
@@ -551,8 +545,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
 
   /* ---- Hydrate library-scoped data from IDB ---- */
   useEffect(() => {
-    if (!storeReady) return;
-    const store = storeRef.current;
     if (!store) return;
     void (async () => {
       const [chars, locs, world, sessions, storyRows, aiSettings, localRuns, entryRows] = await Promise.all([
@@ -630,8 +622,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       await refreshResearchRuns();
     })();
   }, [
-    storeReady,
-    storeRef,
+    store,
     libraryId,
     initialChatId,
     refreshResearchRuns,
@@ -645,7 +636,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
 
   /* ---- Build RAG context for chat ---- */
   const buildContext = useCallback(async (query: string): Promise<string> => {
-    const store = storeRef.current;
     if (!store) return "";
     const nodes = Object.values(ragNodesRef.current);
     return buildRAGContext(
@@ -656,7 +646,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       5,
       workerRef.current ?? undefined,
     );
-  }, [storeRef, systemStatus.embedModel, ragNodesRef, workerRef]);
+  }, [store, systemStatus.embedModel, ragNodesRef, workerRef]);
 
   /* ---- Stable chat messages callback (prevents infinite-loop from inline arrow in JSX) ---- */
   const handleMessagesChange = useCallback(
@@ -707,7 +697,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     setLocations,
     worldEntries,
     setWorldEntries,
-    storeRef,
+    store,
   });
 
   /** Handles a raw EditBlockEvent from Chat's parseEditStream. Constructs a ChangeSet and calls applyIncomingEdit. */
@@ -899,8 +889,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     commitEntityDraft,
     revertEntityDraft,
     buildContext,
-    storeRef,
-    storeReady,
     indexingCount,
   };
 
@@ -1035,7 +1023,9 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
               />
             )}
             <div className="library-content">
-              {children}
+              <StoreGate>
+                {children}
+              </StoreGate>
             </div>
           </div>
 
