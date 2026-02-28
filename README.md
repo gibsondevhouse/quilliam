@@ -13,15 +13,22 @@ Built for Apple Silicon with Unified Memory awareness.
 | Cloud — assist | Anthropic, BYO key, opt-in per action |
 | Cloud — research | Anthropic + Tavily, BYO keys, opt-in per action |
 | Storage | IndexedDB `quilliam-rag` (DB v11) + encrypted cloud vault |
-| RAG | Hierarchical nodes + SHA-256 fragment hashing + local vector retrieval |
+| RAG | 7-level hierarchical node tree + SHA-256 fragment hashing + local vector retrieval |
 
 ## Development
 
 ```bash
 npm install
-npm run dev       # http://localhost:3000 (bumps to 3001+ if port is taken)
+npm run dev       # http://localhost:3000 (auto-bumps to 3001+ if port is taken)
 npm run lint
 npm run build
+```
+
+Additional lint targets:
+
+```bash
+npm run lint:css-size        # Fails if any CSS partial exceeds 400 lines
+npm run lint:component-size  # Fails if any component .tsx exceeds 400 lines
 ```
 
 Run Ollama in a separate terminal (Apple Silicon GPU tuning):
@@ -50,14 +57,14 @@ The script sets `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`, `OLLAMA
 | `POST` | `/api/embeddings` | Proxy to Ollama embeddings |
 | `GET` | `/api/status` | Ollama + model health check |
 | `GET` | `/api/system` | System info (model, platform) |
-| `POST` | `/api/extract-canonical` | Extract canonical entity patches from prose |
+| `POST` | `/api/extract-canonical` | Extract `EntryPatch` records from prose |
 
 ### Cloud — opt-in, require unlocked vault session
 
 | Method | Route | Description |
 |---|---|---|
 | `POST` | `/api/cloud/assist` | Anthropic-powered assisted edit (review-first patches) |
-| `GET/POST/DELETE` | `/api/cloud/vault/*` | Encrypted provider key vault management |
+| `GET\|POST\|DELETE` | `/api/cloud/vault/*` | Encrypted provider key vault management |
 | `GET` | `/api/research/runs` | List deep research runs (filter by `?libraryId=`) |
 | `POST` | `/api/research/runs` | Create and start a new research run |
 | `GET` | `/api/research/runs/[id]` | Fetch a single run record |
@@ -99,18 +106,72 @@ The script sets `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q8_0`, `OLLAMA
 
 ## Key Source Paths
 
-- App shell: `src/app/ClientShell.tsx`
-- Library workspace orchestration: `src/app/library/[libraryId]/layout.tsx`
-- Chat UI: `src/components/Chat.tsx`
-- RAG persistence + retrieval: `src/lib/rag/`
-- Cloud vault + provider clients: `src/lib/cloud/`
-- Deep research engine: `src/lib/research/`
-- Domain types (entry-centric universe engine): `src/lib/types.ts`
-- RAG indexer worker: `src/workers/rag-indexer.ts`
+| Path | Purpose |
+|---|---|
+| `src/app/ClientShell.tsx` | App shell and global state |
+| `src/app/library/[libraryId]/layout.tsx` | Library workspace orchestration |
+| `src/components/Chat/` | Multi-mode AI chat UI (local / cloud / research) |
+| `src/components/BuildFeed/` | AI suggestion feed and patch cards |
+| `src/components/CanonicalDocDashboard/` | Entry editor and relations panel |
+| `src/components/MasterTimelinePage/` | Universe-level timeline |
+| `src/components/CultureVersionPanel/` | Bitemporal culture snapshot management |
+| `src/lib/types.ts` | Domain types (Entry supertype, all universe engine records) |
+| `src/lib/rag/hierarchy.ts` | RAG node types and 7-level manuscript tree |
+| `src/lib/rag/db/schema.ts` | IndexedDB schema and full migration history |
+| `src/lib/rag/store.ts` | Persisted record shapes for IDB and workers |
+| `src/lib/rag/migrate-imp002.ts` | Plan-001 → Plan-002 data migration utility |
+| `src/lib/cloud/` | Cloud vault and Anthropic/Tavily provider clients |
+| `src/lib/research/` | Deep research engine (phases, budgets, citations) |
+| `src/lib/domain/` | Domain-layer utilities for universe engine operations |
+| `src/lib/context/` | React context providers for library/universe state |
+| `src/workers/rag-indexer.ts` | SHA-256 fragment hashing and embedding worker |
+
+## Domain Model
+
+### Entry supertype (universe encyclopedia)
+
+All encyclopedia objects share the `Entry` supertype:
+
+- `entryType` ∈ `{ character, location, culture, organization, system, item, language, religion, lineage, economy, rule }` — plus legacy aliases `{ faction, magic_system, lore_entry, scene, timeline_event }`
+- `canonStatus` ∈ `{ draft, proposed, canon, deprecated, retconned, alternate-branch }`
+- `relationships: RelationshipRef[]` — denormalised outbound edges
+- `sources: SourceRef[]` — per-entry provenance
+
+### Manuscript hierarchy
+
+```
+Universe → Series → Book → Chapter → Scene
+```
+
+Alongside a **Timeline layer**: `Timeline → Era → Event → TimeAnchor → Calendar`
+
+### RAG node tree (7 levels)
+
+```
+library → series → book → section → chapter → scene → fragment
+```
+
+`fragment` nodes (~500 tokens) are produced by the chunker for vectorisation and are never shown in the tree UI.
+
+### Persistence (IndexedDB `quilliam-rag` v11)
+
+| Version | Stores added |
+|---|---|
+| v1–v2 | `nodes`, `embeddings`, `metadata`, `chatSessions`, `chatMessages` |
+| v3 | `characters`, `locations`, `worldEntries` |
+| v4 | `stories` |
+| v5 | `aiSettings`, `researchRuns`, `researchArtifacts` |
+| v6 | `usageLedgers` |
+| v7 | `canonicalDocs`, `relationships`, `patches` |
+| v8 | `relationIndexByDoc`, `patchByDoc` |
+| v9 | `universes`, `entries`, `series`, `books`, `chapters`, `scenes`, `entryRelations`, `timelines`, `eras`, `events`, `calendars`, `timeAnchors`, `memberships`, `cultureMemberships`, `itemOwnerships`, `mentions`, `media`, `maps`, `mapPins` |
+| v10 | `cultureVersions`, `organizationVersions`, `religionVersions`, `continuityIssues`, `suggestions`, `revisions` |
+| v11 | `entryPatches`, `entryPatchByEntry` |
 
 ## Guardrails
 
 1. **Local mode stays local.** No external calls in `local` execution mode.
 2. **Cloud always requires explicit user opt-in.** No silent background requests.
 3. **Provider keys never leave the server.** Keys are vault-encrypted at rest; never stored in UI state, logs, or `localStorage`.
-4. **All AI edits are review-first.** Patches (`EntryPatch` / `CanonicalPatch`) land as `pending` and require user acceptance before being applied.
+4. **All AI edits are review-first.** `EntryPatch` records land as `pending` and require user acceptance before being applied. `autoCommit: true` must be explicitly set to bypass review.
+5. **TypeScript strict mode.** `npm run lint` and `npm run build` must pass before any change is considered complete.
