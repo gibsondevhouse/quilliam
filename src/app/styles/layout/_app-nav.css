@@ -1,0 +1,140 @@
+/* ============================================================
+   APP NAV (ChatGPT-style left navigation)
+   ============================================================ */
+
+.app-nav {
+  width: 260px;
+  min-width: 260px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Brand wordmark */
+.app-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 16px 8px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+/* Primary CTA */
+.app-nav-new-btn {
+  margin: 8px 12px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+.app-nav-new-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* Section label */
+.app-nav-section-label {
+  padding: 12px 16px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Tree scroll area */
+.app-nav-tree {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 8px;
+}
+
+.app-nav-tree::-webkit-scrollbar {
+  width: 4px;
+}
+.app-nav-tree::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+/* Secondary action (New Library) */
+.app-nav-secondary {
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.app-nav-new-library-btn {
+  width: 100%;
+  padding: 7px 12px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.app-nav-new-library-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Footer collapse toggle */
+.app-nav-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.app-nav-collapse-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.app-nav-collapse-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* Expand trigger shown when nav is collapsed */
+.app-nav-expand-btn {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px 4px;
+  z-index: 100;
+  font-size: 13px;
+}
+.app-nav-expand-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-active);
+}

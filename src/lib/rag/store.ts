@@ -318,6 +318,7 @@ export interface RAGStore {
   listChaptersByBook(bookId: string): Promise<PersistedChapter[]>;
   putScene(entry: PersistedScene): Promise<void>;
   listScenesByChapter(chapterId: string): Promise<PersistedScene[]>;
+  getSceneById(id: string): Promise<PersistedScene | undefined>;
   addEntryRelation(rel: PersistedRelationship): Promise<void>;
   removeEntryRelation(id: string): Promise<void>;
   getEntryRelationsForEntry(entryId: string): Promise<PersistedRelationship[]>;
@@ -345,6 +346,7 @@ export interface RAGStore {
   listItemOwnershipByOwner(ownerEntryId: string): Promise<PersistedItemOwnership[]>;
   putMention(entry: PersistedMention): Promise<void>;
   listMentionsByScene(sceneId: string): Promise<PersistedMention[]>;
+  listMentionsByEntry(entryId: string): Promise<PersistedMention[]>;
   putMedia(entry: PersistedMedia): Promise<void>;
   listMediaByUniverse(universeId: string): Promise<PersistedMedia[]>;
   putMap(entry: PersistedMap): Promise<void>;
@@ -368,6 +370,7 @@ export interface RAGStore {
   listRevisionsForTarget(targetType: string, targetId: string): Promise<PersistedRevision[]>;
   addEntryPatch(patch: PersistedEntryPatch): Promise<void>;
   getPendingEntryPatches(): Promise<PersistedEntryPatch[]>;
+  listAllEntryPatches(): Promise<PersistedEntryPatch[]>;
   getEntryPatchesForEntry(entryId: string): Promise<PersistedEntryPatch[]>;
   // Canonical documents (Plan 001 — Phase 3)
   addDoc(doc: PersistedCanonicalDoc): Promise<void>;

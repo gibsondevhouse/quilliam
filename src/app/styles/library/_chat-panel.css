@@ -1,0 +1,121 @@
+/* ---- Right-side AI chat panel (Copilot-style) ---- */
+.library-chat-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 340px;
+  min-width: 260px;
+  max-width: 720px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-secondary);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.library-chat-panel-resize {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background 0.15s;
+}
+
+.library-chat-panel-resize:hover,
+.library-chat-panel-resize.dragging {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.library-chat-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  user-select: none;
+  background: var(--bg-secondary);
+}
+
+.library-chat-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+.library-chat-panel-title-accent {
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.library-chat-panel-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.library-chat-panel-mode-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+
+.library-chat-panel-mode-select {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-radius: 5px;
+  font-size: 11px;
+  padding: 2px 6px;
+  max-width: 132px;
+}
+
+.library-chat-panel-actions {
+  display: flex;
+  gap: 1px;
+  align-items: center;
+}
+
+.library-chat-panel-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 15px;
+  line-height: 1;
+  transition: color 0.1s, background 0.1s;
+}
+
+.library-chat-panel-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.library-chat-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============================================================

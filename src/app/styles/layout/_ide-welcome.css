@@ -1,0 +1,83 @@
+/* ============================================================
+   IDE WELCOME SCREEN
+   ============================================================ */
+
+.ide-welcome {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.ide-welcome-inner {
+  text-align: center;
+  max-width: 400px;
+}
+
+.ide-welcome-brand {
+  width: 56px;
+  height: 56px;
+  background: var(--accent);
+  color: white;
+  font-size: 28px;
+  font-weight: 700;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.ide-welcome-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  margin-bottom: 4px;
+}
+
+.ide-welcome-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 28px;
+}
+
+.ide-welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.ide-welcome-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: 1px solid transparent;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  text-align: left;
+  width: 100%;
+}
+
+.ide-welcome-action:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.ide-welcome-key {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 80px;
+}
+
+.ide-welcome-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+

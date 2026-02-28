@@ -1,5 +1,5 @@
-import { CanonicalDocDashboard } from "@/components/CanonicalDocDashboard";
+import { MasterTimelinePage } from "@/components/MasterTimelinePage";
 
 export default function TimelinePage() {
-  return <CanonicalDocDashboard type="timeline_event" title="Master Timeline" />;
+  return <MasterTimelinePage />;
 }

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { EditorArea } from "@/components/Editor/EditorArea";
+import { SceneMetaPanel } from "@/components/SceneMetaPanel";
 import { useLibraryContext } from "@/lib/context/LibraryContext";
 import { useRAGContext } from "@/lib/context/RAGContext";
 
@@ -73,20 +74,30 @@ export function ChapterEditorPage({ chapterId }: ChapterEditorPageProps) {
     (cs) => cs.status === "pending",
   );
   const liveContent = pendingChangeSets.length > 0 ? workingContents[chapterId] : undefined;
+  const isScene = ragNode?.type === "scene";
+  const parentChapterId = ragNode?.parentId ?? null;
 
   return (
-    <EditorArea
-      key={chapterId}
-      initialContent={currentDoc.content}
-      content={liveContent}
-      documentTitle={currentDoc.title}
-      onContentChange={(content) => handleContentChange(chapterId, content)}
-      onTitleChange={(title) => handleTitleChange(chapterId, title)}
-      pendingChangeSets={pendingChangeSets}
-      onAcceptHunk={(id) => acceptChange(id)}
-      onRejectHunk={(id) => rejectChange(id)}
-      onAcceptAll={() => acceptAllChanges("__active__")}
-      onRejectAll={() => rejectAllChanges("__active__")}
-    />
+    <div className="chapter-editor-wrap">
+      <EditorArea
+        key={chapterId}
+        initialContent={currentDoc.content}
+        content={liveContent}
+        documentTitle={currentDoc.title}
+        onContentChange={(content) => handleContentChange(chapterId, content)}
+        onTitleChange={(title) => handleTitleChange(chapterId, title)}
+        pendingChangeSets={pendingChangeSets}
+        onAcceptHunk={(id) => acceptChange(id)}
+        onRejectHunk={(id) => rejectChange(id)}
+        onAcceptAll={() => acceptAllChanges("__active__")}
+        onRejectAll={() => rejectAllChanges("__active__")}
+      />
+      {isScene && parentChapterId && (
+        <SceneMetaPanel
+          sceneNodeId={chapterId}
+          chapterId={parentChapterId}
+        />
+      )}
+    </div>
   );
 }

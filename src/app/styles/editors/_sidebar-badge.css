@@ -1,0 +1,31 @@
+/* ============================================================
+   SIDEBAR TYPE BADGE
+   ============================================================ */
+
+.sidebar-type-badge {
+  margin-left: auto;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.sidebar-tree-item:hover .sidebar-type-badge {
+  opacity: 1;
+}
+
+.sidebar-expand-icon.placeholder {
+  visibility: hidden;
+}
+
+.sidebar-hint {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+

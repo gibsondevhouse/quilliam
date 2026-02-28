@@ -196,3 +196,44 @@ export async function applyEntryPatch(patch: EntryPatch, store: EntryPatchStore)
 
   await store.updatePatchStatus(patch.id, "accepted");
 }
+
+/**
+ * Return a human-readable one-line summary for a single patch operation.
+ * Used in BuildFeed, ChangeLogPage, and any other patch review surfaces.
+ */
+export function opSummary(op: EntryPatchOperation): string {
+  switch (op.op) {
+    case "create-entry":
+      return `Create ${op.entryType}: "${op.entry.name ?? "?"}"`;
+    case "update-entry":
+      return `Update ${op.entryId} — ${op.field}`;
+    case "add-relation":
+      return `Link: ${op.relation.from} —[${op.relation.type}]→ ${op.relation.to}`;
+    case "remove-relation":
+      return `Remove relation: ${op.relationId}`;
+    case "create-issue":
+      return `Continuity issue: ${op.issue.checkType ?? "manual"}`;
+    case "resolve-issue":
+      return `Resolve issue: ${op.issueId}`;
+    case "create-version":
+      return `Create culture version for ${op.version.cultureEntryId ?? "unknown"}`;
+    case "update-scene-links":
+      return `Update scene links for ${op.sceneId}`;
+    case "mark-retcon":
+      return `Mark retcon on ${op.entryId}`;
+    case "create":
+      return `Create ${op.docType}: "${String(op.fields.name ?? "?")}"`;
+    case "update":
+      return `Update ${op.docId} — ${op.field}`;
+    case "add-relationship":
+      return `Link: ${op.relationship.from} —[${op.relationship.type}]→ ${op.relationship.to}`;
+    case "remove-relationship":
+      return `Remove relationship: ${op.relationshipId}`;
+    case "mark-contradiction":
+      return `Contradiction on ${op.docId}`;
+    case "delete":
+      return `Delete entry: ${op.docId}`;
+    default:
+      return "Unknown operation";
+  }
+}

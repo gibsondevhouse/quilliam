@@ -1,0 +1,122 @@
+/* ============================================================
+   EDITOR: ENHANCED LAYOUT
+   ============================================================ */
+
+.editor-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-status-selector {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.editor-status-btn {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.editor-status-btn:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.editor-status-btn:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.editor-status-btn.active {
+  background: color-mix(in srgb, var(--status-color) 20%, transparent);
+  border-color: var(--status-color);
+  color: var(--status-color);
+}
+
+/* Word goal progress bar */
+.editor-goal-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 2px;
+}
+
+.editor-goal-track {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-surface);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.editor-goal-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.editor-goal-fill.complete {
+  background: var(--green);
+}
+
+.editor-goal-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono), monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Editor surface with minimap */
+.editor-surface-wrapper {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+
+.editor-surface {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 48px;
+}
+
+.editor-stats .goal-met {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.editor-stats-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: capitalize;
+}
+
+.editor-stats-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.editor-stats-dot.draft {
+  background: var(--yellow);
+}
+
+.editor-stats-dot.revised {
+  background: var(--accent);
+}
+
+.editor-stats-dot.final {
+  background: var(--green);
+}
+

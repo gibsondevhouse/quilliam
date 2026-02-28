@@ -1,0 +1,24 @@
+/* ============================================================
+   TAB: DIRTY STATE
+   ============================================================ */
+
+.tab-dirty-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.tab-item.dirty .tab-close {
+  display: none;
+}
+
+.tab-item.dirty:hover .tab-close {
+  display: flex;
+}
+
+.tab-item.dirty:hover .tab-dirty-dot {
+  display: none;
+}
+

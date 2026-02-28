@@ -1,11 +1,11 @@
 @import "tailwindcss";
-@import "./styles/layout.css";
+@import "./styles/layout/index.css";
 @import "./styles/sidebar.css";
-@import "./styles/editors.css";
-@import "./styles/chat.css";
-@import "./styles/workspace.css";
-@import "./styles/overlays.css";
-@import "./styles/library.css";
+@import "./styles/editors/index.css";
+@import "./styles/chat/index.css";
+@import "./styles/workspace/index.css";
+@import "./styles/overlays/index.css";
+@import "./styles/library/index.css";
 
 :root {
   --bg-primary: #1a1a1f;

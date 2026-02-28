@@ -1458,6 +1458,11 @@ export async function listScenesByChapter(chapterId: string): Promise<PersistedS
   return all.sort((a, b) => a.number - b.number);
 }
 
+export async function getSceneById(id: string): Promise<PersistedScene | undefined> {
+  const db = await getDb();
+  return db.get("scenes", id);
+}
+
 export async function addEntryRelation(rel: PersistedRelationship): Promise<void> {
   const db = await getDb();
   await db.put("entryRelations", rel);
@@ -1600,6 +1605,11 @@ export async function putMention(entry: PersistedMention): Promise<void> {
 export async function listMentionsByScene(sceneId: string): Promise<PersistedMention[]> {
   const db = await getDb();
   return db.getAllFromIndex("mentions", "by_scene", sceneId);
+}
+
+export async function listMentionsByEntry(entryId: string): Promise<PersistedMention[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("mentions", "by_entry", entryId);
 }
 
 export async function putMedia(entry: PersistedMedia): Promise<void> {
@@ -1754,6 +1764,11 @@ export async function addEntryPatch(patch: PersistedEntryPatch): Promise<void> {
 export async function getPendingEntryPatches(): Promise<PersistedEntryPatch[]> {
   const db = await getDb();
   return db.getAllFromIndex("entryPatches", "by_status", "pending");
+}
+
+export async function listAllEntryPatches(): Promise<PersistedEntryPatch[]> {
+  const db = await getDb();
+  return db.getAll("entryPatches");
 }
 
 export async function getEntryPatchesForEntry(entryId: string): Promise<PersistedEntryPatch[]> {
@@ -2104,6 +2119,7 @@ export async function createRAGStore(): Promise<RAGStore> {
     listChaptersByBook,
     putScene,
     listScenesByChapter,
+    getSceneById,
     addEntryRelation,
     removeEntryRelation,
     getEntryRelationsForEntry,
@@ -2131,6 +2147,7 @@ export async function createRAGStore(): Promise<RAGStore> {
     listItemOwnershipByOwner,
     putMention,
     listMentionsByScene,
+    listMentionsByEntry,
     putMedia,
     listMediaByUniverse,
     putMap,
@@ -2154,6 +2171,7 @@ export async function createRAGStore(): Promise<RAGStore> {
     listRevisionsForTarget,
     addEntryPatch,
     getPendingEntryPatches,
+    listAllEntryPatches,
     getEntryPatchesForEntry,
     addDoc,
     updateDoc,

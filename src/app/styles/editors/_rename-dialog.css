@@ -1,0 +1,80 @@
+/* ============================================================
+   RENAME DIALOG
+   ============================================================ */
+
+.rename-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.rename-dialog {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  width: 320px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.rename-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.rename-input {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  caret-color: var(--accent);
+}
+
+.rename-input:focus {
+  border-color: var(--accent);
+}
+
+.rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.rename-cancel,
+.rename-confirm {
+  border: none;
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rename-cancel {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.rename-cancel:hover {
+  background: var(--bg-active);
+}
+
+.rename-confirm {
+  background: var(--accent);
+  color: white;
+}
+
+.rename-confirm:hover {
+  background: var(--accent-dim);
+}

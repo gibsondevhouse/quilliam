@@ -1,0 +1,8 @@
+@import "./_detail-editor.css";
+@import "./_editor-area.css";
+@import "./_monaco-diff.css";
+@import "./_editor-empty.css";
+@import "./_status-bar.css";
+@import "./_sidebar-badge.css";
+@import "./_ctx-menu.css";
+@import "./_rename-dialog.css";

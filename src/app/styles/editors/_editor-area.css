@@ -1,0 +1,135 @@
+/* ============================================================
+   EDITOR AREA
+   ============================================================ */
+
+.editor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-title-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 48px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+.editor-title-input {
+  width: 100%;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  caret-color: var(--accent);
+}
+
+.editor-title-input::placeholder {
+  color: var(--text-muted);
+}
+
+.editor-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.editor-title-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.editor-title-btn.accept {
+  border-color: rgba(74, 222, 128, 0.55);
+  color: #95f2b5;
+}
+
+.editor-title-btn.reject {
+  border-color: rgba(248, 113, 113, 0.55);
+  color: #f8a3a3;
+}
+
+.editor-surface {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 48px;
+}
+
+.editor-surface::-webkit-scrollbar {
+  width: 6px;
+}
+
+.editor-surface::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+}
+
+.editor-textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  background: none;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: var(--font-sans), Georgia, serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--text-primary);
+  caret-color: var(--accent);
+}
+
+.editor-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.editor-stats {
+  display: flex;
+  gap: 16px;
+  padding: 6px 48px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono), monospace;
+}
+
+.editor-stats-pending {
+  margin-left: auto;
+  color: #e5c07b;
+  font-size: 11px;
+}
+
+/* Monaco surface fills the editor-surface flex child */
+.editor-surface--monaco {
+  padding: 0;
+  overflow: hidden;
+}
+
+.editor-surface--monaco .monaco-editor {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.editor-monaco-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  opacity: 0.4;
+}
+

@@ -1,0 +1,93 @@
+/* ============================================================
+   STATUS BAR (bottom)
+   ============================================================ */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--statusbar-height);
+  padding: 0 10px;
+  background: var(--accent-dim);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: var(--font-mono), monospace;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.status-bar-left,
+.status-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.status-bar-item.brand {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.status-bar-separator {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.status-dot.connected {
+  background: var(--green);
+}
+
+.status-dot.disconnected {
+  background: var(--red);
+}
+
+@keyframes indexing-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.status-dot.indexing-pulse {
+  background: #e5c07b;
+  animation: indexing-pulse 1.2s ease-in-out infinite;
+}
+
+.status-bar-item.indexing {
+  color: #e5c07b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-bar-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  font-family: var(--font-mono), monospace;
+  cursor: pointer;
+  padding: 1px 8px;
+  border-radius: 3px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.status-bar-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.status-bar-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+

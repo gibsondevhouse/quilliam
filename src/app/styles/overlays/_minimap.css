@@ -1,0 +1,57 @@
+/* ============================================================
+   MINIMAP
+   ============================================================ */
+
+.minimap {
+  width: 60px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+}
+
+.minimap-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(124, 111, 239, 0.1);
+  border: 1px solid rgba(124, 111, 239, 0.25);
+  border-radius: 2px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.minimap-lines {
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.minimap-line {
+  height: 2px;
+  background: var(--text-muted);
+  opacity: 0.2;
+  border-radius: 1px;
+  min-width: 2px;
+}
+
+.minimap-line.heading {
+  opacity: 0.5;
+  background: var(--accent);
+  height: 2px;
+}
+
+.minimap-line.break {
+  opacity: 0.4;
+  background: var(--yellow);
+  height: 1px;
+}
+
+.minimap-line.empty {
+  opacity: 0;
+}
+

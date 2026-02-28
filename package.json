@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lint:css-size": "for f in $(find src/app/styles -mindepth 2 -name '_*.css'); do n=$(wc -l < $f); if [ $n -gt 400 ]; then echo \"TOO LARGE ($n lines): $f\"; exit 1; fi; done && echo \"css-size: OK\"",
+    "lint:component-size": "for f in $(find src/components -name '*.tsx'); do n=$(wc -l < $f); if [ $n -gt 400 ]; then echo \"TOO LARGE ($n lines): $f\"; exit 1; fi; done && echo \"component-size: OK\""
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

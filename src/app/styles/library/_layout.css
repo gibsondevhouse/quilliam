@@ -1,0 +1,127 @@
+/* ============================================================
+   LIBRARY LAYOUT — secondary nav + library body
+   ============================================================ */
+
+.library-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Library body: sidebar + content + optional panels */
+.library-body {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left sidebar nav */
+.library-sidebar {
+  width: 200px;
+  min-width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  padding: 6px 0;
+}
+
+.library-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.library-sidebar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.library-sidebar-group {
+  margin-bottom: 2px;
+}
+
+.library-sidebar-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 5px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.library-sidebar-group-header:hover {
+  color: var(--text-secondary);
+}
+
+.library-sidebar-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s;
+  color: var(--text-muted);
+}
+
+.library-sidebar-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.library-sidebar-group-items {
+  padding: 0 0 4px;
+}
+
+.library-sidebar-item {
+  display: block;
+  padding: 5px 10px 5px 26px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.1s, color 0.1s;
+}
+
+.library-sidebar-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.library-sidebar-item.active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+/* Column wrapper: holds TabBar + page content */
+.library-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.library-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+

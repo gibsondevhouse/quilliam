@@ -1,0 +1,28 @@
+/* ============================================================
+   STATUS BAR: ENHANCED
+   ============================================================ */
+
+.status-bar-doc-status {
+  text-transform: capitalize;
+}
+
+.status-bar-doc-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.status-bar-doc-dot.draft {
+  background: var(--yellow);
+}
+
+.status-bar-doc-dot.revised {
+  background: var(--accent);
+}
+
+.status-bar-doc-dot.final {
+  background: var(--green);
+}
+

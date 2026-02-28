@@ -1,0 +1,48 @@
+/* ============================================================
+   SIDEBAR: DRAG & DROP, INLINE RENAME, DIRTY DOTS
+   ============================================================ */
+
+.sidebar-tree-item.drag-over {
+  background: rgba(124, 111, 239, 0.12);
+  border-top: 2px solid var(--accent);
+}
+
+.sidebar-expand-btn {
+  background: none;
+  border: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.sidebar-expand-btn.placeholder {
+  visibility: hidden;
+}
+
+.sidebar-rename-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 1px 4px;
+  outline: none;
+  min-width: 0;
+}
+
+.sidebar-dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+

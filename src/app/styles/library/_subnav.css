@@ -1,0 +1,94 @@
+/* Secondary horizontal topbar */
+.library-subnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  min-height: 36px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.library-subnav::-webkit-scrollbar {
+  display: none;
+}
+
+.library-subnav-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.library-subnav-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 12px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.library-subnav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.library-subnav-link {
+  display: inline-block;
+  padding: 0 10px;
+  height: 36px;
+  line-height: 36px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.library-subnav-link:hover {
+  color: var(--text-primary);
+}
+
+.library-subnav-link.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+.library-subnav-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 26px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.1s, background 0.1s, border-color 0.1s;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.library-subnav-chat-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.library-subnav-chat-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+

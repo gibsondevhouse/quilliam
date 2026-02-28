@@ -1,0 +1,158 @@
+/* ============================================================
+   QUESTION WORKSPACE (Modular Architect cards)
+   ============================================================ */
+
+.qw-container {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.qw-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.qw-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+
+.qw-count {
+  font-size: 10px;
+  font-family: var(--font-mono), monospace;
+  background: var(--bg-surface);
+  color: var(--accent);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.qw-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qw-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: border-color 0.15s, opacity 0.3s;
+}
+
+.qw-card.answered {
+  border-color: rgba(74, 222, 128, 0.25);
+  background: rgba(74, 222, 128, 0.04);
+}
+
+.qw-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.qw-card-question {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.qw-card-dismiss {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+}
+
+.qw-card-dismiss:hover {
+  background: var(--bg-hover);
+  color: var(--red);
+}
+
+.qw-card-reply {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.qw-card-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  caret-color: var(--accent);
+  transition: border-color 0.15s;
+}
+
+.qw-card-input:focus {
+  border-color: var(--accent);
+}
+
+.qw-card-input::placeholder {
+  color: var(--text-muted);
+}
+
+.qw-card-send {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.qw-card-send:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+
+.qw-card-send:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.qw-card-answered {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.qw-answered-label {
+  color: var(--green);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.qw-answered-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+

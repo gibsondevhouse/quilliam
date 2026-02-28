@@ -1,0 +1,68 @@
+/* ============================================================
+   ACTIVITY BAR (far left icon strip)
+   ============================================================ */
+
+.activity-bar {
+  width: var(--activity-bar-width);
+  min-width: var(--activity-bar-width);
+  background: var(--bg-activity);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  user-select: none;
+}
+
+.activity-bar-top {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.activity-bar-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding-bottom: 4px;
+}
+
+.activity-bar-btn {
+  position: relative;
+  width: 100%;
+  height: 48px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.activity-bar-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  background: transparent;
+  border-radius: 0 2px 2px 0;
+  transition: background 0.15s;
+}
+
+.activity-bar-btn:hover {
+  color: var(--text-primary);
+}
+
+.activity-bar-btn.active {
+  color: var(--text-primary);
+}
+
+.activity-bar-btn.active::before {
+  background: var(--accent);
+}
+

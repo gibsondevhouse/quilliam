@@ -1,0 +1,97 @@
+/* ============================================================
+   RIGHT CHAT PANEL (Quilliam AI — Copilot-style)
+   ============================================================ */
+
+.ide-chat-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-width: 260px;
+  max-width: 720px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-secondary);
+  min-height: 0;
+  transition: width 0s; /* width controlled by inline style + drag */
+}
+
+/* Drag-to-resize handle — 6px strip on the left edge */
+.chat-panel-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 20;
+  border-left: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.chat-panel-resize-handle:hover,
+.chat-panel-resize-handle.dragging {
+  border-left-color: var(--accent);
+}
+
+/* Header */
+.chat-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 10px 0 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.chat-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+.chat-panel-title-accent {
+  color: var(--accent);
+}
+
+.chat-panel-actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.chat-panel-icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 15px;
+  transition: color 0.1s, background 0.1s;
+}
+
+.chat-panel-icon-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.chat-panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+

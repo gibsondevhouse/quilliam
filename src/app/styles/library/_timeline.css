@@ -1,0 +1,129 @@
+/*
+   MASTER TIMELINE PAGE
+   ============================================================ */
+
+.master-timeline-page .library-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.master-timeline-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.master-timeline-eras {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 0;
+}
+
+.master-timeline-era {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.master-timeline-era-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.master-timeline-era-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.master-timeline-add-event {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+
+.master-timeline-events {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.master-timeline-empty {
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.master-timeline-event {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.master-timeline-event:last-child {
+  border-bottom: none;
+}
+
+.master-timeline-event-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.master-timeline-event-type {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.master-timeline-event-name {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.master-timeline-event-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+}
+
+.master-timeline-event-id {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.master-timeline-event-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.master-timeline-scene-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+}
+
+.master-timeline-scene-link {
+  font-size: 11px;
+  color: var(--accent, #3b82f6);
+}
+
+/* ============================================================
