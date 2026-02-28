@@ -50,14 +50,14 @@ const SIDEBAR_GROUPS = [
       { label: "Overview", path: "universe" },
       { label: "Master Timeline", path: "master-timeline" },
       { label: "Cosmology", path: "cosmology" },
-      { label: "Magic Systems", path: "magic-systems" },
-      { label: "Rules", path: "rules" },
+      { label: "Magic/Tech Systems", path: "magic-systems" },
+      { label: "Rules of Reality", path: "rules" },
     ],
   },
   {
     label: "World Structures",
     items: [
-      { label: "Locations", path: "locations" },
+      { label: "Regions & Locations", path: "locations" },
       { label: "Cultures", path: "cultures" },
       { label: "Religions", path: "religions" },
       { label: "Languages", path: "languages" },
@@ -67,8 +67,8 @@ const SIDEBAR_GROUPS = [
   {
     label: "Power Structures",
     items: [
-      { label: "Organizations", path: "organizations" },
-      { label: "Factions", path: "factions" },
+      { label: "Kingdoms & Empires", path: "organizations" },
+      { label: "Factions & Orders", path: "factions" },
       { label: "Conflicts", path: "conflicts" },
     ],
   },
