@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLibraryContext } from "@/lib/context/LibraryContext";
 
@@ -16,6 +16,25 @@ const STATUS_COLORS = {
   archived: "#6b7280",
 } as const;
 
+interface ModuleStat {
+  count: number;
+  lastUpdated?: number;
+}
+
+const EMPTY_STAT: ModuleStat = { count: 0 };
+
+function formatLastUpdated(ts?: number): string {
+  if (!ts) return "No updates";
+  const deltaMs = Date.now() - ts;
+  const mins = Math.floor(deltaMs / 60_000);
+  if (mins < 1) return "Updated just now";
+  if (mins < 60) return `Updated ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Updated ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `Updated ${days}d ago`;
+}
+
 export function LibraryDashboard() {
   const router = useRouter();
   const lib = useLibraryContext();
@@ -23,12 +42,16 @@ export function LibraryDashboard() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(lib.libraryTitle);
 
-  const recentStories = lib.stories.slice(0, 5);
+  const [editingLogline, setEditingLogline] = useState(false);
+  const [loglineDraft, setLoglineDraft] = useState(lib.libraryDescription ?? "");
+
+  const [moduleStats, setModuleStats] = useState<Record<string, ModuleStat>>({});
+
   const recentThreads = lib.chats.slice(0, 5);
 
-  const handleNewStory = useCallback(() => {
+  const handleNewBook = useCallback(() => {
     const story = lib.addStory();
-    router.push(`/library/${lib.libraryId}/stories/${story.id}`);
+    router.push(`/library/${lib.libraryId}/books/${story.id}`);
   }, [lib, router]);
 
   const handleNewThread = useCallback(() => {
@@ -49,9 +72,102 @@ export function LibraryDashboard() {
     }
   }, [titleDraft, lib]);
 
+  const commitLogline = useCallback(() => {
+    setEditingLogline(false);
+    if (loglineDraft.trim()) {
+      lib.setLibraryDescription(loglineDraft.trim());
+    }
+  }, [loglineDraft, lib]);
+
+  useEffect(() => {
+    if (!lib.storeReady) return;
+    const store = lib.storeRef.current;
+    if (!store) return;
+
+    void (async () => {
+      const [
+        characters,
+        locations,
+        cultures,
+        religions,
+        languages,
+        economics,
+        organizations,
+        lineages,
+        items,
+        rules,
+        scenes,
+        timeline,
+        systems,
+        suggestions,
+        continuity,
+      ] = await Promise.all([
+        store.queryEntriesByType("character"),
+        store.queryEntriesByType("location"),
+        store.queryEntriesByType("culture"),
+        store.queryEntriesByType("religion"),
+        store.queryEntriesByType("language"),
+        store.queryEntriesByType("economy"),
+        store.queryEntriesByType("organization"),
+        store.queryEntriesByType("lineage"),
+        store.queryEntriesByType("item"),
+        store.queryEntriesByType("rule"),
+        store.queryEntriesByType("scene"),
+        store.queryEntriesByType("timeline_event"),
+        store.queryEntriesByType("system"),
+        store.listSuggestionsByUniverse(lib.libraryId),
+        store.listContinuityIssuesByUniverse(lib.libraryId),
+      ]);
+
+      const newest = (rows: Array<{ updatedAt: number }>): number | undefined =>
+        rows.length > 0 ? Math.max(...rows.map((row) => row.updatedAt)) : undefined;
+
+      setModuleStats({
+        books: { count: lib.stories.length, lastUpdated: newest(lib.stories.map((s) => ({ updatedAt: s.createdAt }))) },
+        characters: { count: characters.length, lastUpdated: newest(characters) },
+        locations: { count: locations.length, lastUpdated: newest(locations) },
+        cultures: { count: cultures.length, lastUpdated: newest(cultures) },
+        religions: { count: religions.length, lastUpdated: newest(religions) },
+        languages: { count: languages.length, lastUpdated: newest(languages) },
+        economics: { count: economics.length, lastUpdated: newest(economics) },
+        organizations: { count: organizations.length, lastUpdated: newest(organizations) },
+        lineages: { count: lineages.length, lastUpdated: newest(lineages) },
+        items: { count: items.length, lastUpdated: newest(items) },
+        rules: { count: rules.length, lastUpdated: newest(rules) },
+        systems: { count: systems.length, lastUpdated: newest(systems) },
+        scenes: { count: scenes.length, lastUpdated: newest(scenes) },
+        timeline: { count: timeline.length, lastUpdated: newest(timeline) },
+        suggestions: { count: suggestions.length, lastUpdated: newest(suggestions) },
+        continuity: { count: continuity.length, lastUpdated: newest(continuity) },
+        maps: EMPTY_STAT,
+        media: EMPTY_STAT,
+      });
+    })();
+  }, [lib.libraryId, lib.stories, lib.storeReady, lib.storeRef]);
+
+  const moduleCards = useMemo(() => [
+    { key: "books", label: "Books", path: "books", desc: "Book-level planning and chapter flow." },
+    { key: "scenes", label: "Scenes", path: "scenes", desc: "Scene entities and scene-linked continuity." },
+    { key: "timeline", label: "Master Timeline", path: "master-timeline", desc: "Universe chronology and events." },
+    { key: "characters", label: "Characters", path: "characters", desc: "People and POV entities." },
+    { key: "locations", label: "Locations", path: "locations", desc: "Places and setting anchors." },
+    { key: "cultures", label: "Cultures", path: "cultures", desc: "Culture canon and versioning." },
+    { key: "religions", label: "Religions", path: "religions", desc: "Beliefs, sects, and doctrine." },
+    { key: "languages", label: "Languages", path: "languages", desc: "Language families and usage." },
+    { key: "economics", label: "Economics", path: "economics", desc: "Trade, markets, and resource systems." },
+    { key: "organizations", label: "Organizations", path: "organizations", desc: "Institutions, factions, and groups." },
+    { key: "lineages", label: "Lineages", path: "lineages", desc: "Family lines and ancestry." },
+    { key: "items", label: "Items", path: "items", desc: "Artifacts, tools, and ownership." },
+    { key: "rules", label: "Rules", path: "rules", desc: "Canon constraints and governing rules." },
+    { key: "systems", label: "Systems", path: "rules", desc: "Magic/tech systems tracked with rules." },
+    { key: "maps", label: "Maps", path: "maps", desc: "Spatial layer and pinning." },
+    { key: "media", label: "Media", path: "media", desc: "Reference media and linked assets." },
+    { key: "suggestions", label: "Suggestions", path: "suggestions", desc: "Review queue for EntryPatch proposals." },
+    { key: "continuity", label: "Continuity Issues", path: "continuity-issues", desc: "Deterministic continuity checks." },
+  ], []);
+
   return (
     <div className="library-dashboard">
-      {/* ---- Header ---- */}
       <div className="library-dashboard-header">
         <div className="library-dashboard-title-row">
           {editingTitle ? (
@@ -61,12 +177,18 @@ export function LibraryDashboard() {
               autoFocus
               onChange={(e) => setTitleDraft(e.target.value)}
               onBlur={commitTitle}
-              onKeyDown={(e) => { if (e.key === "Enter") commitTitle(); if (e.key === "Escape") setEditingTitle(false); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitTitle();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
             />
           ) : (
             <h1
               className="library-dashboard-title"
-              onClick={() => { setTitleDraft(lib.libraryTitle); setEditingTitle(true); }}
+              onClick={() => {
+                setTitleDraft(lib.libraryTitle);
+                setEditingTitle(true);
+              }}
               title="Click to edit"
             >
               {lib.libraryTitle}
@@ -86,14 +208,36 @@ export function LibraryDashboard() {
           </span>
         </div>
 
-        {lib.libraryDescription ? (
-          <p className="library-dashboard-logline">{lib.libraryDescription}</p>
+        {editingLogline ? (
+          <input
+            className="library-dashboard-logline-input"
+            value={loglineDraft}
+            autoFocus
+            placeholder="Enter a logline or description…"
+            onChange={(e) => setLoglineDraft(e.target.value)}
+            onBlur={commitLogline}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitLogline();
+              if (e.key === "Escape") setEditingLogline(false);
+            }}
+          />
+        ) : lib.libraryDescription ? (
+          <p
+            className="library-dashboard-logline"
+            onClick={() => {
+              setLoglineDraft(lib.libraryDescription ?? "");
+              setEditingLogline(true);
+            }}
+            title="Click to edit"
+          >
+            {lib.libraryDescription}
+          </p>
         ) : (
           <p
             className="library-dashboard-logline placeholder"
             onClick={() => {
-              const val = prompt("Enter a logline or description for this library:");
-              if (val) lib.setLibraryDescription(val);
+              setLoglineDraft("");
+              setEditingLogline(true);
             }}
           >
             Add a logline or description…
@@ -101,8 +245,8 @@ export function LibraryDashboard() {
         )}
 
         <div className="library-dashboard-quick-actions">
-          <button className="library-dashboard-action" onClick={handleNewStory}>
-            + New Story
+          <button className="library-dashboard-action" onClick={handleNewBook}>
+            + New Book
           </button>
           <button className="library-dashboard-action" onClick={handleNewThread}>
             + New Thread
@@ -113,39 +257,34 @@ export function LibraryDashboard() {
         </div>
       </div>
 
-      {/* ---- Cards ---- */}
       <div className="library-dashboard-cards">
-        {/* Stories */}
-        <div className="library-dashboard-card">
-          <div className="library-dashboard-card-header">
-            <h3>Stories <span className="library-dashboard-count">{lib.stories.length}</span></h3>
-            <button onClick={() => router.push(`/library/${lib.libraryId}/stories`)}>View all →</button>
-          </div>
-          {recentStories.length === 0 ? (
-            <p className="library-dashboard-empty">No stories yet. <button onClick={handleNewStory}>Create one</button></p>
-          ) : (
-            <ul className="library-dashboard-list">
-              {recentStories.map((s) => (
-                <li key={s.id}>
-                  <button onClick={() => router.push(`/library/${lib.libraryId}/stories/${s.id}`)}>
-                    <span className="item-icon">📚</span>
-                    <span className="item-title">{s.title}</span>
-                    <span className="item-category">{s.status}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {moduleCards.map((card) => {
+          const stat = moduleStats[card.key] ?? EMPTY_STAT;
+          return (
+            <div key={card.key} className="library-dashboard-card">
+              <div className="library-dashboard-card-header">
+                <h3>
+                  {card.label} <span className="library-dashboard-count">{stat.count}</span>
+                </h3>
+                <button onClick={() => router.push(`/library/${lib.libraryId}/${card.path}`)}>
+                  Open →
+                </button>
+              </div>
+              <p className="library-dashboard-empty" style={{ marginBottom: 8 }}>
+                {card.desc}
+              </p>
+              <p className="item-preview">{formatLastUpdated(stat.lastUpdated)}</p>
+            </div>
+          );
+        })}
 
-        {/* Recent Threads */}
         <div className="library-dashboard-card">
           <div className="library-dashboard-card-header">
-            <h3>Threads</h3>
-            <button onClick={() => router.push(`/library/${lib.libraryId}/threads`)}>View all →</button>
+            <h3>Threads <span className="library-dashboard-count">{lib.chats.length}</span></h3>
+            <button onClick={() => router.push(`/library/${lib.libraryId}/threads`)}>Open →</button>
           </div>
           {recentThreads.length === 0 ? (
-            <p className="library-dashboard-empty">No threads yet. <button onClick={handleNewThread}>Start one</button></p>
+            <p className="library-dashboard-empty">No threads yet. Use + New Thread to start one.</p>
           ) : (
             <ul className="library-dashboard-list">
               {recentThreads.map((c) => (
@@ -159,87 +298,6 @@ export function LibraryDashboard() {
               ))}
             </ul>
           )}
-        </div>
-
-        {/* Characters */}
-        <div className="library-dashboard-card">
-          <div className="library-dashboard-card-header">
-            <h3>Characters <span className="library-dashboard-count">{lib.characters.length}</span></h3>
-            <button onClick={() => router.push(`/library/${lib.libraryId}/characters`)}>View all →</button>
-          </div>
-          {lib.characters.length === 0 ? (
-            <p className="library-dashboard-empty">No characters yet. <button onClick={handleAddCharacter}>Add one</button></p>
-          ) : (
-            <div className="library-dashboard-roster">
-              {lib.characters.slice(0, 6).map((c) => (
-                <div
-                  key={c.id}
-                  className="library-dashboard-avatar"
-                  title={c.name || "Unnamed"}
-                  onClick={() => router.push(`/library/${lib.libraryId}/characters`)}
-                >
-                  {(c.name || "?")[0].toUpperCase()}
-                </div>
-              ))}
-              {lib.characters.length > 6 && (
-                <div className="library-dashboard-avatar overflow">+{lib.characters.length - 6}</div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Locations */}
-        <div className="library-dashboard-card">
-          <div className="library-dashboard-card-header">
-            <h3>Locations <span className="library-dashboard-count">{lib.locations.length}</span></h3>
-            <button onClick={() => router.push(`/library/${lib.libraryId}/locations`)}>View all →</button>
-          </div>
-          {lib.locations.length === 0 ? (
-            <p className="library-dashboard-empty">No locations yet.</p>
-          ) : (
-            <ul className="library-dashboard-list">
-              {lib.locations.slice(0, 4).map((l) => (
-                <li key={l.id}>
-                  <button onClick={() => router.push(`/library/${lib.libraryId}/locations`)}>
-                    <span className="item-icon">📍</span>
-                    <span className="item-title">{l.name || "Unnamed"}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* World */}
-        <div className="library-dashboard-card">
-          <div className="library-dashboard-card-header">
-            <h3>World <span className="library-dashboard-count">{lib.worldEntries.length}</span></h3>
-            <button onClick={() => router.push(`/library/${lib.libraryId}/world`)}>View all →</button>
-          </div>
-          {lib.worldEntries.length === 0 ? (
-            <p className="library-dashboard-empty">No world entries yet.</p>
-          ) : (
-            <ul className="library-dashboard-list">
-              {lib.worldEntries.slice(0, 4).map((w) => (
-                <li key={w.id}>
-                  <button onClick={() => router.push(`/library/${lib.libraryId}/world`)}>
-                    <span className="item-icon">🌍</span>
-                    <span className="item-title">{w.title || "Untitled"}</span>
-                    {w.category && <span className="item-category">{w.category}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Systems — placeholder */}
-        <div className="library-dashboard-card placeholder-card">
-          <div className="library-dashboard-card-header">
-            <h3>Systems</h3>
-            <button onClick={() => router.push(`/library/${lib.libraryId}/systems`)}>View →</button>
-          </div>
-          <p className="library-dashboard-empty">Magic, tech &amp; economy systems — coming soon.</p>
         </div>
       </div>
     </div>

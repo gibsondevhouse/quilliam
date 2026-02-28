@@ -6,12 +6,26 @@
 import type { RAGNode } from "@/lib/rag/hierarchy";
 import type {
   AiLibrarySettings,
+  Calendar,
   CanonicalDoc,
   CanonicalPatch,
   CanonicalType,
+  ContinuityIssue,
+  CultureVersion,
+  Entry,
+  EntryPatch,
+  EntryType,
+  Era,
+  Event,
+  Mention,
+  Revision,
   Relationship,
   ResearchArtifact,
   ResearchRunRecord,
+  Suggestion,
+  TimeAnchor,
+  Timeline,
+  Universe,
   UsageMeter,
 } from "@/lib/types";
 
@@ -142,6 +156,21 @@ export type PersistedRelationship = Relationship;
 /** Canonical patch stored directly as-is — shape matches CanonicalPatch. */
 export type PersistedCanonicalPatch = CanonicalPatch;
 
+/** Plan-002 universe-level records */
+export type PersistedUniverse = Universe;
+export type PersistedEntry = Entry;
+export type PersistedEntryPatch = EntryPatch;
+export type PersistedTimeline = Timeline;
+export type PersistedEra = Era;
+export type PersistedEvent = Event;
+export type PersistedCalendar = Calendar;
+export type PersistedTimeAnchor = TimeAnchor;
+export type PersistedCultureVersion = CultureVersion;
+export type PersistedContinuityIssue = ContinuityIssue;
+export type PersistedSuggestion = Suggestion;
+export type PersistedRevision = Revision;
+export type PersistedMention = Mention;
+
 /**
  * Denormalised lookup entry: one row per (docId, relationshipId) pair.
  * Stored in the `relationIndexByDoc` object store.
@@ -246,6 +275,44 @@ export interface RAGStore {
   listResearchArtifacts(runId: string): Promise<PersistedResearchArtifact[]>;
   putUsageLedger(entry: PersistedUsageLedger): Promise<void>;
   getUsageLedger(runId: string): Promise<PersistedUsageLedger | null>;
+  // Plan-002 universe engine stores
+  putUniverse(universe: PersistedUniverse): Promise<void>;
+  getUniverse(id: string): Promise<PersistedUniverse | null>;
+  listUniverses(): Promise<PersistedUniverse[]>;
+  addEntry(entry: PersistedEntry): Promise<void>;
+  updateEntry(id: string, patch: Partial<PersistedEntry>): Promise<void>;
+  getEntryById(id: string): Promise<PersistedEntry | undefined>;
+  listEntriesByUniverse(universeId: string): Promise<PersistedEntry[]>;
+  queryEntriesByType(type: EntryType): Promise<PersistedEntry[]>;
+  deleteEntry(id: string): Promise<void>;
+  addEntryRelation(rel: PersistedRelationship): Promise<void>;
+  removeEntryRelation(id: string): Promise<void>;
+  getEntryRelationsForEntry(entryId: string): Promise<PersistedRelationship[]>;
+  putTimeline(entry: PersistedTimeline): Promise<void>;
+  listTimelinesByUniverse(universeId: string): Promise<PersistedTimeline[]>;
+  putEra(entry: PersistedEra): Promise<void>;
+  listErasByTimeline(timelineId: string): Promise<PersistedEra[]>;
+  putEvent(entry: PersistedEvent): Promise<void>;
+  listEventsByUniverse(universeId: string): Promise<PersistedEvent[]>;
+  putCalendar(entry: PersistedCalendar): Promise<void>;
+  listCalendarsByUniverse(universeId: string): Promise<PersistedCalendar[]>;
+  putTimeAnchor(entry: PersistedTimeAnchor): Promise<void>;
+  getTimeAnchor(id: string): Promise<PersistedTimeAnchor | null>;
+  putMention(entry: PersistedMention): Promise<void>;
+  listMentionsByScene(sceneId: string): Promise<PersistedMention[]>;
+  addCultureVersion(entry: PersistedCultureVersion): Promise<void>;
+  listCultureVersionsByCulture(cultureEntryId: string): Promise<PersistedCultureVersion[]>;
+  addContinuityIssue(entry: PersistedContinuityIssue): Promise<void>;
+  listContinuityIssuesByUniverse(universeId: string): Promise<PersistedContinuityIssue[]>;
+  updateContinuityIssueStatus(id: string, status: PersistedContinuityIssue["status"], resolution?: string): Promise<void>;
+  addSuggestion(entry: PersistedSuggestion): Promise<void>;
+  listSuggestionsByUniverse(universeId: string): Promise<PersistedSuggestion[]>;
+  updateSuggestionStatus(id: string, status: PersistedSuggestion["status"]): Promise<void>;
+  addRevision(entry: PersistedRevision): Promise<void>;
+  listRevisionsForTarget(targetType: string, targetId: string): Promise<PersistedRevision[]>;
+  addEntryPatch(patch: PersistedEntryPatch): Promise<void>;
+  getPendingEntryPatches(): Promise<PersistedEntryPatch[]>;
+  getEntryPatchesForEntry(entryId: string): Promise<PersistedEntryPatch[]>;
   // Canonical documents (Plan 001 — Phase 3)
   addDoc(doc: PersistedCanonicalDoc): Promise<void>;
   updateDoc(id: string, patch: Partial<PersistedCanonicalDoc>): Promise<void>;

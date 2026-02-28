@@ -1,15 +1,5 @@
 "use client";
 
-/**
- * BuildFeed — patch review queue (Plan 001 — Phase 5).
- *
- * Shows all pending `CanonicalPatch` records grouped by source (chat, research, manual).
- * Users can accept or reject individual operations or entire patches.
- *
- * Accepted patches are applied to canonicalDocs and relationships stores.
- * Rejected patches are archived (status "rejected") — never deleted.
- */
-
 import {
   useCallback,
   useEffect,
@@ -18,19 +8,11 @@ import {
   useState,
 } from "react";
 import { useRAGContext } from "@/lib/context/RAGContext";
-import type {
-  CanonicalDoc,
-  CanonicalPatch,
-  PatchOperation,
-  Relationship,
-} from "@/lib/types";
+import { applyEntryPatch } from "@/lib/domain/patch";
+import type { EntryPatch, EntryPatchOperation } from "@/lib/types";
 
-/* ----------------------------------------------------------------
-   Helpers
-   ---------------------------------------------------------------- */
-
-function groupBySource(patches: CanonicalPatch[]): Map<string, CanonicalPatch[]> {
-  const groups = new Map<string, CanonicalPatch[]>();
+function groupBySource(patches: EntryPatch[]): Map<string, EntryPatch[]> {
+  const groups = new Map<string, EntryPatch[]>();
   for (const patch of patches) {
     const key = `${patch.sourceRef.kind}:${patch.sourceRef.id}`;
     const list = groups.get(key) ?? [];
@@ -40,114 +22,65 @@ function groupBySource(patches: CanonicalPatch[]): Map<string, CanonicalPatch[]>
   return groups;
 }
 
-function sourceLabel(patch: CanonicalPatch): string {
+function sourceLabel(patch: EntryPatch): string {
   switch (patch.sourceRef.kind) {
-    case "chat_message":      return `Chat — ${patch.sourceRef.id.slice(0, 8)}`;
-    case "research_artifact": return `Research run — ${patch.sourceRef.id.slice(0, 8)}`;
-    case "scene_node":        return `Scene — ${patch.sourceRef.id.slice(0, 8)}`;
-    case "manual":            return "Manual";
-    default:                  return patch.sourceRef.id.slice(0, 12);
+    case "chat_message":
+      return `Chat — ${patch.sourceRef.id.slice(0, 8)}`;
+    case "research_artifact":
+      return `Research run — ${patch.sourceRef.id.slice(0, 8)}`;
+    case "scene_node":
+      return `Scene — ${patch.sourceRef.id.slice(0, 8)}`;
+    case "manual":
+      return "Manual";
+    default:
+      return patch.sourceRef.id.slice(0, 12);
   }
 }
 
-function opSummary(op: PatchOperation): string {
+function opSummary(op: EntryPatchOperation): string {
   switch (op.op) {
+    case "create-entry":
+      return `Create ${op.entryType}: "${op.entry.name ?? "?"}"`;
+    case "update-entry":
+      return `Update ${op.entryId} — ${op.field}`;
+    case "add-relation":
+      return `Link: ${op.relation.from} —[${op.relation.type}]→ ${op.relation.to}`;
+    case "remove-relation":
+      return `Remove relation: ${op.relationId}`;
+    case "create-issue":
+      return `Continuity issue: ${op.issue.checkType ?? "manual"}`;
+    case "resolve-issue":
+      return `Resolve issue: ${op.issueId}`;
+    case "create-version":
+      return `Create culture version for ${op.version.cultureEntryId ?? "unknown"}`;
+    case "update-scene-links":
+      return `Update scene links for ${op.sceneId}`;
+    case "mark-retcon":
+      return `Mark retcon on ${op.entryId}`;
     case "create":
-      return `Create ${op.docType}: "${(op.fields.name as string) ?? "?"}"`;
+      return `Create ${op.docType}: "${String(op.fields.name ?? "?")}"`;
     case "update":
-      return `Update ${op.docId} — ${op.field}: "${op.oldValue}" → "${op.newValue}"`;
+      return `Update ${op.docId} — ${op.field}`;
     case "add-relationship":
       return `Link: ${op.relationship.from} —[${op.relationship.type}]→ ${op.relationship.to}`;
     case "remove-relationship":
       return `Remove relationship: ${op.relationshipId}`;
     case "mark-contradiction":
-      return `Contradiction on ${op.docId}: ${op.note}`;
+      return `Contradiction on ${op.docId}`;
     case "delete":
-      return `Delete doc: ${op.docId}`;
+      return `Delete entry: ${op.docId}`;
   }
 }
 
 function confidenceBadgeProps(score: number): { label: string; cls: string } {
   const pct = Math.round(score * 100);
   if (score >= 0.85) return { label: `${pct}%`, cls: "build-feed-confidence--high" };
-  if (score >= 0.60) return { label: `${pct}%`, cls: "build-feed-confidence--medium" };
+  if (score >= 0.6) return { label: `${pct}%`, cls: "build-feed-confidence--medium" };
   return { label: `${pct}%`, cls: "build-feed-confidence--low" };
 }
 
-/* ----------------------------------------------------------------
-   Patch application logic
-   ---------------------------------------------------------------- */
-
-async function applyPatch(
-  patch: CanonicalPatch,
-  store: {
-    addDoc(d: CanonicalDoc): Promise<void>;
-    updateDoc(id: string, p: Partial<CanonicalDoc>): Promise<void>;
-    deleteDoc(id: string): Promise<void>;
-    addRelationship(r: Relationship): Promise<void>;
-    removeRelationship(id: string): Promise<void>;
-    getDocById(id: string): Promise<CanonicalDoc | undefined>;
-    updatePatchStatus(id: string, s: CanonicalPatch["status"]): Promise<void>;
-  },
-): Promise<void> {
-  for (const op of patch.operations) {
-    switch (op.op) {
-      case "create": {
-        const doc: CanonicalDoc = {
-          id:            (op.fields.id as string) ?? `doc_${Date.now()}`,
-          type:          op.docType,
-          name:          (op.fields.name as string) ?? "",
-          summary:       (op.fields.summary as string) ?? "",
-          details:       (op.fields.details as Record<string, unknown>) ?? {},
-          status:        "draft",
-          sources:       (op.fields.sources as CanonicalDoc["sources"]) ?? [],
-          relationships: [],
-          lastVerified:  0,
-          createdAt:     Date.now(),
-          updatedAt:     Date.now(),
-        };
-        await store.addDoc(doc);
-        break;
-      }
-      case "update": {
-        await store.updateDoc(op.docId, { [op.field]: op.newValue } as Partial<CanonicalDoc>);
-        break;
-      }
-      case "add-relationship": {
-        const relId = `rel_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-        await store.addRelationship({ ...op.relationship, id: relId, createdAt: Date.now() } as Relationship);
-        break;
-      }
-      case "remove-relationship": {
-        await store.removeRelationship(op.relationshipId);
-        break;
-      }
-      case "mark-contradiction": {
-        const existing = await store.getDocById(op.docId);
-        if (existing) {
-          const contradictions = [
-            ...((existing.details.contradictions as unknown[]) ?? []),
-            { note: op.note, at: Date.now() },
-          ];
-          await store.updateDoc(op.docId, { details: { ...existing.details, contradictions } });
-        }
-        break;
-      }
-      case "delete": {
-        await store.deleteDoc(op.docId);
-        break;
-      }
-    }
-  }
-  await store.updatePatchStatus(patch.id, "accepted");
-}
-
-/* ----------------------------------------------------------------
-   PatchCard — single patch in the queue
-   ---------------------------------------------------------------- */
-
 interface PatchCardProps {
-  patch: CanonicalPatch;
+  patch: EntryPatch;
   onAccept: (id: string) => void;
   onReject: (id: string) => void;
   resolved?: boolean;
@@ -212,30 +145,26 @@ function PatchCard({ patch, onAccept, onReject, resolved, resolvedAs }: PatchCar
   );
 }
 
-/* ----------------------------------------------------------------
-   Main component
-   ---------------------------------------------------------------- */
-
-type ResolvedPatch = CanonicalPatch & { resolvedAs: "accepted" | "rejected" };
+type ResolvedPatch = EntryPatch & { resolvedAs: "accepted" | "rejected" };
 
 export function BuildFeed() {
   const { storeRef, storeReady } = useRAGContext();
-  const [patches, setPatches] = useState<CanonicalPatch[]>([]);
+  const [patches, setPatches] = useState<EntryPatch[]>([]);
   const [resolvedPatches, setResolvedPatches] = useState<ResolvedPatch[]>([]);
-  // Start with loading=true — avoids synchronous setState inside the effect.
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
 
-  /* Load pending patches */
   useEffect(() => {
     if (!storeReady || loadedRef.current) return;
     const store = storeRef.current;
     if (!store) return;
     loadedRef.current = true;
-    void store.getPendingPatches().then((result) => {
-      setPatches(result.sort((a, b) => b.createdAt - a.createdAt));
+
+    void (async () => {
+      const pending = await store.getPendingPatches();
+      setPatches(pending.sort((a, b) => b.createdAt - a.createdAt));
       setLoading(false);
-    });
+    })();
   }, [storeReady, storeRef]);
 
   const groups = useMemo(() => groupBySource(patches), [patches]);
@@ -245,9 +174,22 @@ export function BuildFeed() {
     if (!store) return;
     const patch = patches.find((p) => p.id === patchId);
     if (!patch) return;
-    await applyPatch(patch, store);
+
+    await applyEntryPatch(patch, {
+      addEntry: store.addEntry,
+      updateEntry: store.updateEntry,
+      deleteEntry: store.deleteEntry,
+      addEntryRelation: store.addEntryRelation,
+      removeEntryRelation: store.removeEntryRelation,
+      addContinuityIssue: store.addContinuityIssue,
+      updateContinuityIssueStatus: store.updateContinuityIssueStatus,
+      addCultureVersion: store.addCultureVersion,
+      updatePatchStatus: store.updatePatchStatus,
+      getEntryById: store.getEntryById,
+    });
+
     setPatches((prev) => prev.filter((p) => p.id !== patchId));
-    setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "accepted" as const }]);
+    setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "accepted" }]);
   }, [patches, storeRef]);
 
   const handleReject = useCallback(async (patchId: string) => {
@@ -255,9 +197,10 @@ export function BuildFeed() {
     if (!store) return;
     const patch = patches.find((p) => p.id === patchId);
     if (!patch) return;
+
     await store.updatePatchStatus(patchId, "rejected");
     setPatches((prev) => prev.filter((p) => p.id !== patchId));
-    setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "rejected" as const }]);
+    setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "rejected" }]);
   }, [patches, storeRef]);
 
   const handleAcceptAll = useCallback(async (sourceKey: string) => {
@@ -265,14 +208,24 @@ export function BuildFeed() {
     if (!store) return;
     const group = groups.get(sourceKey) ?? [];
     const newlyResolved: ResolvedPatch[] = [];
+
     for (const patch of group) {
-      await applyPatch(patch, store);
-      newlyResolved.push({ ...patch, resolvedAs: "accepted" as const });
+      await applyEntryPatch(patch, {
+        addEntry: store.addEntry,
+        updateEntry: store.updateEntry,
+        deleteEntry: store.deleteEntry,
+        addEntryRelation: store.addEntryRelation,
+        removeEntryRelation: store.removeEntryRelation,
+        addContinuityIssue: store.addContinuityIssue,
+        updateContinuityIssueStatus: store.updateContinuityIssueStatus,
+        addCultureVersion: store.addCultureVersion,
+        updatePatchStatus: store.updatePatchStatus,
+        getEntryById: store.getEntryById,
+      });
+      newlyResolved.push({ ...patch, resolvedAs: "accepted" });
     }
-    setPatches((prev) => prev.filter((p) => {
-      const key = `${p.sourceRef.kind}:${p.sourceRef.id}`;
-      return key !== sourceKey;
-    }));
+
+    setPatches((prev) => prev.filter((p) => `${p.sourceRef.kind}:${p.sourceRef.id}` !== sourceKey));
     setResolvedPatches((prev) => [...prev, ...newlyResolved]);
   }, [groups, storeRef]);
 
@@ -281,165 +234,85 @@ export function BuildFeed() {
     if (!store) return;
     const group = groups.get(sourceKey) ?? [];
     const newlyResolved: ResolvedPatch[] = [];
+
     for (const patch of group) {
       await store.updatePatchStatus(patch.id, "rejected");
-      newlyResolved.push({ ...patch, resolvedAs: "rejected" as const });
+      newlyResolved.push({ ...patch, resolvedAs: "rejected" });
     }
-    setPatches((prev) => prev.filter((p) => {
-      const key = `${p.sourceRef.kind}:${p.sourceRef.id}`;
-      return key !== sourceKey;
-    }));
+
+    setPatches((prev) => prev.filter((p) => `${p.sourceRef.kind}:${p.sourceRef.id}` !== sourceKey));
     setResolvedPatches((prev) => [...prev, ...newlyResolved]);
   }, [groups, storeRef]);
 
-  const handleAcceptHighConfidence = useCallback(async () => {
-    const store = storeRef.current;
-    if (!store) return;
-    const highConf = patches.filter((p) => p.confidence >= 0.85);
-    if (highConf.length === 0) return;
-    const newlyResolved: ResolvedPatch[] = [];
-    for (const patch of highConf) {
-      await applyPatch(patch, store);
-      newlyResolved.push({ ...patch, resolvedAs: "accepted" as const });
-    }
-    const highIds = new Set(highConf.map((p) => p.id));
-    setPatches((prev) => prev.filter((p) => !highIds.has(p.id)));
-    setResolvedPatches((prev) => [...prev, ...newlyResolved]);
-  }, [patches, storeRef]);
-
   if (loading) {
-    return <div className="build-feed-empty"><p>Loading Build Feed…</p></div>;
-  }
-
-  if (patches.length === 0) {
     return (
       <div className="build-feed">
-        <div className="build-feed-header">
-          <h2>Build Feed</h2>
-          {resolvedPatches.length > 0 && (
-            <span className="build-feed-badge">{resolvedPatches.length} resolved</span>
-          )}
-        </div>
-        {resolvedPatches.length === 0 && (
-          <div className="build-feed-empty">
-            <p>No pending patches. Write in chat or run research to propose canonical entities.</p>
-          </div>
-        )}
-        {resolvedPatches.length > 0 && (
-          <div className="build-feed-resolved">
-            <div className="build-feed-resolved-header">
-              <span>Resolved this session ({resolvedPatches.length})</span>
-              <button
-                className="build-feed-btn build-feed-btn--clear"
-                onClick={() => setResolvedPatches([])}
-              >
-                Clear
-              </button>
-            </div>
-            {resolvedPatches.map((patch) => (
-              <PatchCard
-                key={patch.id}
-                patch={patch}
-                onAccept={() => undefined}
-                onReject={() => undefined}
-                resolved
-                resolvedAs={patch.resolvedAs}
-              />
-            ))}
-          </div>
-        )}
+        <div className="build-feed-header"><h2>Suggestions</h2></div>
+        <div className="build-feed-empty">Loading suggestions…</div>
       </div>
     );
   }
 
-  const highConfCount = patches.filter((p) => p.confidence >= 0.85).length;
-
   return (
     <div className="build-feed">
       <div className="build-feed-header">
-        <h2>Build Feed</h2>
-        <span className="build-feed-badge">{patches.length} pending</span>
+        <h2>Suggestions</h2>
+        <span className="build-feed-count">{patches.length} pending</span>
       </div>
 
-      {/* Global batch controls */}
-      {patches.length > 0 && (
-        <div className="build-feed-batch-controls">
-          <button
-            className="build-feed-btn build-feed-btn--accept build-feed-btn--batch"
-            onClick={() => void handleAcceptHighConfidence()}
-            disabled={highConfCount === 0}
-            title="Accept all patches with confidence ≥ 85%"
-          >
-            Accept high-confidence{highConfCount > 0 ? ` (${highConfCount})` : ""}
-          </button>
+      {patches.length === 0 && resolvedPatches.length === 0 ? (
+        <div className="build-feed-empty">No pending suggestions.</div>
+      ) : (
+        <>
+          {Array.from(groups.entries()).map(([sourceKey, group]) => (
+            <section key={sourceKey} className="build-feed-group">
+              <div className="build-feed-group-header">
+                <div className="build-feed-group-title">{sourceLabel(group[0])}</div>
+                <div className="build-feed-group-actions">
+                  <button className="build-feed-btn" onClick={() => void handleAcceptAll(sourceKey)}>
+                    Accept All
+                  </button>
+                  <button className="build-feed-btn" onClick={() => void handleRejectAll(sourceKey)}>
+                    Reject All
+                  </button>
+                </div>
+              </div>
+
+              <div className="build-feed-group-list">
+                {group.map((patch) => (
+                  <PatchCard
+                    key={patch.id}
+                    patch={patch}
+                    onAccept={(id) => void handleAccept(id)}
+                    onReject={(id) => void handleReject(id)}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+
           {resolvedPatches.length > 0 && (
-            <button
-              className="build-feed-btn build-feed-btn--clear"
-              onClick={() => setResolvedPatches([])}
-              title="Hide resolved patches from this session"
-            >
-              Clear resolved ({resolvedPatches.length})
-            </button>
+            <section className="build-feed-resolved">
+              <h3>Resolved</h3>
+              <div className="build-feed-group-list">
+                {resolvedPatches
+                  .slice()
+                  .sort((a, b) => b.createdAt - a.createdAt)
+                  .slice(0, 20)
+                  .map((patch) => (
+                    <PatchCard
+                      key={`resolved-${patch.id}`}
+                      patch={patch}
+                      resolved
+                      resolvedAs={patch.resolvedAs}
+                      onAccept={() => undefined}
+                      onReject={() => undefined}
+                    />
+                  ))}
+              </div>
+            </section>
           )}
-        </div>
-      )}
-
-      {Array.from(groups.entries()).map(([key, group]) => (
-        <div key={key} className="build-feed-group">
-          <div className="build-feed-group-header">
-            <span className="build-feed-group-label">
-              {group[0] ? sourceLabel(group[0]) : key}
-              {" "}— {group.length} patch(es)
-            </span>
-            <div className="build-feed-group-actions">
-              <button
-                className="build-feed-btn build-feed-btn--accept"
-                onClick={() => void handleAcceptAll(key)}
-              >
-                Accept all
-              </button>
-              <button
-                className="build-feed-btn build-feed-btn--reject"
-                onClick={() => void handleRejectAll(key)}
-              >
-                Reject all from source
-              </button>
-            </div>
-          </div>
-          {group.map((patch) => (
-            <PatchCard
-              key={patch.id}
-              patch={patch}
-              onAccept={(id) => void handleAccept(id)}
-              onReject={(id) => void handleReject(id)}
-            />
-          ))}
-        </div>
-      ))}
-
-      {/* Recently resolved (this session) */}
-      {resolvedPatches.length > 0 && (
-        <div className="build-feed-resolved">
-          <div className="build-feed-resolved-header">
-            <span>Resolved this session ({resolvedPatches.length})</span>
-            <button
-              className="build-feed-btn build-feed-btn--clear"
-              onClick={() => setResolvedPatches([])}
-            >
-              Clear
-            </button>
-          </div>
-          {resolvedPatches.map((patch) => (
-            <PatchCard
-              key={patch.id}
-              patch={patch}
-              onAccept={() => undefined}
-              onReject={() => undefined}
-              resolved
-              resolvedAs={patch.resolvedAs}
-            />
-          ))}
-        </div>
+        </>
       )}
     </div>
   );

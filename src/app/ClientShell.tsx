@@ -271,7 +271,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     if (!node) return;
     if (node.type === "library") {
       localStorage.setItem("quilliam_last_library", id);
-      router.push(`/library/${id}/dashboard`);
+      router.push(`/library/${id}/universe`);
       return;
     }
 
@@ -280,14 +280,14 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     localStorage.setItem("quilliam_last_library", libId);
 
     if (node.type === "book") {
-      router.push(`/library/${libId}/stories/${id}`);
+      router.push(`/library/${libId}/books/${id}`);
       return;
     }
 
     if (node.type === "section") {
       const book = findAncestorOfType(ragNodesRef.current, id, "book");
       if (book) {
-        router.push(`/library/${libId}/stories/${book.id}/chapters`);
+        router.push(`/library/${libId}/books/${book.id}/chapters`);
       } else {
         router.push(`/library/${libId}/chapters`);
       }
@@ -304,7 +304,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     const newId = addNode(parentId, childType);
     if (childType === "library") {
       localStorage.setItem("quilliam_last_library", newId);
-      router.push(`/library/${newId}/dashboard`);
+      router.push(`/library/${newId}/universe`);
     } else {
       // For other edit types, navigate into the library
       const libId = parentId
@@ -313,14 +313,14 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
       if (!libId) return;
 
       if (childType === "book") {
-        router.push(`/library/${libId}/stories/${newId}`);
+        router.push(`/library/${libId}/books/${newId}`);
         return;
       }
 
       if (childType === "section") {
         const book = parentId ? findAncestorOfType(ragNodesRef.current, parentId, "book") : null;
         if (book) {
-          router.push(`/library/${libId}/stories/${book.id}/chapters`);
+          router.push(`/library/${libId}/books/${book.id}/chapters`);
         } else {
           router.push(`/library/${libId}/chapters`);
         }

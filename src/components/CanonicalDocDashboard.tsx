@@ -1,12 +1,5 @@
 "use client";
 
-/**
- * CanonicalDocDashboard — reusable list + detail panel for any CanonicalType.
- *
- * Used by each canonical route page (Characters, Locations, Factions, etc.).
- * Reads and writes directly to the RAGStore canonicalDocs / patches stores.
- */
-
 import {
   useCallback,
   useEffect,
@@ -14,51 +7,49 @@ import {
   useRef,
   useState,
 } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useParams } from "next/navigation";
 import { useRAGContext } from "@/lib/context/RAGContext";
-import type { CanonicalDoc, CanonicalType, PatchOperation, CanonicalPatch } from "@/lib/types";
+import type { Entry, EntryPatch, EntryType } from "@/lib/types";
 
-/* ----------------------------------------------------------------
-   Helpers
-   ---------------------------------------------------------------- */
-
-const TYPE_PREFIX: Record<CanonicalType, string> = {
-  character:      "char",
-  location:       "loc",
-  faction:        "fac",
-  magic_system:   "mgc",
-  item:           "itm",
-  lore_entry:     "lre",
-  rule:           "rul",
-  scene:          "scn",
+const TYPE_PREFIX: Record<EntryType, string> = {
+  character: "char",
+  location: "loc",
+  culture: "cul",
+  organization: "org",
+  system: "sys",
+  item: "itm",
+  language: "lng",
+  religion: "rel",
+  lineage: "lin",
+  economy: "eco",
+  rule: "rul",
+  // Transitional legacy values
+  faction: "fac",
+  magic_system: "mgc",
+  lore_entry: "lre",
+  scene: "scn",
   timeline_event: "evt",
 };
 
-function makeDocId(type: CanonicalType, name: string): string {
+function makeDocId(type: EntryType, name: string): string {
   const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "")
     .slice(0, 40);
-  return `${TYPE_PREFIX[type]}_${slug}`;
+  return `${TYPE_PREFIX[type] ?? "ent"}_${slug}`;
 }
 
 function makePatchId(): string {
-  return `patch_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  return `epatch_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/* ----------------------------------------------------------------
-   Detail form (right panel)
-   ---------------------------------------------------------------- */
-
 interface DocFormProps {
-  doc: CanonicalDoc;
+  doc: Entry;
   onSave: (fields: { name: string; summary: string }) => void;
 }
 
 function DocForm({ doc, onSave }: DocFormProps) {
-  // key={doc.id} on the parent remounts this component when the selected doc changes,
-  // so local state always initialises from the current doc — no effect needed.
   const [name, setName] = useState(doc.name);
   const [summary, setSummary] = useState(doc.summary);
 
@@ -88,8 +79,8 @@ function DocForm({ doc, onSave }: DocFormProps) {
         />
       </div>
       <div className="canonical-doc-meta">
-        <span className={`canonical-doc-status canonical-doc-status--${doc.status}`}>
-          {doc.status === "canon" ? "Canon" : "Draft"}
+        <span className={`canonical-doc-status canonical-doc-status--${doc.canonStatus}`}>
+          {doc.canonStatus}
         </span>
         {doc.sources.length > 0 && (
           <span className="canonical-doc-sources">{doc.sources.length} source(s)</span>
@@ -107,42 +98,40 @@ function DocForm({ doc, onSave }: DocFormProps) {
   );
 }
 
-/* ----------------------------------------------------------------
-   Main component
-   ---------------------------------------------------------------- */
-
 interface CanonicalDocDashboardProps {
-  type: CanonicalType;
+  type: EntryType;
   title: string;
 }
 
 export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProps) {
   const { storeRef, storeReady } = useRAGContext();
   const searchParams = useSearchParams();
-  const highlightId  = searchParams.get("highlight");
-  const [docs, setDocs] = useState<CanonicalDoc[]>([]);
+  const params = useParams<{ libraryId: string }>();
+  const libraryId = params.libraryId;
+  const highlightId = searchParams.get("highlight");
+  const [docs, setDocs] = useState<Entry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  // Start with loading=true so the first render shows the loading state without
-  // needing a synchronous setState call inside the effect.
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
-  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "canon">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "draft" | "proposed" | "canon" | "deprecated" | "retconned" | "alternate-branch"
+  >("all");
   const [sortOrder, setSortOrder] = useState<"name" | "updated">("name");
 
-  /* Load docs on mount / when store is ready */
   useEffect(() => {
     if (!storeReady || loadedRef.current) return;
     const store = storeRef.current;
     if (!store) return;
     loadedRef.current = true;
-    void store.queryDocsByType(type).then((result) => {
-      const sorted = result.sort((a, b) => a.name.localeCompare(b.name));
+    void (async () => {
+      const entries = await store.queryEntriesByType(type);
+      const sorted = entries.sort((a, b) => a.name.localeCompare(b.name));
       setDocs(sorted);
       setLoading(false);
       if (highlightId && sorted.some((d) => d.id === highlightId)) {
         setActiveId(highlightId);
       }
-    });
+    })();
   }, [storeReady, storeRef, type, highlightId]);
 
   const activeDoc = useMemo(
@@ -151,7 +140,9 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
   );
 
   const displayedDocs = useMemo(() => {
-    const filtered = statusFilter === "all" ? docs : docs.filter((d) => d.status === statusFilter);
+    const filtered = statusFilter === "all"
+      ? docs
+      : docs.filter((d) => d.canonStatus === statusFilter);
     return [...filtered].sort((a, b) =>
       sortOrder === "name"
         ? a.name.localeCompare(b.name)
@@ -159,77 +150,105 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
     );
   }, [docs, statusFilter, sortOrder]);
 
-  /* Add a new draft doc locally */
   const handleAdd = useCallback(async () => {
     const store = storeRef.current;
     if (!store) return;
     const name = `New ${title.replace(/s$/, "")}`;
-    const doc: CanonicalDoc = {
-      id:           makeDocId(type, `${name}-${Date.now()}`),
+    const now = Date.now();
+
+    const doc: Entry = {
+      id: makeDocId(type, `${name}-${now}`),
+      universeId: libraryId,
+      entryType: type,
       type,
       name,
-      summary:      "",
-      details:      {},
-      status:       "draft",
-      sources:      [],
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
+      summary: "",
+      bodyMd: "",
+      canonStatus: "draft",
+      visibility: "private",
+      details: {},
+      status: "draft",
+      sources: [],
       relationships: [],
       lastVerified: 0,
-      createdAt:    Date.now(),
-      updatedAt:    Date.now(),
+      createdAt: now,
+      updatedAt: now,
     };
-    await store.addDoc(doc);
+
+    await store.addEntry(doc);
     setDocs((prev) => [...prev, doc].sort((a, b) => a.name.localeCompare(b.name)));
     setActiveId(doc.id);
-  }, [storeRef, type, title]);
+  }, [libraryId, storeRef, title, type]);
 
-  /* Save as a pending patch (review-first) */
   const handleSave = useCallback(async (fields: { name: string; summary: string }) => {
     if (!activeId) return;
     const store = storeRef.current;
     if (!store) return;
 
-    const ops: PatchOperation[] = [];
     const prev = docs.find((d) => d.id === activeId);
     if (!prev) return;
 
+    const ops: EntryPatch["operations"] = [];
     if (fields.name !== prev.name) {
-      ops.push({ op: "update", docId: activeId, field: "name", oldValue: prev.name, newValue: fields.name });
+      ops.push({
+        op: "update-entry",
+        entryId: activeId,
+        field: "name",
+        oldValue: prev.name,
+        newValue: fields.name,
+      });
     }
     if (fields.summary !== prev.summary) {
-      ops.push({ op: "update", docId: activeId, field: "summary", oldValue: prev.summary, newValue: fields.summary });
+      ops.push({
+        op: "update-entry",
+        entryId: activeId,
+        field: "summary",
+        oldValue: prev.summary,
+        newValue: fields.summary,
+      });
     }
     if (ops.length === 0) return;
 
-    const patch: CanonicalPatch = {
-      id:         makePatchId(),
-      status:     "pending",
+    const patch: EntryPatch = {
+      id: makePatchId(),
+      status: "pending",
       operations: ops,
-      sourceRef:  { kind: "manual", id: activeId },
+      sourceRef: { kind: "manual", id: activeId },
       confidence: 1,
       autoCommit: false,
-      createdAt:  Date.now(),
+      createdAt: Date.now(),
     };
+
+    await store.addEntryPatch(patch);
     await store.addPatch(patch);
-    // Optimistically apply locally so the UI reflects the change
-    setDocs((prev) =>
-      prev.map((d) =>
-        d.id === activeId ? { ...d, ...fields, updatedAt: Date.now() } : d,
+
+    setDocs((prevDocs) =>
+      prevDocs.map((d) =>
+        d.id === activeId
+          ? {
+              ...d,
+              ...fields,
+              slug: fields.name
+                ? fields.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+                : d.slug,
+              updatedAt: Date.now(),
+            }
+          : d,
       ),
     );
   }, [activeId, docs, storeRef]);
 
-  /* Delete */
   const handleDelete = useCallback(async (id: string) => {
     const store = storeRef.current;
     if (!store) return;
-    await store.deleteDoc(id);
+    await store.deleteEntry(id);
     setDocs((prev) => prev.filter((d) => d.id !== id));
     if (activeId === id) setActiveId(null);
   }, [activeId, storeRef]);
 
   return (
     <div className="library-page split-page">
-      {/* Left: list */}
       <div className="split-page-list">
         <div className="library-page-header">
           <h2>{title}</h2>
@@ -242,11 +261,24 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
             <select
               id="status-filter"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as "all" | "draft" | "canon")}
+              onChange={(e) => setStatusFilter(
+                e.target.value as
+                  | "all"
+                  | "draft"
+                  | "proposed"
+                  | "canon"
+                  | "deprecated"
+                  | "retconned"
+                  | "alternate-branch",
+              )}
             >
               <option value="all">All</option>
               <option value="draft">Draft</option>
+              <option value="proposed">Proposed</option>
               <option value="canon">Canon</option>
+              <option value="deprecated">Deprecated</option>
+              <option value="retconned">Retconned</option>
+              <option value="alternate-branch">Alternate Branch</option>
             </select>
           </div>
           <div className="canonical-dashboard-sort">
@@ -284,7 +316,7 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
                   onClick={() => setActiveId(doc.id)}
                 >
                   <span className="library-item-avatar">
-                    {doc.status === "canon" ? "★" : (doc.name || "?")[0].toUpperCase()}
+                    {doc.canonStatus === "canon" ? "★" : (doc.name || "?")[0].toUpperCase()}
                   </span>
                   <div className="library-item-info">
                     <span className="library-item-title">{doc.name || "Unnamed"}</span>
@@ -306,7 +338,6 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
         )}
       </div>
 
-      {/* Right: detail / form */}
       <div className="split-page-editor">
         {activeDoc ? (
           <DocForm

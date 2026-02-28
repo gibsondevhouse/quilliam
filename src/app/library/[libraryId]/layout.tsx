@@ -20,7 +20,8 @@ import {
   DEFAULT_PROVIDER_CONFIG,
   DEFAULT_RUN_BUDGET,
   AiExecutionMode,
-  CanonicalPatch,
+  Entry,
+  EntryPatch,
   ChatMessageEntry,
   ChatSession,
   type CloudProviderConfig,
@@ -37,27 +38,31 @@ import { useChatState } from "@/lib/library/chatState";
 import { useChangeSetMachine } from "@/lib/library/changeSetMachine";
 import { useEntityState } from "@/lib/library/entityState";
 import { useRagWorker } from "@/lib/library/ragWorker";
+import { applyEntryPatch } from "@/lib/domain/patch";
 
 /* ----------------------------------------------------------------
    Library sub-nav link
    ---------------------------------------------------------------- */
 const SUB_NAV_ITEMS = [
-  { label: "Dashboard",      path: "dashboard" },
-  { label: "Stories",        path: "stories" },
-  { label: "Threads",        path: "threads" },
-  { label: "Characters",     path: "characters" },
-  { label: "Locations",      path: "locations" },
-  { label: "Factions",       path: "factions" },
-  { label: "Magic Systems",  path: "magic-systems" },
-  { label: "Items",          path: "items" },
-  { label: "Lore",           path: "lore" },
-  { label: "Rules",          path: "rules" },
-  { label: "Timeline",       path: "timeline" },
-  { label: "World",          path: "world" },
-  { label: "Canon",          path: "canon" },
-  { label: "Systems",        path: "systems" },
-  { label: "Build Feed",     path: "build-feed" },
-  { label: "Continuity",     path: "continuity" },
+  { label: "Universe", path: "universe" },
+  { label: "Master Timeline", path: "master-timeline" },
+  { label: "Locations", path: "locations" },
+  { label: "Cultures", path: "cultures" },
+  { label: "Religions", path: "religions" },
+  { label: "Languages", path: "languages" },
+  { label: "Economics", path: "economics" },
+  { label: "Organizations", path: "organizations" },
+  { label: "Characters", path: "characters" },
+  { label: "Lineages", path: "lineages" },
+  { label: "Items", path: "items" },
+  { label: "Maps", path: "maps" },
+  { label: "Media", path: "media" },
+  { label: "Books", path: "books" },
+  { label: "Scenes", path: "scenes" },
+  { label: "Suggestions", path: "suggestions" },
+  { label: "Continuity Issues", path: "continuity-issues" },
+  { label: "Change Log", path: "change-log" },
+  { label: "Settings", path: "settings" },
 ] as const;
 
 /* ----------------------------------------------------------------
@@ -176,6 +181,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   const [cloudProviderConfigState, setCloudProviderConfigState] = useState<CloudProviderConfig>(DEFAULT_PROVIDER_CONFIG);
   const [defaultRunBudgetState, setDefaultRunBudgetState] = useState<RunBudget>(DEFAULT_RUN_BUDGET);
   const [researchRuns, setResearchRuns] = useState<ResearchRunRecord[]>([]);
+  const [existingEntries, setExistingEntries] = useState<Entry[]>([]);
 
   const persistAiSettings = useCallback(
     (next: {
@@ -258,11 +264,39 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     }
   }, [libraryId, storeRef]);
 
+  const handlePatchesExtracted = useCallback(async (patches: EntryPatch[]) => {
+    const store = storeRef.current;
+    if (!store || patches.length === 0) return;
+
+    for (const patch of patches) {
+      if (patch.operations.length === 0) continue;
+      // `addPatch` mirrors into both legacy and entry patch stores.
+      await store.addPatch(patch);
+
+      if (patch.autoCommit) {
+        await applyEntryPatch(patch, {
+          addEntry: store.addEntry,
+          updateEntry: store.updateEntry,
+          deleteEntry: store.deleteEntry,
+          addEntryRelation: store.addEntryRelation,
+          removeEntryRelation: store.removeEntryRelation,
+          addContinuityIssue: store.addContinuityIssue,
+          updateContinuityIssueStatus: store.updateContinuityIssueStatus,
+          addCultureVersion: store.addCultureVersion,
+          updatePatchStatus: store.updatePatchStatus,
+          getEntryById: store.getEntryById,
+        });
+      }
+    }
+
+    const latest = await store.listEntriesByUniverse(libraryId);
+    setExistingEntries(latest);
+  }, [libraryId, storeRef]);
+
   /**
    * Called by Chat when a deep research run completes.
-   * Extracts canonical entities from the run's artifacts via the local Ollama model
-   * and persists the resulting patch to IDB for Build Feed review.
-   * Runs asynchronously and never throws — failures are logged and silently ignored.
+   * Extracts entry patches from research artifacts and routes them through
+   * auto-commit vs review-first handling.
    */
   const handleResearchRunComplete = useCallback(async (run: ResearchRunRecord) => {
     try {
@@ -281,23 +315,20 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
           text: artifactText,
           sourceType: "research",
           sourceId: run.id,
+          existingEntries,
         }),
       });
 
       if (!response.ok) return;
 
-      const payload = (await response.json()) as { patch?: CanonicalPatch };
-      const patch = payload.patch;
-      if (!patch || patch.operations.length === 0) return;
-
-      const store = storeRef.current;
-      if (store) {
-        await store.addPatch(patch);
-      }
+      const payload = (await response.json()) as { patches?: EntryPatch[] };
+      const patches = Array.isArray(payload.patches) ? payload.patches : [];
+      if (patches.length === 0) return;
+      await handlePatchesExtracted(patches);
     } catch (error) {
       console.error("Research canonical extraction failed:", error);
     }
-  }, [storeRef]);
+  }, [existingEntries, handlePatchesExtracted]);
   /* ---- Tab state ---- */  const [openTabs, setOpenTabs] = useState<EditorTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
@@ -340,7 +371,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     }
     return ids;
   }, [docContents, savedContents]);
-
+  
   const {
     characters,
     setCharacters,
@@ -374,7 +405,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
 
   const addStory = useCallback((): Story => {
     const now = Date.now();
-    // addNode creates the "book" RAG node (Library → Book is valid in the hierarchy)
+    // addNode creates the "book" RAG node (Library -> Book is valid in the hierarchy)
     // and returns the new node's id
     const id = addNode(libraryId, "book");
     const entry: Story = { id, libraryId, title: "Untitled Story", synopsis: "", genre: "", status: "drafting", createdAt: now };
@@ -484,7 +515,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     const store = storeRef.current;
     if (!store) return;
     void (async () => {
-      const [chars, locs, world, sessions, storyRows, aiSettings, localRuns] = await Promise.all([
+      const [chars, locs, world, sessions, storyRows, aiSettings, localRuns, entryRows] = await Promise.all([
         store.getCharactersByLibrary(libraryId),
         store.getLocationsByLibrary(libraryId),
         store.getWorldEntriesByLibrary(libraryId),
@@ -492,11 +523,38 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
         store.getStoriesByLibrary(libraryId),
         store.getAiLibrarySettings(libraryId),
         store.listResearchRunsByLibrary(libraryId),
+        store.listEntriesByUniverse(libraryId),
       ]);
       setCharacters(chars.map((c) => ({ id: c.id, libraryId: c.libraryId, name: c.name, role: c.role, notes: c.notes })));
       setLocations(locs.map((l) => ({ id: l.id, libraryId: l.libraryId, name: l.name, description: l.description })));
       setWorldEntries(world.map((w) => ({ id: w.id, libraryId: w.libraryId, title: w.title, category: w.category, notes: w.notes })));
       setStories(storyRows.map((s) => ({ id: s.id, libraryId: s.libraryId, title: s.title, synopsis: s.synopsis, genre: s.genre, status: s.status, createdAt: s.createdAt })));
+      if (entryRows.length > 0) {
+        setExistingEntries(entryRows);
+      } else {
+        // Compatibility bootstrap for libraries upgraded from pre-entry schema.
+        const legacyDocs = (
+          await Promise.all([
+            store.queryDocsByType("character"),
+            store.queryDocsByType("location"),
+            store.queryDocsByType("faction"),
+            store.queryDocsByType("magic_system"),
+            store.queryDocsByType("item"),
+            store.queryDocsByType("lore_entry"),
+            store.queryDocsByType("rule"),
+            store.queryDocsByType("scene"),
+            store.queryDocsByType("timeline_event"),
+            store.queryDocsByType("culture"),
+            store.queryDocsByType("organization"),
+            store.queryDocsByType("system"),
+            store.queryDocsByType("language"),
+            store.queryDocsByType("religion"),
+            store.queryDocsByType("lineage"),
+            store.queryDocsByType("economy"),
+          ])
+        ).flat();
+        setExistingEntries(legacyDocs);
+      }
       setAiModeState(aiSettings?.executionMode ?? "local");
       setCloudProviderConfigState(aiSettings?.providerConfig ?? DEFAULT_PROVIDER_CONFIG);
       setDefaultRunBudgetState(aiSettings?.defaultBudget ?? DEFAULT_RUN_BUDGET);
@@ -694,7 +752,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   /* ---- Active sub-nav segment ---- */
   const activeSegment = useMemo(() => {
     const match = pathname?.match(/^\/library\/[^/]+\/([^/]+)/);
-    return match ? match[1] : "dashboard";
+    return match ? match[1] : "universe";
   }, [pathname]);
 
   /* ---- Chat context for AI ---- */
@@ -811,7 +869,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
               className="library-page-action primary"
               onClick={() => {
                 setShowMigrationBanner(false);
-                router.push(`/library/${libraryId}/systems#migration`);
+                router.push(`/library/${libraryId}/settings#migration`);
               }}
             >
               Go to migration
@@ -964,6 +1022,8 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
                     onEditBlock={handleEditBlock}
                     onResearchRunChange={refreshResearchRuns}
                     onResearchRunComplete={handleResearchRunComplete}
+                    onPatchesExtracted={handlePatchesExtracted}
+                    existingEntries={existingEntries}
                   />
                 )}
               </div>

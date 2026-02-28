@@ -173,35 +173,47 @@ export const DEFAULT_RUN_BUDGET: RunBudget = {
 };
 
 // ---------------------------------------------------------------------------
-// Canonical document model (Plan 001 — Phase 1)
+// Plan 002 domain model (Entry-centric universe engine)
 // ---------------------------------------------------------------------------
 
-/**
- * All first-class narrative entity kinds.
- * ID prefix conventions:
- *   character: char_   location: loc_   faction: fac_
- *   magic_system: mgc_ item: itm_       lore_entry: lre_
- *   rule: rul_         scene: scn_      timeline_event: evt_
- */
-export type CanonicalType =
+export type CoreEntryType =
   | "character"
   | "location"
+  | "culture"
+  | "organization"
+  | "system"
+  | "item"
+  | "language"
+  | "religion"
+  | "lineage"
+  | "economy"
+  | "rule";
+
+/**
+ * Transitional values retained so existing Plan-001 records/routes keep working
+ * while the staged migration is in progress.
+ */
+export type LegacyEntryType =
   | "faction"
   | "magic_system"
-  | "item"
   | "lore_entry"
-  | "rule"
   | "scene"
   | "timeline_event";
 
+export type EntryType = CoreEntryType | LegacyEntryType;
+
+export type CanonStatus =
+  | "draft"
+  | "proposed"
+  | "canon"
+  | "deprecated"
+  | "retconned"
+  | "alternate-branch";
+
+export type VisibilityScope = "private" | "team" | "public";
+
 /**
  * A traceable citation pointing back to the prose or research that originated a fact.
- *
- * `kind` values:
- *   "chat_message"      — from a local or cloud chat turn
- *   "research_artifact" — from a research run artifact
- *   "scene_node"        — from a RAG scene node
- *   "manual"            — entered directly by the user
  */
 export interface SourceRef {
   kind: "chat_message" | "research_artifact" | "scene_node" | "manual";
@@ -211,95 +223,334 @@ export interface SourceRef {
   excerpt?: string;
 }
 
-/** Denormalised outgoing edge on a `CanonicalDoc` for fast single-doc reads. */
+/** Denormalised outgoing edge on an Entry for fast single-entry reads. */
 export interface RelationshipRef {
-  /** ID of the `Relationship` record in the relationships store. */
+  /** ID of the relationship record in the relation store. */
   relationshipId: string;
-  /** Target doc ID. */
+  /** Target entry ID. */
   toId: string;
   /** Edge label (e.g., "member_of", "located_at"). */
   type: string;
 }
 
-/** Base record for all canonical narrative entities. */
-export interface CanonicalDoc {
-  /** Prefix-encoded unique ID (e.g., `char_123`). */
+/** Entry supertype for all universe encyclopedia entities. */
+export interface Entry {
   id: string;
-  type: CanonicalType;
-  /** Primary display name or title. */
+  universeId: string;
+  entryType: EntryType;
   name: string;
-  /** Short human-readable summary. */
+  slug: string;
   summary: string;
-  /**
-   * Type-specific structured fields.
-   * character:      appearance, personality, goals, backstory, age, affiliations
-   * location:       geography, climate, culture, pointsOfInterest
-   * faction:        ideology, leadership, territory, memberIds
-   * magic_system:   principles, limitations, costs, practitioners
-   * item:           description, owner, powers, origin
-   * lore_entry:     topic, content, relatedDocs
-   * rule:           statement, exceptions, scope
-   * scene:          chapterRef, presentCharacters, presentLocations, summary, rawContent
-   * timeline_event: date, participants, location, consequences
-   */
+  bodyMd?: string;
+  canonStatus: CanonStatus;
+  visibility: VisibilityScope;
+  tags?: string[];
+  aliases?: string[];
+  coverMediaId?: string;
+
+  // Compatibility bridge fields while old call-sites are migrated.
+  type: EntryType;
   details: Record<string, unknown>;
-  /** "draft" = unreviewed; "canon" = user-accepted. */
   status: "draft" | "canon";
-  /** Citations to originating prose, research artifacts, or chat messages. */
   sources: SourceRef[];
-  /** Denormalised outgoing edges — canonical store remains the `relationships` table. */
   relationships: RelationshipRef[];
-  /** Updated each time a continuity check confirms no contradiction (epoch ms). */
   lastVerified: number;
+
   createdAt: number;
   updatedAt: number;
 }
 
-/** Typed edge between two canonical documents. */
-export interface Relationship {
+export interface Universe {
   id: string;
-  from: string;
-  /** Edge label: "member_of", "located_at", "appears_in", "owns", "rivals", "parent_of", "precedes", etc. */
-  type: string;
-  to: string;
-  /** Optional extra data: timeframe, strength, confidence score. */
-  metadata: Record<string, unknown>;
-  sources: SourceRef[];
+  name: string;
+  tagline?: string;
+  overviewMd?: string;
+  defaultCalendarId?: string;
   createdAt: number;
+  updatedAt: number;
+}
+
+export interface Series {
+  id: string;
+  universeId: string;
+  name: string;
+  status: "planning" | "drafting" | "editing" | "published" | "archived";
+  orderIndex: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Book {
+  id: string;
+  universeId: string;
+  seriesId?: string;
+  title: string;
+  status: "idea" | "planning" | "drafting" | "editing" | "published" | "archived";
+  orderIndex: number;
+  bookTimelineId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Chapter {
+  id: string;
+  bookId: string;
+  number: number;
+  title: string;
+  summary?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Scene {
+  id: string;
+  chapterId: string;
+  number: number;
+  povCharacterEntryId?: string;
+  locationEntryId?: string;
+  timeAnchorId?: string;
+  sceneMd: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Timeline {
+  id: string;
+  universeId: string;
+  bookId?: string;
+  timelineType: "master" | "book";
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Era {
+  id: string;
+  timelineId: string;
+  name: string;
+  startTimeAnchorId?: string;
+  endTimeAnchorId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Event {
+  id: string;
+  universeId: string;
+  timeAnchorId: string;
+  eraId?: string;
+  name: string;
+  eventType: string;
+  descriptionMd?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Calendar {
+  id: string;
+  universeId: string;
+  name: string;
+  rules: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TimeAnchor {
+  id: string;
+  calendarId: string;
+  precision: "year" | "month" | "day" | "approximate";
+  dateParts: Record<string, unknown>;
+  relativeDay: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 /**
- * Atomic operation inside a `Patch` / `CanonicalPatch`.
- *
- * Op naming uses kebab-case to match the Swift EditParser conventions.
+ * Transitional relation shape; keeps legacy fields while introducing Plan-002
+ * semantics (`fromEntryId`, `toEntryId`, `relationType`, validity interval).
  */
-export type PatchOperation =
-  | { op: "create"; docType: CanonicalType; fields: Partial<CanonicalDoc> }
+export interface Relationship {
+  id: string;
+  from: string;
+  type: string;
+  to: string;
+  metadata: Record<string, unknown>;
+  sources: SourceRef[];
+  createdAt: number;
+
+  fromEntryId?: string;
+  toEntryId?: string;
+  relationType?: string;
+  validFromEventId?: string;
+  validToEventId?: string;
+  meta?: Record<string, unknown>;
+}
+
+export type Relation = Relationship;
+
+export interface Membership {
+  id: string;
+  characterEntryId: string;
+  organizationEntryId: string;
+  role: string;
+  validFromEventId?: string;
+  validToEventId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type CultureMembershipKind =
+  | "primary"
+  | "secondary"
+  | "diaspora"
+  | "adopted"
+  | "assimilated"
+  | "ancestral";
+
+export interface CultureMembership {
+  id: string;
+  characterEntryId: string;
+  cultureEntryId: string;
+  membershipKind: CultureMembershipKind;
+  validFromEventId?: string;
+  validToEventId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ItemOwnership {
+  id: string;
+  itemEntryId: string;
+  ownerEntryId: string;
+  ownerKind: "character" | "organization" | "lineage" | "location" | "unknown";
+  acquiredEventId?: string;
+  lostEventId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Mention {
+  id: string;
+  sceneId: string;
+  entryId: string;
+  mentionType: "explicit" | "implicit" | "alias" | "title";
+  startOffset?: number;
+  endOffset?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Media {
+  id: string;
+  universeId: string;
+  mediaType: "image" | "audio" | "video" | "document" | "other";
+  storageUri: string;
+  metadata: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Map {
+  id: string;
+  universeId: string;
+  mediaId: string;
+  projection?: string;
+  bounds?: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MapPin {
+  id: string;
+  mapId: string;
+  entryId: string;
+  x: number;
+  y: number;
+  icon?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Revision {
+  id: string;
+  universeId: string;
+  targetType: "entry" | "event" | "culture_version" | "timeline" | "scene" | string;
+  targetId: string;
+  authorId?: string;
+  createdAt: number;
+  patch: Record<string, unknown>;
+  message?: string;
+}
+
+export interface ContinuityIssue {
+  id: string;
+  universeId: string;
+  severity: "blocker" | "warning" | "note";
+  status: "open" | "in_review" | "resolved" | "wont_fix";
+  checkType: string;
+  description: string;
+  evidence: Array<{ type: string; id: string; excerpt?: string }>;
+  resolution?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Suggestion {
+  id: string;
+  universeId: string;
+  targetType: string;
+  targetId: string;
+  proposedChange: Record<string, unknown>;
+  status: "pending" | "accepted" | "rejected";
+  origin: "ai" | "human";
+  confidence?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CultureVersion {
+  id: string;
+  cultureEntryId: string;
+  eraId?: string;
+  validFromEventId: string;
+  validToEventId?: string;
+  traits: Record<string, unknown>;
+  changeTrigger?: string;
+  sourceSceneId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ---------------------------------------------------------------------------
+// Entry patch model (Plan 002)
+// ---------------------------------------------------------------------------
+
+export type EntryPatchOperation =
+  | { op: "create-entry"; entryType: EntryType; entry: Partial<Entry> }
+  | { op: "update-entry"; entryId: string; field: string; oldValue: unknown; newValue: unknown }
+  | { op: "add-relation"; relation: Omit<Relationship, "id" | "createdAt"> }
+  | { op: "remove-relation"; relationId: string }
+  | { op: "create-issue"; issue: Partial<ContinuityIssue> }
+  | { op: "resolve-issue"; issueId: string; resolution: string }
+  | { op: "create-version"; version: Partial<CultureVersion> }
+  | { op: "update-scene-links"; sceneId: string; entryIds: string[] }
+  | { op: "mark-retcon"; entryId: string; note?: string }
+  // Transitional Plan-001 ops preserved for adapter-first migration
+  | { op: "create"; docType: EntryType; fields: Partial<Entry> }
   | { op: "update"; docId: string; field: string; oldValue: unknown; newValue: unknown }
   | { op: "add-relationship"; relationship: Omit<Relationship, "id" | "createdAt"> }
   | { op: "remove-relationship"; relationshipId: string }
   | { op: "mark-contradiction"; docId: string; note: string }
   | { op: "delete"; docId: string };
 
-/** Alias matching the plan's naming convention. */
-export type PatchOp = PatchOperation;
-
-/**
- * A proposed changeset awaiting user review in the Build Feed.
- * Mirrors the Swift change-set concept but operates on canonical docs rather than line-edits.
- */
-export interface CanonicalPatch {
+export interface EntryPatch {
   id: string;
   /** "pending" = awaiting review; "accepted" = applied; "rejected" = archived. */
   status: "pending" | "accepted" | "rejected";
-  operations: PatchOperation[];
+  operations: EntryPatchOperation[];
   /** Where the patch originated. */
   sourceRef: SourceRef;
-  /**
-   * Extraction confidence in [0, 1].
-   * >= 0.85 → eligible for auto-commit (autoCommit: true).
-   * < 0.85  → must be reviewed in the Build Feed.
-   */
+  /** Extraction confidence in [0, 1]. */
   confidence: number;
   /** When true the patch was (or should be) committed without user review. */
   autoCommit: boolean;
@@ -307,5 +558,21 @@ export interface CanonicalPatch {
   resolvedAt?: number;
 }
 
-/** Alias matching the plan's naming convention. */
-export type Patch = CanonicalPatch;
+// ---------------------------------------------------------------------------
+// Compatibility aliases (one release cycle)
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use EntryType. */
+export type CanonicalType = EntryType;
+/** @deprecated Use Entry. */
+export type CanonicalDoc = Entry;
+/** @deprecated Use Relationship (same runtime shape). */
+export type CanonicalRelationship = Relationship;
+/** @deprecated Use EntryPatchOperation. */
+export type PatchOperation = EntryPatchOperation;
+/** @deprecated Use EntryPatchOperation. */
+export type PatchOp = EntryPatchOperation;
+/** @deprecated Use EntryPatch. */
+export type CanonicalPatch = EntryPatch;
+/** @deprecated Use EntryPatch. */
+export type Patch = EntryPatch;

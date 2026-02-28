@@ -214,7 +214,7 @@ function TreeNode({
             {isDirty && <span className="sidebar-dirty-dot" title="Unsaved changes" />}
             {node.type === "scene" && node.sceneDocId && libraryId && (
               <a
-                href={`/library/${libraryId}/canonical-scenes?highlight=${node.sceneDocId}`}
+                href={`/library/${libraryId}/scenes?highlight=${node.sceneDocId}`}
                 className="scene-doc-badge"
                 title={`Open canonical scene doc: ${node.sceneDocId}`}
                 onClick={(e) => e.stopPropagation()}

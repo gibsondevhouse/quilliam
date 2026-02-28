@@ -39,8 +39,7 @@ eliminating errors in everything you touch.
 
 ## 2. Pre-Flight Audit (run before any phase; repeat after each phase)
 
-Scan the full `src/` tree and the touched Swift files (if any Swift files are in
-scope for the current plan). Bin findings into three priority tiers:
+Scan the full `src/` tree and bin findings into three priority tiers:
 
 ### BLOCK — must fix before advancing
 - TypeScript compile errors (`npm run build` fails)
@@ -111,21 +110,7 @@ read-only.
 | **No TypeScript `any`** | Use generics, `unknown`, or proper union types. `eslint-disable` is not an acceptable workaround. |
 | **Streaming intact** | Never modify the Ollama streaming path in `src/app/api/chat/route.ts` without verifying the SSE pipeline still works end-to-end. |
 | **Cumulative IDB upgrades** | `onupgradeneeded` branches must be cumulative. Never drop existing stores or indices without a migration path. Bump `IDB_VERSION` for every schema change. |
-| **Cross-platform parity** | If an edit-fence or patch parser is changed in TypeScript (`src/lib/editParser.ts`), the equivalent change must be noted as a required Swift update in `Quilliam/Services/EditParser.swift` — and vice versa. |
 | **Lint + build green** | Every phase must end with `npm run lint` and `npm run build` both passing. |
-
----
-
-## 5. Swift / Native Scope
-
-By default this agent operates on the **web app** (`src/`).
-
-Include `Quilliam/` Swift files when:
-- The plan file for the current phase explicitly lists Swift targets (e.g. Phase 6 lists `Quilliam/Models/`, `Quilliam/ViewModels/ChatViewModel.swift`).
-- A TypeScript parser change requires a parity update in `Quilliam/Services/EditParser.swift`.
-
-When editing Swift files, apply the same BLOCK / DEBLOAT / POLISH tiers. Do not
-introduce SwiftUI deprecations or break `@Observable` / SwiftData model macros.
 
 ---
 

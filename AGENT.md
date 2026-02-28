@@ -18,7 +18,6 @@ Non-negotiables:
 ## 2) Repository Topology
 
 - Web app: `src/` (Next.js 16, React 19, TS strict)
-- Native app: `Quilliam/` (SwiftUI + SwiftData)
 - Local inference: Ollama (`http://localhost:11434`)
 
 Critical web entry points:
@@ -37,16 +36,6 @@ Critical web entry points:
   - Research: `/api/research/runs` (GET/POST), `/api/research/runs/[id]` (GET), `/api/research/runs/[id]/cancel` (POST), `/api/research/runs/[id]/events` (SSE)
 - RAG + IDB contracts: `src/lib/rag/*`
 - RAG indexer worker: `src/workers/rag-indexer.ts`
-
-Critical native entry points:
-
-- App entry: `Quilliam/QuilliamApp.swift`
-- AI orchestration: `Quilliam/ViewModels/ChatViewModel.swift`
-- Ollama streaming: `Quilliam/Services/OllamaService.swift`
-- Edit-fence parsing: `Quilliam/Services/EditParser.swift`
-- Domain models: `Quilliam/Models/` (`Document.swift`, `Message.swift`, `OllamaModels.swift`, `LineEdit.swift`, `EditableEntity.swift`,
-  `CanonicalDocument.swift`, `CanonicalRelationship.swift`)
-- Chat UX controls (mode, keys, run monitor): `Quilliam/Views/ChatView.swift`
 
 ## 3) Local Development
 
@@ -96,11 +85,6 @@ Web:
 - Cloud vault is encrypted at rest and unlocked per session.
 - Deep research runs/artifacts/usage are durably persisted and resumable after reload.
 
-Native:
-
-- Provider keys use Keychain (`CloudSecretsStore`).
-- Deep research runs persist in app-support JSON managed by `DeepResearchRunActor`.
-
 ## 6) Verification Checklist
 
 Before finalizing:
@@ -135,11 +119,4 @@ Before finalizing:
 7. Deep research run lifecycle works: create, progress, complete/cancel/budget_exceeded.
 8. Missing/locked keys produce explicit user-facing errors and safe fallback.
 
-## 7) Cross-Platform Parser Consistency
 
-Keep Swift and TypeScript edit-fence parsing behavior aligned where practical:
-
-- Header grammar (`line=`, `line=N+`, ranges, `delete`, `file=` target)
-- 1-based to 0-based conversion
-- Unclosed fence recovery behavior
-- File target key mapping (`__active__`, `character:*`, `location:*`, `world:*`)

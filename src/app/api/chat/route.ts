@@ -38,7 +38,7 @@ const EXTRACTION_SUFFIX = `
 ---
 After your narrative reply, output a fenced JSON block (delimited by triple backticks and the tag "canonical_extraction") listing any characters, locations, factions, or other narrative entities you mentioned, using this schema:
 \`\`\`canonical_extraction
-{ "entities": [ { "type": "<CanonicalType>", "name": "<name>", "summary": "<one sentence>" } ], "relationships": [ { "from": "<name>", "relType": "<edge label>", "to": "<name>" } ] }
+{ "entities": [ { "type": "<EntryType>", "name": "<name>", "summary": "<one sentence>" } ], "relationships": [ { "from": "<name>", "relType": "<edge label>", "to": "<name>" } ] }
 \`\`\`
 Omit the block entirely if no entities were mentioned.`;
 

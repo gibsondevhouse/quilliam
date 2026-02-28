@@ -14,9 +14,9 @@ import type { FileTarget } from "@/lib/changeSets";
 import { useSystemContext } from "@/lib/context/SystemContext";
 import type {
   AiExecutionMode,
-  CanonicalDoc,
-  CanonicalPatch,
   CloudProviderConfig,
+  Entry,
+  EntryPatch,
   ProposedPatchBatch,
   ResearchRunRecord,
   RunBudget,
@@ -77,12 +77,12 @@ interface ChatProps {
    * from the completed text.  The caller applies auto-commit patches immediately
    * and queues review patches in the Build Feed via `store.addPatch`.
    *
-   * Pass `existingDocs` when calling Chat to enable name-aware extraction;
+   * Pass `existingEntries` when calling Chat to enable name-aware extraction;
    * omit for landing-page / unauthenticated contexts.
    */
-  onPatchesExtracted?: (patches: CanonicalPatch[]) => Promise<void>;
+  onPatchesExtracted?: (patches: EntryPatch[]) => Promise<void>;
   /** Canonical docs from the store, forwarded to /api/extract-canonical for name matching. */
-  existingDocs?: CanonicalDoc[];
+  existingEntries?: Entry[];
   initialMessages?: { role: "user" | "assistant"; content: string }[];
   onMessagesChange?: (messages: { role: "user" | "assistant"; content: string }[]) => void;
 }
@@ -233,9 +233,9 @@ function useLocalChat(params: {
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   setStreamingContent: Dispatch<SetStateAction<string>>;
   /** When provided, extraction runs after each assistant response. */
-  onPatchesExtracted?: (patches: CanonicalPatch[]) => Promise<void>;
+  onPatchesExtracted?: (patches: EntryPatch[]) => Promise<void>;
   /** Canonical docs forwarded to /api/extract-canonical for name matching. */
-  existingDocs?: CanonicalDoc[];
+  existingEntries?: Entry[];
 }) {
   const {
     onEditBlock,
@@ -243,7 +243,7 @@ function useLocalChat(params: {
     setMessages,
     setStreamingContent,
     onPatchesExtracted,
-    existingDocs,
+    existingEntries,
   } = params;
 
   return useCallback(
@@ -293,7 +293,7 @@ function useLocalChat(params: {
 
       // --- Patch proposal pipeline (Plan 003) -----------------------------------
       // After the full response is assembled, post it to /api/extract-canonical.
-      // The endpoint runs extractPatches (name-aware if existingDocs provided)
+      // The endpoint runs extractPatches (name-aware if existingEntries provided)
       // and returns Patch[]. The caller applies auto-commit patches immediately
       // and queues review patches in the Build Feed.
       if (onPatchesExtracted && fullContent.trim().length > 0) {
@@ -305,11 +305,11 @@ function useLocalChat(params: {
               text:         fullContent,
               sourceType:   "chat",
               sourceId:     sourceId ?? `chat_${Date.now()}`,
-              existingDocs: existingDocs ?? [],
+              existingEntries: existingEntries ?? [],
             }),
           });
           if (res.ok) {
-            const payload = (await res.json()) as { patches?: CanonicalPatch[] };
+            const payload = (await res.json()) as { patches?: EntryPatch[] };
             const patches = Array.isArray(payload.patches) ? payload.patches : [];
             if (patches.length > 0) {
               await onPatchesExtracted(patches);
@@ -320,7 +320,7 @@ function useLocalChat(params: {
         }
       }
     },
-    [initQuestionStates, onEditBlock, onPatchesExtracted, existingDocs, setMessages, setStreamingContent],
+    [initQuestionStates, onEditBlock, onPatchesExtracted, existingEntries, setMessages, setStreamingContent],
   );
 }
 
@@ -329,7 +329,7 @@ function useAssistedCloud(params: {
   runBudget: RunBudget;
   initQuestionStates: (msgIndex: number, content: string) => void;
   onEditBlock?: (event: EditBlockEvent) => void;
-  onPatchesExtracted?: (patches: CanonicalPatch[]) => Promise<void>;
+  onPatchesExtracted?: (patches: EntryPatch[]) => Promise<void>;
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
 }) {
   const { providerConfig, runBudget, initQuestionStates, onEditBlock, onPatchesExtracted, setMessages } = params;
@@ -361,7 +361,8 @@ function useAssistedCloud(params: {
       const payload = (await response.json().catch(() => ({}))) as {
         message?: string;
         patches?: ProposedPatchBatch[];
-        canonicalPatches?: CanonicalPatch[];
+        entryPatches?: EntryPatch[];
+        canonicalPatches?: EntryPatch[]; // compatibility with older API payloads
         error?: string;
       };
 
@@ -383,12 +384,14 @@ function useAssistedCloud(params: {
         }
       }
 
-      // Forward canonical entity patches to the Build Feed / auto-commit pipeline.
-      const canonicalPatches = Array.isArray(payload.canonicalPatches)
-        ? payload.canonicalPatches.filter((p) => p.operations.length > 0)
+      // Forward entry patches to the Build Feed / auto-commit pipeline.
+      const entryPatches = Array.isArray(payload.entryPatches)
+        ? payload.entryPatches.filter((p) => p.operations.length > 0)
+        : Array.isArray(payload.canonicalPatches)
+          ? payload.canonicalPatches.filter((p) => p.operations.length > 0)
         : [];
-      if (canonicalPatches.length > 0 && onPatchesExtracted) {
-        await onPatchesExtracted(canonicalPatches).catch(console.error);
+      if (entryPatches.length > 0 && onPatchesExtracted) {
+        await onPatchesExtracted(entryPatches).catch(console.error);
       }
 
       const assistantIndex = newMessages.length;
@@ -673,7 +676,7 @@ export function Chat({
   onResearchRunChange,
   onResearchRunComplete,
   onPatchesExtracted,
-  existingDocs,
+  existingEntries,
   initialMessages,
   onMessagesChange,
 }: ChatProps) {
@@ -811,7 +814,7 @@ export function Chat({
     setMessages,
     setStreamingContent,
     onPatchesExtracted,
-    existingDocs,
+    existingEntries,
   });
 
   const runAssistedCloud = useAssistedCloud({

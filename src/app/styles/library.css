@@ -328,6 +328,20 @@
   color: var(--text-secondary);
 }
 
+.library-dashboard-logline-input {
+  font-size: 14px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-active);
+  border-radius: 5px;
+  padding: 2px 8px;
+  outline: none;
+  width: 100%;
+  max-width: 640px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
 .library-dashboard-quick-actions {
   display: flex;
   gap: 8px;

@@ -4,10 +4,9 @@ This file provides repository guidance for coding agents.
 
 ## Project Snapshot
 
-Quilliam is a local-first writing IDE with two clients in one repo:
+Quilliam is a local-first writing IDE (web app):
 
 - Web app: Next.js 16 + React 19 (`src/`)
-- Native app: SwiftUI + SwiftData (`Quilliam/`)
 - Local inference: Ollama at `http://localhost:11434`
 - Optional cloud tiers: Anthropic (assist/refactor) + Tavily (deep research), opt-in only
 
@@ -36,13 +35,6 @@ Run Ollama in a separate terminal (with Metal/GPU tuning):
 - Embeddings/status APIs: `src/app/api/embeddings/route.ts`, `src/app/api/status/route.ts`, `src/app/api/system/route.ts`
 - RAG persistence + retrieval: `src/lib/rag/*`
 - Worker hashing: `src/workers/rag-indexer.ts`
-
-## Native App Architecture (`Quilliam/`)
-
-- App entry: `Quilliam/QuilliamApp.swift`
-- State orchestration: `Quilliam/ViewModels/ChatViewModel.swift`
-- Streaming + edit parsing: `Quilliam/Services/OllamaService.swift`, `Quilliam/Services/EditParser.swift`
-- Editor/chat views: `Quilliam/Views/*`
 
 ## Non-Negotiables
 

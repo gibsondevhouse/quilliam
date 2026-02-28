@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     if (!session.keys.anthropicApiKey) {
       return NextResponse.json(
         {
-          error: "Anthropic API key is not configured. Add it in Systems settings.",
+          error: "Anthropic API key is not configured. Add it in Settings.",
         },
         { status: 400 },
       );

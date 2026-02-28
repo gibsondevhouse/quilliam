@@ -10,18 +10,31 @@ import {
   materializeNode,
   serializeNode,
   type PersistedAiLibrarySettings,
+  type PersistedCalendar,
   type PersistedCanonicalDoc,
   type PersistedCanonicalPatch,
   type PersistedChatMessage,
   type PersistedChatSession,
   type PersistedCharacter,
+  type PersistedContinuityIssue,
+  type PersistedCultureVersion,
+  type PersistedEntry,
+  type PersistedEntryPatch,
+  type PersistedEra,
+  type PersistedEvent,
   type PersistedLibraryMeta,
   type PersistedLocation,
+  type PersistedMention,
   type PersistedPatchByDocEntry,
   type PersistedRelationIndexEntry,
+  type PersistedRevision,
   type PersistedRelationship,
   type PersistedResearchArtifact,
   type PersistedResearchRun,
+  type PersistedSuggestion,
+  type PersistedTimeAnchor,
+  type PersistedTimeline,
+  type PersistedUniverse,
   type PersistedUsageLedger,
   type PersistedWorldEntry,
   type PersistedStory,
@@ -30,7 +43,7 @@ import {
   type StoredEmbedding,
   type StoredMetadata,
 } from "@/lib/rag/store";
-import type { CanonicalType } from "@/lib/types";
+import type { CanonicalType, EntryType } from "@/lib/types";
 
 interface RAGDBSchema extends DBSchema {
   nodes: {
@@ -127,6 +140,87 @@ interface RAGDBSchema extends DBSchema {
     value: PersistedPatchByDocEntry;
     indexes: { by_doc: string; by_status: string; by_patchId: string };
   };
+  // v9 — Plan-002 universe engine stores
+  universes: {
+    key: string;
+    value: PersistedUniverse;
+    indexes: { by_updated: number };
+  };
+  entries: {
+    key: string;
+    value: PersistedEntry;
+    indexes: {
+      by_universe: string;
+      by_entry_type: string;
+      by_canon_status: string;
+      by_slug: string;
+    };
+  };
+  entryRelations: {
+    key: string;
+    value: PersistedRelationship;
+    indexes: { by_from: string; by_to: string; by_type: string };
+  };
+  timelines: {
+    key: string;
+    value: PersistedTimeline;
+    indexes: { by_universe: string; by_book: string };
+  };
+  eras: {
+    key: string;
+    value: PersistedEra;
+    indexes: { by_timeline: string };
+  };
+  events: {
+    key: string;
+    value: PersistedEvent;
+    indexes: { by_universe: string; by_era: string; by_time_anchor: string };
+  };
+  calendars: {
+    key: string;
+    value: PersistedCalendar;
+    indexes: { by_universe: string };
+  };
+  timeAnchors: {
+    key: string;
+    value: PersistedTimeAnchor;
+    indexes: { by_calendar: string; by_relative_day: number };
+  };
+  mentions: {
+    key: string;
+    value: PersistedMention;
+    indexes: { by_scene: string; by_entry: string };
+  };
+  cultureVersions: {
+    key: string;
+    value: PersistedCultureVersion;
+    indexes: { by_culture: string; by_valid_from: string; by_valid_to: string };
+  };
+  continuityIssues: {
+    key: string;
+    value: PersistedContinuityIssue;
+    indexes: { by_universe: string; by_severity: string; by_issue_status: string };
+  };
+  suggestions: {
+    key: string;
+    value: PersistedSuggestion;
+    indexes: { by_universe: string; by_status: string };
+  };
+  revisions: {
+    key: string;
+    value: PersistedRevision;
+    indexes: { by_target: [string, string]; by_universe: string };
+  };
+  entryPatches: {
+    key: string;
+    value: PersistedEntryPatch;
+    indexes: { by_status: string; by_sourceType: string; by_sourceId: string };
+  };
+  entryPatchByEntry: {
+    key: [string, string]; // [entryId, patchId]
+    value: PersistedPatchByDocEntry;
+    indexes: { by_entry: string; by_status: string; by_patchId: string };
+  };
 }
 
 interface PersistedEmbedding extends StoredEmbedding {
@@ -139,7 +233,7 @@ function libraryMetaKey(libraryId: string): string {
 }
 
 const DB_NAME = "quilliam-rag";
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 let dbPromise: Promise<IDBPDatabase<RAGDBSchema>> | null = null;
 
@@ -361,6 +455,114 @@ function getDb(): Promise<IDBPDatabase<RAGDBSchema>> {
             await transaction.objectStore("metadata").put({
               key: "schemaVersion",
               value: 8,
+              updatedAt: Date.now(),
+            });
+          }
+        }
+
+        // --- v9: Plan-002 universe engine stores ---
+        if (oldVersion < 9) {
+          if (!database.objectStoreNames.contains("universes")) {
+            const universes = database.createObjectStore("universes", { keyPath: "id" });
+            universes.createIndex("by_updated", "updatedAt");
+          }
+
+          if (!database.objectStoreNames.contains("entries")) {
+            const entries = database.createObjectStore("entries", { keyPath: "id" });
+            entries.createIndex("by_universe", "universeId");
+            entries.createIndex("by_entry_type", "entryType");
+            entries.createIndex("by_canon_status", "canonStatus");
+            entries.createIndex("by_slug", "slug");
+          }
+
+          if (!database.objectStoreNames.contains("entryRelations")) {
+            const rels = database.createObjectStore("entryRelations", { keyPath: "id" });
+            rels.createIndex("by_from", "from");
+            rels.createIndex("by_to", "to");
+            rels.createIndex("by_type", "type");
+          }
+
+          if (!database.objectStoreNames.contains("timelines")) {
+            const timelines = database.createObjectStore("timelines", { keyPath: "id" });
+            timelines.createIndex("by_universe", "universeId");
+            timelines.createIndex("by_book", "bookId");
+          }
+
+          if (!database.objectStoreNames.contains("eras")) {
+            const eras = database.createObjectStore("eras", { keyPath: "id" });
+            eras.createIndex("by_timeline", "timelineId");
+          }
+
+          if (!database.objectStoreNames.contains("events")) {
+            const events = database.createObjectStore("events", { keyPath: "id" });
+            events.createIndex("by_universe", "universeId");
+            events.createIndex("by_era", "eraId");
+            events.createIndex("by_time_anchor", "timeAnchorId");
+          }
+
+          if (!database.objectStoreNames.contains("calendars")) {
+            const calendars = database.createObjectStore("calendars", { keyPath: "id" });
+            calendars.createIndex("by_universe", "universeId");
+          }
+
+          if (!database.objectStoreNames.contains("timeAnchors")) {
+            const anchors = database.createObjectStore("timeAnchors", { keyPath: "id" });
+            anchors.createIndex("by_calendar", "calendarId");
+            anchors.createIndex("by_relative_day", "relativeDay");
+          }
+
+          if (!database.objectStoreNames.contains("mentions")) {
+            const mentions = database.createObjectStore("mentions", { keyPath: "id" });
+            mentions.createIndex("by_scene", "sceneId");
+            mentions.createIndex("by_entry", "entryId");
+          }
+
+          if (!database.objectStoreNames.contains("cultureVersions")) {
+            const versions = database.createObjectStore("cultureVersions", { keyPath: "id" });
+            versions.createIndex("by_culture", "cultureEntryId");
+            versions.createIndex("by_valid_from", "validFromEventId");
+            versions.createIndex("by_valid_to", "validToEventId");
+          }
+
+          if (!database.objectStoreNames.contains("continuityIssues")) {
+            const issues = database.createObjectStore("continuityIssues", { keyPath: "id" });
+            issues.createIndex("by_universe", "universeId");
+            issues.createIndex("by_severity", "severity");
+            issues.createIndex("by_issue_status", "status");
+          }
+
+          if (!database.objectStoreNames.contains("suggestions")) {
+            const suggestions = database.createObjectStore("suggestions", { keyPath: "id" });
+            suggestions.createIndex("by_universe", "universeId");
+            suggestions.createIndex("by_status", "status");
+          }
+
+          if (!database.objectStoreNames.contains("revisions")) {
+            const revisions = database.createObjectStore("revisions", { keyPath: "id" });
+            revisions.createIndex("by_target", ["targetType", "targetId"]);
+            revisions.createIndex("by_universe", "universeId");
+          }
+
+          if (!database.objectStoreNames.contains("entryPatches")) {
+            const patches = database.createObjectStore("entryPatches", { keyPath: "id" });
+            patches.createIndex("by_status", "status");
+            patches.createIndex("by_sourceType", "sourceRef.kind");
+            patches.createIndex("by_sourceId", "sourceRef.id");
+          }
+
+          if (!database.objectStoreNames.contains("entryPatchByEntry")) {
+            const idx = database.createObjectStore("entryPatchByEntry", {
+              keyPath: ["docId", "patchId"],
+            });
+            idx.createIndex("by_entry", "docId");
+            idx.createIndex("by_status", "status");
+            idx.createIndex("by_patchId", "patchId");
+          }
+
+          if (database.objectStoreNames.contains("metadata")) {
+            await transaction.objectStore("metadata").put({
+              key: "schemaVersion",
+              value: 9,
               updatedAt: Date.now(),
             });
           }
@@ -657,6 +859,21 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
       "researchRuns",
       "researchArtifacts",
       "usageLedgers",
+      "universes",
+      "entries",
+      "entryRelations",
+      "timelines",
+      "eras",
+      "events",
+      "calendars",
+      "timeAnchors",
+      "mentions",
+      "cultureVersions",
+      "continuityIssues",
+      "suggestions",
+      "revisions",
+      "entryPatches",
+      "entryPatchByEntry",
     ],
     "readwrite",
   );
@@ -713,6 +930,102 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
     }
     runCursor = await runCursor.continue();
   }
+
+  const entryRows = await tx.objectStore("entries").index("by_universe").getAll(libraryId);
+  const timelineRows = await tx.objectStore("timelines").index("by_universe").getAll(libraryId);
+  const calendarRows = await tx.objectStore("calendars").index("by_universe").getAll(libraryId);
+  const eventRows = await tx.objectStore("events").index("by_universe").getAll(libraryId);
+  const entryIds = new Set(entryRows.map((row) => row.id));
+  const sceneIds = new Set(entryRows.filter((row) => row.entryType === "scene").map((row) => row.id));
+  const timelineIds = new Set(timelineRows.map((row) => row.id));
+  const calendarIds = new Set(calendarRows.map((row) => row.id));
+  const cultureEntryIds = new Set(entryRows.filter((row) => row.entryType === "culture").map((row) => row.id));
+  const patchIdsToDelete = new Set<string>();
+  const timeAnchorIdsToDelete = new Set<string>(eventRows.map((row) => row.timeAnchorId).filter(Boolean));
+
+  const deleteByUniverse = async (
+    storeName:
+      | "entries"
+      | "timelines"
+      | "events"
+      | "calendars"
+      | "continuityIssues"
+      | "suggestions"
+      | "revisions",
+  ): Promise<void> => {
+    const index = tx.objectStore(storeName).index("by_universe");
+    let cursor = await index.openCursor(libraryId);
+    while (cursor) {
+      await cursor.delete();
+      cursor = await cursor.continue();
+    }
+  };
+
+  const deleteByIndex = async (
+    storeName: "entryRelations" | "mentions" | "cultureVersions" | "eras" | "timeAnchors" | "entryPatchByEntry",
+    indexName: "by_from" | "by_to" | "by_scene" | "by_entry" | "by_culture" | "by_timeline" | "by_calendar",
+    value: string,
+    beforeDelete?: (cursorValue: { patchId?: string }) => void,
+  ): Promise<void> => {
+    type GenericCursor = {
+      value: unknown;
+      delete(): Promise<void>;
+      continue(): Promise<GenericCursor | null>;
+    };
+    const store = tx.objectStore(storeName) as unknown as {
+      index(name: string): { openCursor(query: string): Promise<GenericCursor | null> };
+    };
+    const index = store.index(indexName);
+    let cursor = await index.openCursor(value);
+    while (cursor) {
+      if (beforeDelete) beforeDelete(cursor.value as { patchId?: string });
+      await cursor.delete();
+      cursor = await cursor.continue();
+    }
+  };
+
+  for (const entryId of entryIds) {
+    await deleteByIndex("entryRelations", "by_from", entryId);
+    await deleteByIndex("entryRelations", "by_to", entryId);
+    await deleteByIndex("mentions", "by_entry", entryId);
+    await deleteByIndex("entryPatchByEntry", "by_entry", entryId, (row) => {
+      if (row.patchId) patchIdsToDelete.add(row.patchId);
+    });
+  }
+
+  for (const sceneId of sceneIds) {
+    await deleteByIndex("mentions", "by_scene", sceneId);
+  }
+
+  for (const cultureEntryId of cultureEntryIds) {
+    await deleteByIndex("cultureVersions", "by_culture", cultureEntryId);
+  }
+
+  for (const timelineId of timelineIds) {
+    await deleteByIndex("eras", "by_timeline", timelineId);
+  }
+
+  for (const calendarId of calendarIds) {
+    await deleteByIndex("timeAnchors", "by_calendar", calendarId);
+  }
+
+  for (const timeAnchorId of timeAnchorIdsToDelete) {
+    await tx.objectStore("timeAnchors").delete(timeAnchorId);
+  }
+
+  for (const patchId of patchIdsToDelete) {
+    await tx.objectStore("entryPatches").delete(patchId);
+  }
+
+  await deleteByUniverse("entries");
+  await deleteByUniverse("timelines");
+  await deleteByUniverse("events");
+  await deleteByUniverse("calendars");
+  await deleteByUniverse("continuityIssues");
+  await deleteByUniverse("suggestions");
+  await deleteByUniverse("revisions");
+
+  await tx.objectStore("universes").delete(libraryId);
 
   await tx.done;
 }
@@ -794,34 +1107,285 @@ export async function getUsageLedger(runId: string): Promise<PersistedUsageLedge
 }
 
 /* ==============================================================
+   Plan-002 universe engine stores
+   ============================================================== */
+
+export async function putUniverse(universe: PersistedUniverse): Promise<void> {
+  const db = await getDb();
+  await db.put("universes", { ...universe, updatedAt: universe.updatedAt ?? Date.now() });
+}
+
+export async function getUniverse(id: string): Promise<PersistedUniverse | null> {
+  const db = await getDb();
+  const record = await db.get("universes", id);
+  return record ?? null;
+}
+
+export async function listUniverses(): Promise<PersistedUniverse[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("universes", "by_updated");
+  return all.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function addEntry(entry: PersistedEntry): Promise<void> {
+  const db = await getDb();
+  await db.put("entries", { ...entry, updatedAt: entry.updatedAt ?? Date.now() });
+}
+
+export async function updateEntry(id: string, patch: Partial<PersistedEntry>): Promise<void> {
+  const db = await getDb();
+  const existing = await db.get("entries", id);
+  if (!existing) return;
+  await db.put("entries", { ...existing, ...patch, id, updatedAt: Date.now() });
+}
+
+export async function getEntryById(id: string): Promise<PersistedEntry | undefined> {
+  const db = await getDb();
+  return db.get("entries", id);
+}
+
+export async function listEntriesByUniverse(universeId: string): Promise<PersistedEntry[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("entries", "by_universe", universeId);
+}
+
+export async function queryEntriesByType(type: EntryType): Promise<PersistedEntry[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("entries", "by_entry_type", type);
+}
+
+export async function deleteEntry(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("entries", id);
+}
+
+export async function addEntryRelation(rel: PersistedRelationship): Promise<void> {
+  const db = await getDb();
+  await db.put("entryRelations", rel);
+}
+
+export async function removeEntryRelation(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("entryRelations", id);
+}
+
+export async function getEntryRelationsForEntry(entryId: string): Promise<PersistedRelationship[]> {
+  const db = await getDb();
+  const [from, to] = await Promise.all([
+    db.getAllFromIndex("entryRelations", "by_from", entryId),
+    db.getAllFromIndex("entryRelations", "by_to", entryId),
+  ]);
+  const byId = new Map<string, PersistedRelationship>();
+  [...from, ...to].forEach((rel) => byId.set(rel.id, rel));
+  return [...byId.values()];
+}
+
+export async function putTimeline(entry: PersistedTimeline): Promise<void> {
+  const db = await getDb();
+  await db.put("timelines", entry);
+}
+
+export async function listTimelinesByUniverse(universeId: string): Promise<PersistedTimeline[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("timelines", "by_universe", universeId);
+}
+
+export async function putEra(entry: PersistedEra): Promise<void> {
+  const db = await getDb();
+  await db.put("eras", entry);
+}
+
+export async function listErasByTimeline(timelineId: string): Promise<PersistedEra[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("eras", "by_timeline", timelineId);
+}
+
+export async function putEvent(entry: PersistedEvent): Promise<void> {
+  const db = await getDb();
+  await db.put("events", entry);
+}
+
+export async function listEventsByUniverse(universeId: string): Promise<PersistedEvent[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("events", "by_universe", universeId);
+}
+
+export async function putCalendar(entry: PersistedCalendar): Promise<void> {
+  const db = await getDb();
+  await db.put("calendars", entry);
+}
+
+export async function listCalendarsByUniverse(universeId: string): Promise<PersistedCalendar[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("calendars", "by_universe", universeId);
+}
+
+export async function putTimeAnchor(entry: PersistedTimeAnchor): Promise<void> {
+  const db = await getDb();
+  await db.put("timeAnchors", entry);
+}
+
+export async function getTimeAnchor(id: string): Promise<PersistedTimeAnchor | null> {
+  const db = await getDb();
+  const record = await db.get("timeAnchors", id);
+  return record ?? null;
+}
+
+export async function putMention(entry: PersistedMention): Promise<void> {
+  const db = await getDb();
+  await db.put("mentions", entry);
+}
+
+export async function listMentionsByScene(sceneId: string): Promise<PersistedMention[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("mentions", "by_scene", sceneId);
+}
+
+export async function addCultureVersion(entry: PersistedCultureVersion): Promise<void> {
+  const db = await getDb();
+  await db.put("cultureVersions", entry);
+}
+
+export async function listCultureVersionsByCulture(cultureEntryId: string): Promise<PersistedCultureVersion[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("cultureVersions", "by_culture", cultureEntryId);
+}
+
+export async function addContinuityIssue(entry: PersistedContinuityIssue): Promise<void> {
+  const db = await getDb();
+  await db.put("continuityIssues", entry);
+}
+
+export async function listContinuityIssuesByUniverse(universeId: string): Promise<PersistedContinuityIssue[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("continuityIssues", "by_universe", universeId);
+}
+
+export async function updateContinuityIssueStatus(
+  id: string,
+  status: PersistedContinuityIssue["status"],
+  resolution?: string,
+): Promise<void> {
+  const db = await getDb();
+  const existing = await db.get("continuityIssues", id);
+  if (!existing) return;
+  await db.put("continuityIssues", {
+    ...existing,
+    status,
+    resolution: resolution ?? existing.resolution,
+    updatedAt: Date.now(),
+  });
+}
+
+export async function addSuggestion(entry: PersistedSuggestion): Promise<void> {
+  const db = await getDb();
+  await db.put("suggestions", entry);
+}
+
+export async function listSuggestionsByUniverse(universeId: string): Promise<PersistedSuggestion[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("suggestions", "by_universe", universeId);
+}
+
+export async function updateSuggestionStatus(id: string, status: PersistedSuggestion["status"]): Promise<void> {
+  const db = await getDb();
+  const existing = await db.get("suggestions", id);
+  if (!existing) return;
+  await db.put("suggestions", { ...existing, status, updatedAt: Date.now() });
+}
+
+export async function addRevision(entry: PersistedRevision): Promise<void> {
+  const db = await getDb();
+  await db.put("revisions", entry);
+}
+
+export async function listRevisionsForTarget(targetType: string, targetId: string): Promise<PersistedRevision[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("revisions", "by_target", [targetType, targetId]);
+}
+
+export async function addEntryPatch(patch: PersistedEntryPatch): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(["entryPatches", "entryPatchByEntry"], "readwrite");
+  await tx.objectStore("entryPatches").put(patch);
+  const entryIds = new Set<string>();
+  for (const op of patch.operations) {
+    if ("entryId" in op) entryIds.add(op.entryId as string);
+    if ("docId" in op) entryIds.add(op.docId as string);
+    if ("entry" in op && op.entry?.id) entryIds.add(op.entry.id as string);
+    if ("fields" in op && op.fields?.id) entryIds.add(op.fields.id as string);
+    if ("relation" in op) {
+      entryIds.add(op.relation.from);
+      entryIds.add(op.relation.to);
+    }
+    if ("relationship" in op) {
+      entryIds.add(op.relationship.from);
+      entryIds.add(op.relationship.to);
+    }
+  }
+  for (const entryId of entryIds) {
+    await tx.objectStore("entryPatchByEntry").put({
+      docId: entryId,
+      patchId: patch.id,
+      status: patch.status,
+    });
+  }
+  await tx.done;
+}
+
+export async function getPendingEntryPatches(): Promise<PersistedEntryPatch[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("entryPatches", "by_status", "pending");
+}
+
+export async function getEntryPatchesForEntry(entryId: string): Promise<PersistedEntryPatch[]> {
+  const db = await getDb();
+  const entries = await db.getAllFromIndex("entryPatchByEntry", "by_entry", entryId);
+  if (entries.length === 0) return [];
+  const tx = db.transaction("entryPatches", "readonly");
+  const rows = await Promise.all(entries.map((entry) => tx.store.get(entry.patchId)));
+  return rows.filter((row): row is PersistedEntryPatch => row !== undefined);
+}
+
+/* ==============================================================
    Canonical documents (Plan 001 — Phase 3)
    ============================================================== */
 
 export async function addDoc(doc: PersistedCanonicalDoc): Promise<void> {
   const db = await getDb();
-  await db.put("canonicalDocs", { ...doc, updatedAt: doc.updatedAt ?? Date.now() });
+  const normalized = { ...doc, updatedAt: doc.updatedAt ?? Date.now() };
+  await db.put("canonicalDocs", normalized);
+  // Bridge write to the Plan-002 entries store.
+  await db.put("entries", normalized);
 }
 
 export async function updateDoc(id: string, patch: Partial<PersistedCanonicalDoc>): Promise<void> {
   const db = await getDb();
   const existing = await db.get("canonicalDocs", id);
   if (!existing) return;
-  await db.put("canonicalDocs", { ...existing, ...patch, id, updatedAt: Date.now() });
+  const next = { ...existing, ...patch, id, updatedAt: Date.now() };
+  await db.put("canonicalDocs", next);
+  await db.put("entries", next);
 }
 
 export async function getDocById(id: string): Promise<PersistedCanonicalDoc | undefined> {
   const db = await getDb();
+  const entry = await db.get("entries", id);
+  if (entry) return entry;
   return db.get("canonicalDocs", id);
 }
 
 export async function queryDocsByType(type: CanonicalType): Promise<PersistedCanonicalDoc[]> {
   const db = await getDb();
+  const entries = await db.getAllFromIndex("entries", "by_entry_type", type);
+  if (entries.length > 0) return entries;
   return db.getAllFromIndex("canonicalDocs", "by_type", type);
 }
 
 export async function deleteDoc(id: string): Promise<void> {
   const db = await getDb();
   await db.delete("canonicalDocs", id);
+  await db.delete("entries", id);
 }
 
 /* ==============================================================
@@ -830,8 +1394,9 @@ export async function deleteDoc(id: string): Promise<void> {
 
 export async function addRelationship(rel: PersistedRelationship): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(["relationships", "relationIndexByDoc"], "readwrite");
+  const tx = db.transaction(["relationships", "relationIndexByDoc", "entryRelations"], "readwrite");
   await tx.objectStore("relationships").put(rel);
+  await tx.objectStore("entryRelations").put(rel);
   // Upsert both directions in the denormalised index
   await tx.objectStore("relationIndexByDoc").put({ docId: rel.from, relationshipId: rel.id });
   await tx.objectStore("relationIndexByDoc").put({ docId: rel.to,   relationshipId: rel.id });
@@ -840,10 +1405,11 @@ export async function addRelationship(rel: PersistedRelationship): Promise<void>
 
 export async function removeRelationship(id: string): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(["relationships", "relationIndexByDoc"], "readwrite");
+  const tx = db.transaction(["relationships", "relationIndexByDoc", "entryRelations"], "readwrite");
   const rel = await tx.objectStore("relationships").get(id);
   if (rel) {
     await tx.objectStore("relationships").delete(id);
+    await tx.objectStore("entryRelations").delete(id);
     // Compound key: [docId, relationshipId]
     await tx.objectStore("relationIndexByDoc").delete([rel.from, id]);
     await tx.objectStore("relationIndexByDoc").delete([rel.to,   id]);
@@ -853,6 +1419,15 @@ export async function removeRelationship(id: string): Promise<void> {
 
 export async function getRelationsForDoc(docId: string): Promise<PersistedRelationship[]> {
   const db = await getDb();
+  const [entryFrom, entryTo] = await Promise.all([
+    db.getAllFromIndex("entryRelations", "by_from", docId),
+    db.getAllFromIndex("entryRelations", "by_to", docId),
+  ]);
+  if (entryFrom.length + entryTo.length > 0) {
+    const map = new Map<string, PersistedRelationship>();
+    [...entryFrom, ...entryTo].forEach((row) => map.set(row.id, row));
+    return [...map.values()];
+  }
   // Range scan via compound-key index: all rows where docId matches
   const entries = await db.getAllFromIndex("relationIndexByDoc", "by_doc", docId);
   if (entries.length === 0) return [];
@@ -867,16 +1442,23 @@ export async function getRelationsForDoc(docId: string): Promise<PersistedRelati
 
 export async function addPatch(patch: PersistedCanonicalPatch): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(["patches", "patchByDoc"], "readwrite");
+  const tx = db.transaction(["patches", "patchByDoc", "entryPatches", "entryPatchByEntry"], "readwrite");
   await tx.objectStore("patches").put(patch);
+  await tx.objectStore("entryPatches").put(patch);
   // Index the patch against every doc it touches
   const docIds = new Set<string>();
   for (const op of patch.operations) {
     if ("docId" in op) docIds.add(op.docId);
     if ("fields" in op && op.fields.id) docIds.add(op.fields.id as string);
+    if ("entry" in op && op.entry?.id) docIds.add(op.entry.id as string);
+    if ("entryId" in op) docIds.add(op.entryId as string);
     if ("relationship" in op) {
       docIds.add(op.relationship.from);
       docIds.add(op.relationship.to);
+    }
+    if ("relation" in op) {
+      docIds.add(op.relation.from);
+      docIds.add(op.relation.to);
     }
     if ("relationshipId" in op && op.op === "remove-relationship") {
       // No doc ID available without the relationship record; skip for now
@@ -884,6 +1466,7 @@ export async function addPatch(patch: PersistedCanonicalPatch): Promise<void> {
   }
   for (const docId of docIds) {
     await tx.objectStore("patchByDoc").put({ docId, patchId: patch.id, status: patch.status });
+    await tx.objectStore("entryPatchByEntry").put({ docId, patchId: patch.id, status: patch.status });
   }
   await tx.done;
 }
@@ -893,25 +1476,38 @@ export async function updatePatchStatus(
   status: PersistedCanonicalPatch["status"]
 ): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(["patches", "patchByDoc"], "readwrite");
+  const tx = db.transaction(["patches", "patchByDoc", "entryPatches", "entryPatchByEntry"], "readwrite");
   const existing = await tx.objectStore("patches").get(id);
   if (!existing) { await tx.done; return; }
   await tx.objectStore("patches").put({ ...existing, status });
+  await tx.objectStore("entryPatches").put({ ...existing, status });
   // Update status on all patchByDoc index rows for this patchId
   const indexRows = await tx.objectStore("patchByDoc").index("by_patchId").getAll(id);
   for (const row of indexRows) {
     await tx.objectStore("patchByDoc").put({ ...row, status });
+  }
+  const entryRows = await tx.objectStore("entryPatchByEntry").index("by_patchId").getAll(id);
+  for (const row of entryRows) {
+    await tx.objectStore("entryPatchByEntry").put({ ...row, status });
   }
   await tx.done;
 }
 
 export async function getPendingPatches(): Promise<PersistedCanonicalPatch[]> {
   const db = await getDb();
+  const next = await db.getAllFromIndex("entryPatches", "by_status", "pending");
+  if (next.length > 0) return next;
   return db.getAllFromIndex("patches", "by_status", "pending");
 }
 
 export async function getPatchesForDoc(docId: string): Promise<PersistedCanonicalPatch[]> {
   const db = await getDb();
+  const entryIndex = await db.getAllFromIndex("entryPatchByEntry", "by_entry", docId);
+  if (entryIndex.length > 0) {
+    const tx = db.transaction("entryPatches", "readonly");
+    const rows = await Promise.all(entryIndex.map((entry) => tx.store.get(entry.patchId)));
+    return rows.filter((row): row is PersistedCanonicalPatch => row !== undefined);
+  }
   // Range scan via compound-key index: all rows where docId matches
   const entries = await db.getAllFromIndex("patchByDoc", "by_doc", docId);
   if (entries.length === 0) return [];
@@ -1072,6 +1668,43 @@ export async function createRAGStore(): Promise<RAGStore> {
     listResearchArtifacts,
     putUsageLedger,
     getUsageLedger,
+    putUniverse,
+    getUniverse,
+    listUniverses,
+    addEntry,
+    updateEntry,
+    getEntryById,
+    listEntriesByUniverse,
+    queryEntriesByType,
+    deleteEntry,
+    addEntryRelation,
+    removeEntryRelation,
+    getEntryRelationsForEntry,
+    putTimeline,
+    listTimelinesByUniverse,
+    putEra,
+    listErasByTimeline,
+    putEvent,
+    listEventsByUniverse,
+    putCalendar,
+    listCalendarsByUniverse,
+    putTimeAnchor,
+    getTimeAnchor,
+    putMention,
+    listMentionsByScene,
+    addCultureVersion,
+    listCultureVersionsByCulture,
+    addContinuityIssue,
+    listContinuityIssuesByUniverse,
+    updateContinuityIssueStatus,
+    addSuggestion,
+    listSuggestionsByUniverse,
+    updateSuggestionStatus,
+    addRevision,
+    listRevisionsForTarget,
+    addEntryPatch,
+    getPendingEntryPatches,
+    getEntryPatchesForEntry,
     addDoc,
     updateDoc,
     getDocById,

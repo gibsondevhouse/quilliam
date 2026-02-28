@@ -23,7 +23,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { extractCanonical, extractPatches } from "@/lib/patchExtractor";
-import type { CanonicalDoc, SourceRef } from "@/lib/types";
+import type { Entry, SourceRef } from "@/lib/types";
 
 /** Maps the legacy API sourceType field to a SourceRef.kind value. */
 function toSourceKind(raw: string | undefined): SourceRef["kind"] {
@@ -40,11 +40,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       text?: string;
       sourceType?: string;
       sourceId?: string;
-      /** Optional snapshot of canonical docs from the client IDB store. */
-      existingDocs?: CanonicalDoc[];
+      /** Optional snapshot of entry records from the client IDB store. */
+      existingEntries?: Entry[];
+      /** Backward compatibility alias, removed after imp002 cutover. */
+      existingDocs?: Entry[];
     };
 
-    const { text, sourceType, sourceId = "unknown", existingDocs } = body;
+    const { text, sourceType, sourceId = "unknown", existingEntries, existingDocs } = body;
 
     if (!text || typeof text !== "string" || text.trim().length === 0) {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
@@ -52,10 +54,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const trimmedText = text.trim();
 
-    if (Array.isArray(existingDocs)) {
+    const candidates = Array.isArray(existingEntries)
+      ? existingEntries
+      : Array.isArray(existingDocs)
+        ? existingDocs
+        : null;
+
+    if (Array.isArray(candidates)) {
       // New pipeline: name-aware multi-patch extraction
       const sourceRef: SourceRef = { kind: toSourceKind(sourceType), id: sourceId };
-      const patches = await extractPatches(trimmedText, existingDocs, sourceRef);
+      const patches = await extractPatches(trimmedText, candidates, sourceRef);
       return NextResponse.json({ patches });
     }
 
@@ -70,4 +78,3 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
-

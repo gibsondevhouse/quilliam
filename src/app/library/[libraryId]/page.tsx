@@ -8,5 +8,5 @@ interface LibraryRootPageProps {
 
 export default async function LibraryRootPage({ params }: LibraryRootPageProps) {
   const { libraryId } = await params;
-  redirect(`/library/${libraryId}/dashboard`);
+  redirect(`/library/${libraryId}/universe`);
 }
