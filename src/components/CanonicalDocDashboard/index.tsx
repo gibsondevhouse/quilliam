@@ -6,6 +6,7 @@ import { DocForm } from "./DocForm";
 import { EntryRelatedPanel } from "./EntryRelatedPanel";
 import { useEntryDashboard } from "./hooks/useEntryDashboard";
 import { useEntryRelatedData } from "./hooks/useEntryRelatedData";
+import { CultureVersionPanel } from "@/components/CultureVersionPanel";
 
 export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProps) {
   const searchParams = useSearchParams();
@@ -142,6 +143,9 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
                 onAddMember={handleAddMember}
                 onRemoveMember={handleRemoveMember}
               />
+            )}
+            {type === "culture" && (
+              <CultureVersionPanel cultureEntryId={activeDoc.id} />
             )}
           </>
         ) : (

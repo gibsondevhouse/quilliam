@@ -1,0 +1,238 @@
+/* ===== Book Timeline Page ===== */
+
+.bt-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.bt-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  flex: 1;
+}
+
+.bt-back-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 0;
+  transition: opacity 0.15s;
+}
+
+.bt-back-btn:hover { opacity: 0.7; }
+
+.bt-breadcrumb-sep {
+  color: var(--text-muted);
+}
+
+.bt-breadcrumb-current {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.bt-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.bt-summary-dot {
+  color: var(--border);
+}
+
+.bt-summary-unlinked {
+  color: #f59e0b;
+}
+
+.bt-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+}
+
+.bt-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* ===== Event rows ===== */
+
+.bt-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.bt-event-row {
+  display: flex;
+  gap: 1rem;
+  min-height: 5rem;
+}
+
+.bt-event-spine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 2rem;
+  flex-shrink: 0;
+}
+
+.bt-event-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  z-index: 1;
+  position: relative;
+}
+
+.bt-event-line {
+  flex: 1;
+  width: 2px;
+  background: var(--border);
+  margin-top: 2px;
+}
+
+.bt-event-row:last-child .bt-event-line {
+  display: none;
+}
+
+.bt-event-body {
+  flex: 1;
+  padding-bottom: 1.5rem;
+}
+
+.bt-event-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.bt-event-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.bt-event-type {
+  font-size: 0.72rem;
+  font-weight: 500;
+  background: rgba(124, 111, 239, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(124, 111, 239, 0.25);
+  border-radius: 4px;
+  padding: 0 5px;
+  line-height: 1.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.bt-event-era {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.bt-event-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0 0 0.6rem;
+  font-style: italic;
+}
+
+/* ===== Scene chips ===== */
+
+.bt-scene-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.bt-scene-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+  max-width: 22rem;
+}
+
+.bt-scene-chip:hover {
+  border-color: var(--accent);
+  background: var(--bg-surface);
+}
+
+.bt-scene-chip-title {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.bt-scene-chip-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 20rem;
+}
+
+/* ===== Unlinked section ===== */
+
+.bt-unlinked-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+}
+
+.bt-unlinked-heading {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.bt-unlinked-count {
+  font-size: 0.72rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 5px;
+  line-height: 1.3rem;
+  color: #f59e0b;
+}
+
+.bt-unlinked-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0 0 0.75rem;
+}

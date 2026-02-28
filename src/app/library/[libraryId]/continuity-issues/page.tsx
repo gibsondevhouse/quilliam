@@ -1,13 +1,16 @@
 "use client";
 
 /**
- * Continuity Viewer — relationship graph, contradiction list, and timeline view.
+ * Continuity Viewer — relationship graph, contradiction list, timeline, and rule-checks.
  * Route: /library/[libraryId]/continuity-issues
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
 import { useStore } from "@/lib/context/useStore";
-import type { Entry, EntryType, Relationship } from "@/lib/types";
+import { ContinuityIssueCard } from "@/components/BuildFeed/ContinuityIssueCard";
+import { runDeterministicContinuityChecks } from "@/lib/domain/continuity/checks";
+import type { ContinuityIssue, Entry, EntryType, Relationship } from "@/lib/types";
 
 const ALL_TYPES: EntryType[] = [
   "character",
@@ -37,15 +40,73 @@ const PAGE_NOW_MS = Date.now();
 
 interface DocMap { [id: string]: Entry }
 
+const SEV_ORDER: Record<ContinuityIssue["severity"], number> = {
+  blocker: 0, warning: 1, note: 2,
+};
+
 export default function ContinuityPage() {
   const store = useStore();
+  const params = useParams<{ libraryId: string }>();
+  const libraryId = params.libraryId;
   const [docs, setDocs] = useState<Entry[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   // Start with loading=true — avoids synchronous setState inside the effect.
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<EntryType | "all">("all");
-  const [tab, setTab] = useState<"graph" | "contradictions" | "timeline">("graph");
+  const [tab, setTab] = useState<"graph" | "contradictions" | "timeline" | "checks">("graph");
   const loadedRef = useRef(false);
+
+  // ----- Rule checks state -----
+  const [checkIssues, setCheckIssues] = useState<ContinuityIssue[]>([]);
+  const [checksLoaded, setChecksLoaded] = useState(false);
+  const [runningChecks, setRunningChecks] = useState(false);
+
+  const loadSavedIssues = useCallback(async () => {
+    const saved = await store.listContinuityIssuesByUniverse(libraryId);
+    setCheckIssues(
+      saved.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || b.createdAt - a.createdAt),
+    );
+    setChecksLoaded(true);
+  }, [store, libraryId]);
+
+  const handleRunChecks = useCallback(async () => {
+    setRunningChecks(true);
+    try {
+      const [mentionsNested, membershipsNested] = await Promise.all([
+        Promise.all(docs.map((d) => store.listMentionsByEntry(d.id))),
+        Promise.all(
+          docs
+            .filter((d) => d.entryType === "culture")
+            .map((d) => store.listCultureMembershipsByCulture(d.id)),
+        ),
+      ]);
+      const ctx = {
+        universeId: libraryId,
+        entries: docs,
+        mentions: mentionsNested.flat(),
+        cultureMemberships: membershipsNested.flat(),
+      };
+      const newIssues = runDeterministicContinuityChecks(ctx);
+      await Promise.all(newIssues.map((issue) => store.addContinuityIssue(issue)));
+      await loadSavedIssues();
+    } finally {
+      setRunningChecks(false);
+    }
+  }, [store, libraryId, docs, loadSavedIssues]);
+
+  const handleSetIssueStatus = useCallback(
+    async (issue: ContinuityIssue, status: ContinuityIssue["status"]) => {
+      await store.updateContinuityIssueStatus(issue.id, status);
+      await loadSavedIssues();
+    },
+    [store, loadSavedIssues],
+  );
+
+  useEffect(() => {
+    if (tab === "checks" && !checksLoaded) {
+      void loadSavedIssues();
+    }
+  }, [tab, checksLoaded, loadSavedIssues]);
 
   useEffect(() => {
     if (loadedRef.current) return;
@@ -93,7 +154,7 @@ export default function ContinuityPage() {
       <div className="library-page-header">
         <h2>Continuity Viewer</h2>
         <div className="continuity-tabs">
-          {(["graph", "contradictions", "timeline"] as const).map((t) => (
+          {(["graph", "contradictions", "timeline", "checks"] as const).map((t) => (
             <button
               key={t}
               className={`continuity-tab ${tab === t ? "active" : ""}`}
@@ -251,6 +312,46 @@ export default function ContinuityPage() {
                 </li>
               ))}
             </ol>
+          )}
+        </div>
+      )}
+
+      {tab === "checks" && (
+        <div className="continuity-checks">
+          <div className="continuity-checks-toolbar">
+            <span className="continuity-checks-count">
+              {checkIssues.length} issue{checkIssues.length !== 1 ? "s" : ""}
+            </span>
+            <button
+              className="library-page-action"
+              onClick={() => void handleRunChecks()}
+              disabled={runningChecks || loading}
+            >
+              {runningChecks ? "Running…" : "▶ Run Checks"}
+            </button>
+          </div>
+
+          {!checksLoaded ? (
+            <p className="library-page-empty">Select this tab to load saved issues.</p>
+          ) : checkIssues.length === 0 ? (
+            <div className="library-page-empty">
+              <p>No issues recorded. Click <strong>Run Checks</strong> to scan for problems.</p>
+              <p className="continuity-checks-hint">
+                Checks: duplicate canonical names · broken mention refs ·
+                conflicting timeline events · culture membership overlap · death-before-appearance
+              </p>
+            </div>
+          ) : (
+            <ul className="continuity-checks-list">
+              {checkIssues.map((issue) => (
+                <li key={issue.id}>
+                  <ContinuityIssueCard
+                    issue={issue}
+                    onSetStatus={(iss, status) => void handleSetIssueStatus(iss, status)}
+                  />
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

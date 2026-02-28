@@ -124,6 +124,12 @@ export default function BookDashboardPage() {
           >
             Beats &amp; Outline
           </button>
+          <button
+            className="library-dashboard-action"
+            onClick={() => router.push(`/library/${libraryId}/books/${storyId}/timeline`)}
+          >
+            Book Timeline
+          </button>
         </div>
       </div>
 

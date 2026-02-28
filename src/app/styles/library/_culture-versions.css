@@ -1,0 +1,304 @@
+/* ===== Culture Version Panel ===== */
+
+.cv-panel {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+}
+
+.cv-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.cv-panel-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+  flex: 1;
+}
+
+.cv-panel-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 6px;
+  color: var(--text-muted);
+  line-height: 1.5rem;
+}
+
+.cv-panel-add-btn {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.7rem;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  margin-left: auto;
+}
+
+.cv-panel-add-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.cv-panel-empty {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ===== Add snapshot form ===== */
+
+.cv-form {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cv-form-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cv-form-row--col {
+  grid-template-columns: 1fr;
+}
+
+.cv-form-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.cv-form-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 0.35rem;
+}
+
+.cv-form-select,
+.cv-form-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  padding: 0.35rem 0.6rem;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+
+.cv-form-select:focus,
+.cv-form-input:focus {
+  border-color: var(--accent);
+}
+
+.cv-form-textarea {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-family: "SFMono-Regular", "Consolas", monospace;
+  padding: 0.5rem 0.6rem;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cv-form-textarea:focus {
+  border-color: var(--accent);
+}
+
+.cv-form-textarea--error {
+  border-color: #f87171;
+}
+
+.cv-form-error {
+  font-size: 0.75rem;
+  color: #f87171;
+  margin-top: 0.25rem;
+}
+
+.cv-form-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+}
+
+.cv-form-btn {
+  font-size: 0.8rem;
+  padding: 0.4rem 0.9rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cv-form-btn:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.cv-form-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cv-form-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.cv-form-btn--primary:hover:not(:disabled) {
+  background: #6b5ed6;
+  border-color: #6b5ed6;
+}
+
+/* ===== Version cards ===== */
+
+.cv-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cv-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  transition: border-left-color 0.15s;
+}
+
+.cv-card--open {
+  border-left-color: #4ade80;
+}
+
+.cv-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.cv-card-validity {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.cv-card-event {
+  color: var(--text-secondary);
+}
+
+.cv-card-event--open {
+  color: #4ade80;
+  font-style: italic;
+}
+
+.cv-card-arrow {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.cv-card-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 4px;
+  padding: 0 5px;
+  line-height: 1.4rem;
+  margin-left: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cv-card-trigger {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0 0 0.5rem;
+}
+
+.cv-card-traits-section {
+  margin-top: 0.35rem;
+}
+
+.cv-card-no-traits {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cv-card-traits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
+}
+
+.cv-card-trait-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.cv-card-trait-key {
+  color: var(--text-muted);
+}
+
+.cv-card-trait-key::after {
+  content: ":";
+}
+
+.cv-card-trait-val {
+  color: var(--text-secondary);
+  font-weight: 500;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-card-trait-more {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
