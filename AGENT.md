@@ -24,12 +24,11 @@ Critical web entry points:
 
 - App shell and global state: `src/app/ClientShell.tsx`
 - Library workspace orchestration: `src/app/library/[libraryId]/layout.tsx`
-- Library sub-routes: `dashboard/`, `stories/`, `chapters/`, `beats/`, `characters/`, `locations/`, `world/`, `threads/[id]/`, `systems/`,
-  `factions/`, `magic-systems/`, `items/`, `lore/`, `rules/`, `canonical-scenes/`, `timeline/`, `build-feed/`, `continuity/`
+- Library sub-routes: `universe/`, `books/`, `chapters/`, `scenes/`, `characters/`, `locations/`, `cultures/`, `organizations/`, `factions/`, `magic-systems/`, `items/`, `languages/`, `religions/`, `lineages/`, `economics/`, `rules/`, `cosmology/`, `master-timeline/`, `maps/`, `media/`, `relationship-web/`, `continuity-issues/`, `conflicts/`, `suggestions/`, `change-log/`, `threads/[id]/`, `settings/`
 - Chat UI and mode routing: `src/components/Chat.tsx`
 - Cloud vault + provider clients: `src/lib/cloud/*`
 - Deep research engine: `src/lib/research/*`
-- Shared entity types: `src/lib/types.ts`
+- Domain types (entry-centric universe engine): `src/lib/types.ts`
 - API routes: `src/app/api/*/route.ts`
   - Local: `/api/chat`, `/api/embeddings`, `/api/status`, `/api/system`, `/api/extract-canonical`
   - Cloud: `/api/cloud/assist`, `/api/cloud/vault/*`
@@ -72,16 +71,22 @@ Optional web runtime knobs:
 
 Web:
 
-- IndexedDB `quilliam-rag` is at **DB v7**. Store inventory:
+- IndexedDB `quilliam-rag` is at **DB v11**. Store inventory:
   - v1–v2: `nodes`, `embeddings`, `metadata`, `chatSessions`, `chatMessages`
   - v3: `characters`, `locations`, `worldEntries`
   - v4: `stories`
   - v5: `aiSettings`, `researchRuns`, `researchArtifacts`
   - v6: `usageLedgers`
-  - v7: `canonicalDocs`, `relationships`, `patches`, `relationIndexByDoc`, `patchByDoc`
-- `RAGNode` hierarchy: `library > series > book > section > chapter > scene > fragment` (7 levels; `series` added, `part` renamed → `section`).
+  - v7: `canonicalDocs`, `relationships`, `patches`
+  - v8: `relationIndexByDoc`, `patchByDoc` (compound-key rebuilds)
+  - v9: `universes`, `entries`, `series`, `books`, `chapters`, `scenes`, `entryRelations`, `timelines`, `eras`, `events`, `calendars`, `timeAnchors`, `memberships`, `cultureMemberships`, `itemOwnerships`, `mentions`, `media`, `maps`, `mapPins`
+  - v10: `cultureVersions`, `organizationVersions`, `religionVersions`, `continuityIssues`, `suggestions`, `revisions`
+  - v11: `entryPatches`, `entryPatchByEntry`
+- `RAGNode` hierarchy: `library > series > book > section > chapter > scene > fragment` (7 levels).
 - `RAGNode.sceneDocId?: string` links a scene tree-node to its canonical scene doc in the `canonicalDocs` store.
-- Canonical patch lifecycle: all model-proposed canon mutations land as `CanonicalPatch { status: "pending" }` records; user accepts/rejects in the Build Feed (`/build-feed`). Patches are never auto-committed.
+- **Universe engine entity model** (`Entry` supertype): entries carry `entryType` ∈ `{ character, location, culture, organization, system, item, language, religion, lineage, economy, rule }` plus legacy aliases. Each entry tracks `canonStatus` ∈ `{ draft, proposed, canon, deprecated, retconned, alternate-branch }`.
+- **Entity patch lifecycle**: model-proposed mutations land as `EntryPatch { status: "pending" }` records in `entryPatches`; user accepts/rejects from the suggestions or change-log views. Patches are never auto-committed unless `autoCommit: true` is explicitly set.
+- **Legacy canonical patch lifecycle**: `CanonicalPatch` records in `patches` remain valid; `EntryPatch` supersedes for Plan-002 universe-engine targets.
 - Cloud vault is encrypted at rest and unlocked per session.
 - Deep research runs/artifacts/usage are durably persisted and resumable after reload.
 
@@ -94,20 +99,27 @@ Before finalizing:
 3. Core pages resolve:
    - `/`
    - `/library/[libraryId]` (dashboard redirect)
-   - `/library/[libraryId]/dashboard`
-   - `/library/[libraryId]/stories`
+   - `/library/[libraryId]/universe`
+   - `/library/[libraryId]/books`
    - `/library/[libraryId]/chapters`
-   - `/library/[libraryId]/beats`
+   - `/library/[libraryId]/scenes`
    - `/library/[libraryId]/characters`
    - `/library/[libraryId]/locations`
-   - `/library/[libraryId]/world`
-   - `/library/[libraryId]/systems`
+   - `/library/[libraryId]/cultures`
+   - `/library/[libraryId]/organizations`
+   - `/library/[libraryId]/master-timeline`
+   - `/library/[libraryId]/maps`
+   - `/library/[libraryId]/continuity-issues`
+   - `/library/[libraryId]/suggestions`
+   - `/library/[libraryId]/change-log`
+   - `/library/[libraryId]/settings`
    - `/library/[libraryId]/threads/[threadId]`
 4. Core APIs resolve:
    - `/api/chat`
    - `/api/embeddings`
    - `/api/status`
    - `/api/system`
+   - `/api/extract-canonical`
    - `/api/cloud/vault/*`
    - `/api/cloud/assist`
    - `/api/research/runs` (GET + POST)
