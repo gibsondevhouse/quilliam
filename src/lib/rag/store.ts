@@ -6,22 +6,34 @@
 import type { RAGNode } from "@/lib/rag/hierarchy";
 import type {
   AiLibrarySettings,
+  Book,
   Calendar,
+  Chapter,
   CanonicalDoc,
   CanonicalPatch,
   CanonicalType,
   ContinuityIssue,
+  CultureMembership,
   CultureVersion,
   Entry,
   EntryPatch,
   EntryType,
   Era,
   Event,
+  ItemOwnership,
+  Map as WorldMap,
+  MapPin,
+  Media,
   Mention,
+  Membership,
+  OrganizationVersion,
+  ReligionVersion,
   Revision,
   Relationship,
   ResearchArtifact,
   ResearchRunRecord,
+  Scene,
+  Series,
   Suggestion,
   TimeAnchor,
   Timeline,
@@ -160,16 +172,28 @@ export type PersistedCanonicalPatch = CanonicalPatch;
 export type PersistedUniverse = Universe;
 export type PersistedEntry = Entry;
 export type PersistedEntryPatch = EntryPatch;
+export type PersistedSeries = Series;
+export type PersistedBook = Book;
+export type PersistedChapter = Chapter;
+export type PersistedScene = Scene;
 export type PersistedTimeline = Timeline;
 export type PersistedEra = Era;
 export type PersistedEvent = Event;
 export type PersistedCalendar = Calendar;
 export type PersistedTimeAnchor = TimeAnchor;
+export type PersistedMembership = Membership;
+export type PersistedCultureMembership = CultureMembership;
+export type PersistedItemOwnership = ItemOwnership;
 export type PersistedCultureVersion = CultureVersion;
+export type PersistedOrganizationVersion = OrganizationVersion;
+export type PersistedReligionVersion = ReligionVersion;
 export type PersistedContinuityIssue = ContinuityIssue;
 export type PersistedSuggestion = Suggestion;
 export type PersistedRevision = Revision;
 export type PersistedMention = Mention;
+export type PersistedMedia = Media;
+export type PersistedMap = WorldMap;
+export type PersistedMapPin = MapPin;
 
 /**
  * Denormalised lookup entry: one row per (docId, relationshipId) pair.
@@ -285,23 +309,55 @@ export interface RAGStore {
   listEntriesByUniverse(universeId: string): Promise<PersistedEntry[]>;
   queryEntriesByType(type: EntryType): Promise<PersistedEntry[]>;
   deleteEntry(id: string): Promise<void>;
+  putSeries(entry: PersistedSeries): Promise<void>;
+  listSeriesByUniverse(universeId: string): Promise<PersistedSeries[]>;
+  putBook(entry: PersistedBook): Promise<void>;
+  listBooksBySeries(seriesId: string): Promise<PersistedBook[]>;
+  listBooksByUniverse(universeId: string): Promise<PersistedBook[]>;
+  putChapter(entry: PersistedChapter): Promise<void>;
+  listChaptersByBook(bookId: string): Promise<PersistedChapter[]>;
+  putScene(entry: PersistedScene): Promise<void>;
+  listScenesByChapter(chapterId: string): Promise<PersistedScene[]>;
   addEntryRelation(rel: PersistedRelationship): Promise<void>;
   removeEntryRelation(id: string): Promise<void>;
   getEntryRelationsForEntry(entryId: string): Promise<PersistedRelationship[]>;
   putTimeline(entry: PersistedTimeline): Promise<void>;
   listTimelinesByUniverse(universeId: string): Promise<PersistedTimeline[]>;
+  listTimelinesByBook(bookId: string): Promise<PersistedTimeline[]>;
   putEra(entry: PersistedEra): Promise<void>;
   listErasByTimeline(timelineId: string): Promise<PersistedEra[]>;
   putEvent(entry: PersistedEvent): Promise<void>;
   listEventsByUniverse(universeId: string): Promise<PersistedEvent[]>;
+  listEventsByEra(eraId: string): Promise<PersistedEvent[]>;
   putCalendar(entry: PersistedCalendar): Promise<void>;
   listCalendarsByUniverse(universeId: string): Promise<PersistedCalendar[]>;
   putTimeAnchor(entry: PersistedTimeAnchor): Promise<void>;
   getTimeAnchor(id: string): Promise<PersistedTimeAnchor | null>;
+  listTimeAnchorsByCalendar(calendarId: string): Promise<PersistedTimeAnchor[]>;
+  putMembership(entry: PersistedMembership): Promise<void>;
+  listMembershipsByCharacter(characterEntryId: string): Promise<PersistedMembership[]>;
+  listMembershipsByOrganization(organizationEntryId: string): Promise<PersistedMembership[]>;
+  putCultureMembership(entry: PersistedCultureMembership): Promise<void>;
+  listCultureMembershipsByCharacter(characterEntryId: string): Promise<PersistedCultureMembership[]>;
+  listCultureMembershipsByCulture(cultureEntryId: string): Promise<PersistedCultureMembership[]>;
+  putItemOwnership(entry: PersistedItemOwnership): Promise<void>;
+  listItemOwnershipByItem(itemEntryId: string): Promise<PersistedItemOwnership[]>;
+  listItemOwnershipByOwner(ownerEntryId: string): Promise<PersistedItemOwnership[]>;
   putMention(entry: PersistedMention): Promise<void>;
   listMentionsByScene(sceneId: string): Promise<PersistedMention[]>;
+  putMedia(entry: PersistedMedia): Promise<void>;
+  listMediaByUniverse(universeId: string): Promise<PersistedMedia[]>;
+  putMap(entry: PersistedMap): Promise<void>;
+  listMapsByUniverse(universeId: string): Promise<PersistedMap[]>;
+  putMapPin(entry: PersistedMapPin): Promise<void>;
+  listMapPinsByMap(mapId: string): Promise<PersistedMapPin[]>;
+  listMapPinsByEntry(entryId: string): Promise<PersistedMapPin[]>;
   addCultureVersion(entry: PersistedCultureVersion): Promise<void>;
   listCultureVersionsByCulture(cultureEntryId: string): Promise<PersistedCultureVersion[]>;
+  addOrganizationVersion(entry: PersistedOrganizationVersion): Promise<void>;
+  listOrganizationVersionsByOrganization(organizationEntryId: string): Promise<PersistedOrganizationVersion[]>;
+  addReligionVersion(entry: PersistedReligionVersion): Promise<void>;
+  listReligionVersionsByReligion(religionEntryId: string): Promise<PersistedReligionVersion[]>;
   addContinuityIssue(entry: PersistedContinuityIssue): Promise<void>;
   listContinuityIssuesByUniverse(universeId: string): Promise<PersistedContinuityIssue[]>;
   updateContinuityIssueStatus(id: string, status: PersistedContinuityIssue["status"], resolution?: string): Promise<void>;

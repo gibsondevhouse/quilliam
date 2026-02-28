@@ -230,6 +230,7 @@ async function seedRevisions(store: RAGStore, universeId: string, entries: Entry
       targetId: entry.id,
       authorId: undefined,
       createdAt: Date.now(),
+      recordedAt: Date.now(),
       patch: { op: "seed", source: "imp002-migration" },
       message: "Seeded by imp-plan-002 migration",
     };
@@ -245,6 +246,7 @@ async function seedRevisions(store: RAGStore, universeId: string, entries: Entry
       targetId: relation.id,
       authorId: undefined,
       createdAt: Date.now(),
+      recordedAt: Date.now(),
       patch: { op: "seed-relation", source: "imp002-migration" },
       message: "Relation seeded by imp-plan-002 migration",
     };

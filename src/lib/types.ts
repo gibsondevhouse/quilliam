@@ -260,6 +260,97 @@ export interface Entry {
   updatedAt: number;
 }
 
+export type SeriesStatus = "planning" | "drafting" | "editing" | "published" | "archived";
+export type BookStatus = "idea" | "planning" | "drafting" | "editing" | "published" | "archived";
+export type TimelineType = "master" | "book";
+export type TimePrecision = "year" | "month" | "day" | "approximate";
+export type MentionType = "explicit" | "implicit" | "alias" | "title";
+export type MediaType = "image" | "audio" | "video" | "document" | "other";
+
+/**
+ * In-universe validity interval used by era-aware entity snapshots.
+ * `validToEventId` omitted means the record is still valid/open-ended.
+ */
+export interface ValidTimeWindow {
+  validFromEventId: string;
+  validToEventId?: string;
+}
+
+/**
+ * System-time bounds for append-only history rows.
+ * `supersededAt` omitted means this row is the current system-time version.
+ */
+export interface SystemTimeWindow {
+  recordedAt?: number;
+  supersededAt?: number;
+}
+
+export interface Character {
+  entryId: string;
+  pronouns?: string;
+  species?: string;
+  birthEventId?: string;
+  deathEventId?: string;
+}
+
+export interface Location {
+  entryId: string;
+  parentLocationEntryId?: string;
+  locationType: string;
+  geo?: Record<string, unknown>;
+}
+
+export interface Culture {
+  entryId: string;
+  parentCultureEntryId?: string;
+  homelandLocationEntryId?: string;
+}
+
+export interface Language {
+  entryId: string;
+  script?: string;
+  phonologyNotes?: string;
+}
+
+export interface Religion {
+  entryId: string;
+  religionType: string;
+}
+
+export interface Organization {
+  entryId: string;
+  orgType: string;
+  headquartersLocationEntryId?: string;
+}
+
+export interface Lineage {
+  entryId: string;
+  seatLocationEntryId?: string;
+  lineageType: string;
+}
+
+export interface Item {
+  entryId: string;
+  itemType: string;
+  rarity?: string;
+}
+
+export interface System {
+  entryId: string;
+  systemType: string;
+}
+
+export interface Economy {
+  entryId: string;
+  economyScope: string;
+}
+
+export interface Rule {
+  entryId: string;
+  ruleScope: string;
+  enforcementLevel: string;
+}
+
 export interface Universe {
   id: string;
   name: string;
@@ -274,7 +365,7 @@ export interface Series {
   id: string;
   universeId: string;
   name: string;
-  status: "planning" | "drafting" | "editing" | "published" | "archived";
+  status: SeriesStatus;
   orderIndex: number;
   createdAt: number;
   updatedAt: number;
@@ -285,7 +376,7 @@ export interface Book {
   universeId: string;
   seriesId?: string;
   title: string;
-  status: "idea" | "planning" | "drafting" | "editing" | "published" | "archived";
+  status: BookStatus;
   orderIndex: number;
   bookTimelineId?: string;
   createdAt: number;
@@ -309,6 +400,8 @@ export interface Scene {
   povCharacterEntryId?: string;
   locationEntryId?: string;
   timeAnchorId?: string;
+  /** Optional alignment to a canonical Event on a timeline. */
+  alignedEventId?: string;
   sceneMd: string;
   createdAt: number;
   updatedAt: number;
@@ -318,7 +411,7 @@ export interface Timeline {
   id: string;
   universeId: string;
   bookId?: string;
-  timelineType: "master" | "book";
+  timelineType: TimelineType;
   name: string;
   createdAt: number;
   updatedAt: number;
@@ -328,6 +421,12 @@ export interface Era {
   id: string;
   timelineId: string;
   name: string;
+  /**
+   * Preferred era boundaries: link to canonical events. Time-anchor fields are
+   * retained for compatibility with existing records.
+   */
+  startEventId?: string;
+  endEventId?: string;
   startTimeAnchorId?: string;
   endTimeAnchorId?: string;
   createdAt: number;
@@ -342,6 +441,7 @@ export interface Event {
   name: string;
   eventType: string;
   descriptionMd?: string;
+  participants?: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -358,7 +458,7 @@ export interface Calendar {
 export interface TimeAnchor {
   id: string;
   calendarId: string;
-  precision: "year" | "month" | "day" | "approximate";
+  precision: TimePrecision;
   dateParts: Record<string, unknown>;
   relativeDay: number;
   createdAt: number;
@@ -433,7 +533,7 @@ export interface Mention {
   id: string;
   sceneId: string;
   entryId: string;
-  mentionType: "explicit" | "implicit" | "alias" | "title";
+  mentionType: MentionType;
   startOffset?: number;
   endOffset?: number;
   createdAt: number;
@@ -443,7 +543,7 @@ export interface Mention {
 export interface Media {
   id: string;
   universeId: string;
-  mediaType: "image" | "audio" | "video" | "document" | "other";
+  mediaType: MediaType;
   storageUri: string;
   metadata: Record<string, unknown>;
   createdAt: number;
@@ -476,8 +576,17 @@ export interface Revision {
   universeId: string;
   targetType: "entry" | "event" | "culture_version" | "timeline" | "scene" | string;
   targetId: string;
+  /** Optional validity interval the revision describes in in-universe time. */
+  validFromEventId?: string;
+  validToEventId?: string;
   authorId?: string;
   createdAt: number;
+  /**
+   * Explicit system-time timestamp for temporal queries.
+   * Defaults to `createdAt` when omitted.
+   */
+  recordedAt?: number;
+  supersedesRevisionId?: string;
   patch: Record<string, unknown>;
   message?: string;
 }
@@ -514,6 +623,30 @@ export interface CultureVersion {
   eraId?: string;
   validFromEventId: string;
   validToEventId?: string;
+  traits: Record<string, unknown>;
+  changeTrigger?: string;
+  sourceSceneId?: string;
+  recordedAt?: number;
+  supersededAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface OrganizationVersion extends ValidTimeWindow, SystemTimeWindow {
+  id: string;
+  organizationEntryId: string;
+  eraId?: string;
+  traits: Record<string, unknown>;
+  changeTrigger?: string;
+  sourceSceneId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ReligionVersion extends ValidTimeWindow, SystemTimeWindow {
+  id: string;
+  religionEntryId: string;
+  eraId?: string;
   traits: Record<string, unknown>;
   changeTrigger?: string;
   sourceSceneId?: string;

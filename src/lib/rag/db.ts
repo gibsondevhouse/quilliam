@@ -10,6 +10,7 @@ import {
   materializeNode,
   serializeNode,
   type PersistedAiLibrarySettings,
+  type PersistedBook,
   type PersistedCalendar,
   type PersistedCanonicalDoc,
   type PersistedCanonicalPatch,
@@ -17,20 +18,31 @@ import {
   type PersistedChatSession,
   type PersistedCharacter,
   type PersistedContinuityIssue,
+  type PersistedCultureMembership,
   type PersistedCultureVersion,
+  type PersistedChapter,
   type PersistedEntry,
   type PersistedEntryPatch,
   type PersistedEra,
   type PersistedEvent,
+  type PersistedItemOwnership,
   type PersistedLibraryMeta,
   type PersistedLocation,
+  type PersistedMap,
+  type PersistedMapPin,
+  type PersistedMedia,
   type PersistedMention,
+  type PersistedMembership,
+  type PersistedOrganizationVersion,
   type PersistedPatchByDocEntry,
   type PersistedRelationIndexEntry,
+  type PersistedReligionVersion,
   type PersistedRevision,
   type PersistedRelationship,
   type PersistedResearchArtifact,
   type PersistedResearchRun,
+  type PersistedScene,
+  type PersistedSeries,
   type PersistedSuggestion,
   type PersistedTimeAnchor,
   type PersistedTimeline,
@@ -156,6 +168,26 @@ interface RAGDBSchema extends DBSchema {
       by_slug: string;
     };
   };
+  series: {
+    key: string;
+    value: PersistedSeries;
+    indexes: { by_universe: string; by_order_index: number };
+  };
+  books: {
+    key: string;
+    value: PersistedBook;
+    indexes: { by_series: string; by_universe: string; by_order_index: number };
+  };
+  chapters: {
+    key: string;
+    value: PersistedChapter;
+    indexes: { by_book: string; by_number: number };
+  };
+  scenes: {
+    key: string;
+    value: PersistedScene;
+    indexes: { by_chapter: string; by_number: number; by_time_anchor: string };
+  };
   entryRelations: {
     key: string;
     value: PersistedRelationship;
@@ -186,15 +218,55 @@ interface RAGDBSchema extends DBSchema {
     value: PersistedTimeAnchor;
     indexes: { by_calendar: string; by_relative_day: number };
   };
+  memberships: {
+    key: string;
+    value: PersistedMembership;
+    indexes: { by_character: string; by_organization: string };
+  };
+  cultureMemberships: {
+    key: string;
+    value: PersistedCultureMembership;
+    indexes: { by_character: string; by_culture: string };
+  };
+  itemOwnerships: {
+    key: string;
+    value: PersistedItemOwnership;
+    indexes: { by_item: string; by_owner: string };
+  };
   mentions: {
     key: string;
     value: PersistedMention;
     indexes: { by_scene: string; by_entry: string };
   };
+  media: {
+    key: string;
+    value: PersistedMedia;
+    indexes: { by_universe: string; by_media_type: string };
+  };
+  maps: {
+    key: string;
+    value: PersistedMap;
+    indexes: { by_universe: string; by_media: string };
+  };
+  mapPins: {
+    key: string;
+    value: PersistedMapPin;
+    indexes: { by_map: string; by_entry: string };
+  };
   cultureVersions: {
     key: string;
     value: PersistedCultureVersion;
     indexes: { by_culture: string; by_valid_from: string; by_valid_to: string };
+  };
+  organizationVersions: {
+    key: string;
+    value: PersistedOrganizationVersion;
+    indexes: { by_organization: string; by_valid_from: string; by_valid_to: string };
+  };
+  religionVersions: {
+    key: string;
+    value: PersistedReligionVersion;
+    indexes: { by_religion: string; by_valid_from: string; by_valid_to: string };
   };
   continuityIssues: {
     key: string;
@@ -233,7 +305,7 @@ function libraryMetaKey(libraryId: string): string {
 }
 
 const DB_NAME = "quilliam-rag";
-const DB_VERSION = 9;
+const DB_VERSION = 11;
 
 let dbPromise: Promise<IDBPDatabase<RAGDBSchema>> | null = null;
 
@@ -567,6 +639,104 @@ function getDb(): Promise<IDBPDatabase<RAGDBSchema>> {
             });
           }
         }
+
+        // --- v10: Plan-002 schema parity (manuscript + join + map/media stores) ---
+        if (oldVersion < 10) {
+          if (!database.objectStoreNames.contains("series")) {
+            const series = database.createObjectStore("series", { keyPath: "id" });
+            series.createIndex("by_universe", "universeId");
+            series.createIndex("by_order_index", "orderIndex");
+          }
+
+          if (!database.objectStoreNames.contains("books")) {
+            const books = database.createObjectStore("books", { keyPath: "id" });
+            books.createIndex("by_series", "seriesId");
+            books.createIndex("by_universe", "universeId");
+            books.createIndex("by_order_index", "orderIndex");
+          }
+
+          if (!database.objectStoreNames.contains("chapters")) {
+            const chapters = database.createObjectStore("chapters", { keyPath: "id" });
+            chapters.createIndex("by_book", "bookId");
+            chapters.createIndex("by_number", "number");
+          }
+
+          if (!database.objectStoreNames.contains("scenes")) {
+            const scenes = database.createObjectStore("scenes", { keyPath: "id" });
+            scenes.createIndex("by_chapter", "chapterId");
+            scenes.createIndex("by_number", "number");
+            scenes.createIndex("by_time_anchor", "timeAnchorId");
+          }
+
+          if (!database.objectStoreNames.contains("memberships")) {
+            const memberships = database.createObjectStore("memberships", { keyPath: "id" });
+            memberships.createIndex("by_character", "characterEntryId");
+            memberships.createIndex("by_organization", "organizationEntryId");
+          }
+
+          if (!database.objectStoreNames.contains("cultureMemberships")) {
+            const cultureMemberships = database.createObjectStore("cultureMemberships", { keyPath: "id" });
+            cultureMemberships.createIndex("by_character", "characterEntryId");
+            cultureMemberships.createIndex("by_culture", "cultureEntryId");
+          }
+
+          if (!database.objectStoreNames.contains("itemOwnerships")) {
+            const itemOwnerships = database.createObjectStore("itemOwnerships", { keyPath: "id" });
+            itemOwnerships.createIndex("by_item", "itemEntryId");
+            itemOwnerships.createIndex("by_owner", "ownerEntryId");
+          }
+
+          if (!database.objectStoreNames.contains("media")) {
+            const media = database.createObjectStore("media", { keyPath: "id" });
+            media.createIndex("by_universe", "universeId");
+            media.createIndex("by_media_type", "mediaType");
+          }
+
+          if (!database.objectStoreNames.contains("maps")) {
+            const maps = database.createObjectStore("maps", { keyPath: "id" });
+            maps.createIndex("by_universe", "universeId");
+            maps.createIndex("by_media", "mediaId");
+          }
+
+          if (!database.objectStoreNames.contains("mapPins")) {
+            const mapPins = database.createObjectStore("mapPins", { keyPath: "id" });
+            mapPins.createIndex("by_map", "mapId");
+            mapPins.createIndex("by_entry", "entryId");
+          }
+
+          if (database.objectStoreNames.contains("metadata")) {
+            await transaction.objectStore("metadata").put({
+              key: "schemaVersion",
+              value: 10,
+              updatedAt: Date.now(),
+            });
+          }
+        }
+
+        // --- v11: temporal version stores for era-aware entity evolution ---
+        if (oldVersion < 11) {
+          if (!database.objectStoreNames.contains("organizationVersions")) {
+            const versions = database.createObjectStore("organizationVersions", { keyPath: "id" });
+            versions.createIndex("by_organization", "organizationEntryId");
+            versions.createIndex("by_valid_from", "validFromEventId");
+            versions.createIndex("by_valid_to", "validToEventId");
+          }
+
+          if (!database.objectStoreNames.contains("religionVersions")) {
+            const versions = database.createObjectStore("religionVersions", { keyPath: "id" });
+            versions.createIndex("by_religion", "religionEntryId");
+            versions.createIndex("by_valid_from", "validFromEventId");
+            versions.createIndex("by_valid_to", "validToEventId");
+          }
+
+          if (database.objectStoreNames.contains("metadata")) {
+            await transaction.objectStore("metadata").put({
+              key: "schemaVersion",
+              value: 11,
+              updatedAt: Date.now(),
+            });
+          }
+        }
       },
     });
   }
@@ -861,14 +1031,26 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
       "usageLedgers",
       "universes",
       "entries",
+      "series",
+      "books",
+      "chapters",
+      "scenes",
       "entryRelations",
       "timelines",
       "eras",
       "events",
       "calendars",
       "timeAnchors",
+      "memberships",
+      "cultureMemberships",
+      "itemOwnerships",
       "mentions",
+      "media",
+      "maps",
+      "mapPins",
       "cultureVersions",
+      "organizationVersions",
+      "religionVersions",
       "continuityIssues",
       "suggestions",
       "revisions",
@@ -932,23 +1114,32 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
   }
 
   const entryRows = await tx.objectStore("entries").index("by_universe").getAll(libraryId);
+  const bookRows = await tx.objectStore("books").index("by_universe").getAll(libraryId);
+  const mapRows = await tx.objectStore("maps").index("by_universe").getAll(libraryId);
   const timelineRows = await tx.objectStore("timelines").index("by_universe").getAll(libraryId);
   const calendarRows = await tx.objectStore("calendars").index("by_universe").getAll(libraryId);
   const eventRows = await tx.objectStore("events").index("by_universe").getAll(libraryId);
   const entryIds = new Set(entryRows.map((row) => row.id));
-  const sceneIds = new Set(entryRows.filter((row) => row.entryType === "scene").map((row) => row.id));
+  const sceneIds = new Set<string>(entryRows.filter((row) => row.entryType === "scene").map((row) => row.id));
+  const mapIds = new Set(mapRows.map((row) => row.id));
+  const bookIds = new Set(bookRows.map((row) => row.id));
   const timelineIds = new Set(timelineRows.map((row) => row.id));
   const calendarIds = new Set(calendarRows.map((row) => row.id));
   const cultureEntryIds = new Set(entryRows.filter((row) => row.entryType === "culture").map((row) => row.id));
   const patchIdsToDelete = new Set<string>();
   const timeAnchorIdsToDelete = new Set<string>(eventRows.map((row) => row.timeAnchorId).filter(Boolean));
+  const chapterIds = new Set<string>();
 
   const deleteByUniverse = async (
     storeName:
       | "entries"
+      | "series"
+      | "books"
       | "timelines"
       | "events"
       | "calendars"
+      | "media"
+      | "maps"
       | "continuityIssues"
       | "suggestions"
       | "revisions",
@@ -962,8 +1153,37 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
   };
 
   const deleteByIndex = async (
-    storeName: "entryRelations" | "mentions" | "cultureVersions" | "eras" | "timeAnchors" | "entryPatchByEntry",
-    indexName: "by_from" | "by_to" | "by_scene" | "by_entry" | "by_culture" | "by_timeline" | "by_calendar",
+    storeName:
+      | "entryRelations"
+      | "mentions"
+      | "cultureVersions"
+      | "organizationVersions"
+      | "religionVersions"
+      | "eras"
+      | "timeAnchors"
+      | "entryPatchByEntry"
+      | "memberships"
+      | "cultureMemberships"
+      | "itemOwnerships"
+      | "mapPins"
+      | "chapters"
+      | "scenes",
+    indexName:
+      | "by_from"
+      | "by_to"
+      | "by_scene"
+      | "by_entry"
+      | "by_culture"
+      | "by_organization"
+      | "by_religion"
+      | "by_timeline"
+      | "by_calendar"
+      | "by_character"
+      | "by_item"
+      | "by_owner"
+      | "by_map"
+      | "by_book"
+      | "by_chapter",
     value: string,
     beforeDelete?: (cursorValue: { patchId?: string }) => void,
   ): Promise<void> => {
@@ -988,9 +1208,34 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
     await deleteByIndex("entryRelations", "by_from", entryId);
     await deleteByIndex("entryRelations", "by_to", entryId);
     await deleteByIndex("mentions", "by_entry", entryId);
+    await deleteByIndex("memberships", "by_character", entryId);
+    await deleteByIndex("memberships", "by_organization", entryId);
+    await deleteByIndex("cultureMemberships", "by_character", entryId);
+    await deleteByIndex("cultureMemberships", "by_culture", entryId);
+    await deleteByIndex("itemOwnerships", "by_item", entryId);
+    await deleteByIndex("itemOwnerships", "by_owner", entryId);
+    await deleteByIndex("organizationVersions", "by_organization", entryId);
+    await deleteByIndex("religionVersions", "by_religion", entryId);
+    await deleteByIndex("mapPins", "by_entry", entryId);
     await deleteByIndex("entryPatchByEntry", "by_entry", entryId, (row) => {
       if (row.patchId) patchIdsToDelete.add(row.patchId);
     });
+  }
+
+  for (const mapId of mapIds) {
+    await deleteByIndex("mapPins", "by_map", mapId);
+  }
+
+  for (const bookId of bookIds) {
+    const rows = await tx.objectStore("chapters").index("by_book").getAll(bookId);
+    for (const row of rows) chapterIds.add(row.id);
+    await deleteByIndex("chapters", "by_book", bookId);
+  }
+
+  for (const chapterId of chapterIds) {
+    const rows = await tx.objectStore("scenes").index("by_chapter").getAll(chapterId);
+    for (const row of rows) sceneIds.add(row.id);
+    await deleteByIndex("scenes", "by_chapter", chapterId);
   }
 
   for (const sceneId of sceneIds) {
@@ -1018,9 +1263,13 @@ export async function deleteLibraryCascade(libraryId: string): Promise<void> {
   }
 
   await deleteByUniverse("entries");
+  await deleteByUniverse("series");
+  await deleteByUniverse("books");
   await deleteByUniverse("timelines");
   await deleteByUniverse("events");
   await deleteByUniverse("calendars");
+  await deleteByUniverse("media");
+  await deleteByUniverse("maps");
   await deleteByUniverse("continuityIssues");
   await deleteByUniverse("suggestions");
   await deleteByUniverse("revisions");
@@ -1159,6 +1408,56 @@ export async function deleteEntry(id: string): Promise<void> {
   await db.delete("entries", id);
 }
 
+export async function putSeries(entry: PersistedSeries): Promise<void> {
+  const db = await getDb();
+  await db.put("series", { ...entry, updatedAt: entry.updatedAt ?? Date.now() });
+}
+
+export async function listSeriesByUniverse(universeId: string): Promise<PersistedSeries[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("series", "by_universe", universeId);
+  return all.sort((a, b) => a.orderIndex - b.orderIndex);
+}
+
+export async function putBook(entry: PersistedBook): Promise<void> {
+  const db = await getDb();
+  await db.put("books", { ...entry, updatedAt: entry.updatedAt ?? Date.now() });
+}
+
+export async function listBooksBySeries(seriesId: string): Promise<PersistedBook[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("books", "by_series", seriesId);
+  return all.sort((a, b) => a.orderIndex - b.orderIndex);
+}
+
+export async function listBooksByUniverse(universeId: string): Promise<PersistedBook[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("books", "by_universe", universeId);
+  return all.sort((a, b) => a.orderIndex - b.orderIndex);
+}
+
+export async function putChapter(entry: PersistedChapter): Promise<void> {
+  const db = await getDb();
+  await db.put("chapters", { ...entry, updatedAt: entry.updatedAt ?? Date.now() });
+}
+
+export async function listChaptersByBook(bookId: string): Promise<PersistedChapter[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("chapters", "by_book", bookId);
+  return all.sort((a, b) => a.number - b.number);
+}
+
+export async function putScene(entry: PersistedScene): Promise<void> {
+  const db = await getDb();
+  await db.put("scenes", { ...entry, updatedAt: entry.updatedAt ?? Date.now() });
+}
+
+export async function listScenesByChapter(chapterId: string): Promise<PersistedScene[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("scenes", "by_chapter", chapterId);
+  return all.sort((a, b) => a.number - b.number);
+}
+
 export async function addEntryRelation(rel: PersistedRelationship): Promise<void> {
   const db = await getDb();
   await db.put("entryRelations", rel);
@@ -1190,6 +1489,11 @@ export async function listTimelinesByUniverse(universeId: string): Promise<Persi
   return db.getAllFromIndex("timelines", "by_universe", universeId);
 }
 
+export async function listTimelinesByBook(bookId: string): Promise<PersistedTimeline[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("timelines", "by_book", bookId);
+}
+
 export async function putEra(entry: PersistedEra): Promise<void> {
   const db = await getDb();
   await db.put("eras", entry);
@@ -1208,6 +1512,11 @@ export async function putEvent(entry: PersistedEvent): Promise<void> {
 export async function listEventsByUniverse(universeId: string): Promise<PersistedEvent[]> {
   const db = await getDb();
   return db.getAllFromIndex("events", "by_universe", universeId);
+}
+
+export async function listEventsByEra(eraId: string): Promise<PersistedEvent[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("events", "by_era", eraId);
 }
 
 export async function putCalendar(entry: PersistedCalendar): Promise<void> {
@@ -1231,6 +1540,58 @@ export async function getTimeAnchor(id: string): Promise<PersistedTimeAnchor | n
   return record ?? null;
 }
 
+export async function listTimeAnchorsByCalendar(calendarId: string): Promise<PersistedTimeAnchor[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("timeAnchors", "by_calendar", calendarId);
+}
+
+export async function putMembership(entry: PersistedMembership): Promise<void> {
+  const db = await getDb();
+  await db.put("memberships", entry);
+}
+
+export async function listMembershipsByCharacter(characterEntryId: string): Promise<PersistedMembership[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("memberships", "by_character", characterEntryId);
+}
+
+export async function listMembershipsByOrganization(organizationEntryId: string): Promise<PersistedMembership[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("memberships", "by_organization", organizationEntryId);
+}
+
+export async function putCultureMembership(entry: PersistedCultureMembership): Promise<void> {
+  const db = await getDb();
+  await db.put("cultureMemberships", entry);
+}
+
+export async function listCultureMembershipsByCharacter(
+  characterEntryId: string
+): Promise<PersistedCultureMembership[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("cultureMemberships", "by_character", characterEntryId);
+}
+
+export async function listCultureMembershipsByCulture(cultureEntryId: string): Promise<PersistedCultureMembership[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("cultureMemberships", "by_culture", cultureEntryId);
+}
+
+export async function putItemOwnership(entry: PersistedItemOwnership): Promise<void> {
+  const db = await getDb();
+  await db.put("itemOwnerships", entry);
+}
+
+export async function listItemOwnershipByItem(itemEntryId: string): Promise<PersistedItemOwnership[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("itemOwnerships", "by_item", itemEntryId);
+}
+
+export async function listItemOwnershipByOwner(ownerEntryId: string): Promise<PersistedItemOwnership[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("itemOwnerships", "by_owner", ownerEntryId);
+}
+
 export async function putMention(entry: PersistedMention): Promise<void> {
   const db = await getDb();
   await db.put("mentions", entry);
@@ -1241,6 +1602,41 @@ export async function listMentionsByScene(sceneId: string): Promise<PersistedMen
   return db.getAllFromIndex("mentions", "by_scene", sceneId);
 }
 
+export async function putMedia(entry: PersistedMedia): Promise<void> {
+  const db = await getDb();
+  await db.put("media", entry);
+}
+
+export async function listMediaByUniverse(universeId: string): Promise<PersistedMedia[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("media", "by_universe", universeId);
+}
+
+export async function putMap(entry: PersistedMap): Promise<void> {
+  const db = await getDb();
+  await db.put("maps", entry);
+}
+
+export async function listMapsByUniverse(universeId: string): Promise<PersistedMap[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("maps", "by_universe", universeId);
+}
+
+export async function putMapPin(entry: PersistedMapPin): Promise<void> {
+  const db = await getDb();
+  await db.put("mapPins", entry);
+}
+
+export async function listMapPinsByMap(mapId: string): Promise<PersistedMapPin[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("mapPins", "by_map", mapId);
+}
+
+export async function listMapPinsByEntry(entryId: string): Promise<PersistedMapPin[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("mapPins", "by_entry", entryId);
+}
+
 export async function addCultureVersion(entry: PersistedCultureVersion): Promise<void> {
   const db = await getDb();
   await db.put("cultureVersions", entry);
@@ -1249,6 +1645,28 @@ export async function addCultureVersion(entry: PersistedCultureVersion): Promise
 export async function listCultureVersionsByCulture(cultureEntryId: string): Promise<PersistedCultureVersion[]> {
   const db = await getDb();
   return db.getAllFromIndex("cultureVersions", "by_culture", cultureEntryId);
+}
+
+export async function addOrganizationVersion(entry: PersistedOrganizationVersion): Promise<void> {
+  const db = await getDb();
+  await db.put("organizationVersions", entry);
+}
+
+export async function listOrganizationVersionsByOrganization(
+  organizationEntryId: string
+): Promise<PersistedOrganizationVersion[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("organizationVersions", "by_organization", organizationEntryId);
+}
+
+export async function addReligionVersion(entry: PersistedReligionVersion): Promise<void> {
+  const db = await getDb();
+  await db.put("religionVersions", entry);
+}
+
+export async function listReligionVersionsByReligion(religionEntryId: string): Promise<PersistedReligionVersion[]> {
+  const db = await getDb();
+  return db.getAllFromIndex("religionVersions", "by_religion", religionEntryId);
 }
 
 export async function addContinuityIssue(entry: PersistedContinuityIssue): Promise<void> {
@@ -1677,23 +2095,55 @@ export async function createRAGStore(): Promise<RAGStore> {
     listEntriesByUniverse,
     queryEntriesByType,
     deleteEntry,
+    putSeries,
+    listSeriesByUniverse,
+    putBook,
+    listBooksBySeries,
+    listBooksByUniverse,
+    putChapter,
+    listChaptersByBook,
+    putScene,
+    listScenesByChapter,
     addEntryRelation,
     removeEntryRelation,
     getEntryRelationsForEntry,
     putTimeline,
     listTimelinesByUniverse,
+    listTimelinesByBook,
     putEra,
     listErasByTimeline,
     putEvent,
     listEventsByUniverse,
+    listEventsByEra,
     putCalendar,
     listCalendarsByUniverse,
     putTimeAnchor,
     getTimeAnchor,
+    listTimeAnchorsByCalendar,
+    putMembership,
+    listMembershipsByCharacter,
+    listMembershipsByOrganization,
+    putCultureMembership,
+    listCultureMembershipsByCharacter,
+    listCultureMembershipsByCulture,
+    putItemOwnership,
+    listItemOwnershipByItem,
+    listItemOwnershipByOwner,
     putMention,
     listMentionsByScene,
+    putMedia,
+    listMediaByUniverse,
+    putMap,
+    listMapsByUniverse,
+    putMapPin,
+    listMapPinsByMap,
+    listMapPinsByEntry,
     addCultureVersion,
     listCultureVersionsByCulture,
+    addOrganizationVersion,
+    listOrganizationVersionsByOrganization,
+    addReligionVersion,
+    listReligionVersionsByReligion,
     addContinuityIssue,
     listContinuityIssuesByUniverse,
     updateContinuityIssueStatus,

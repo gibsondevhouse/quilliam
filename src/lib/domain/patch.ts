@@ -147,6 +147,8 @@ export async function applyEntryPatch(patch: EntryPatch, store: EntryPatchStore)
           traits: op.version.traits ?? {},
           changeTrigger: op.version.changeTrigger,
           sourceSceneId: op.version.sourceSceneId,
+          recordedAt: op.version.recordedAt ?? now,
+          supersededAt: op.version.supersededAt,
           createdAt: op.version.createdAt ?? now,
           updatedAt: now,
         };
