@@ -1,0 +1,125 @@
+/* ── Beats & Outline Page ───────────────────────────────────────── */
+.beats-outline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 24px;
+}
+
+.beats-chapter {
+  border: 1px solid var(--border-subtle, rgba(99,102,241,0.2));
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary, rgba(0,0,0,0.2));
+}
+
+.beats-chapter-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary, #e2e8f0);
+  transition: background 0.15s;
+}
+
+.beats-chapter-header:hover {
+  background: var(--bg-hover, rgba(99,102,241,0.08));
+}
+
+.beats-chapter-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-accent, #a78bfa);
+  min-width: 40px;
+}
+
+.beats-chapter-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.beats-chapter-count {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+}
+
+.beats-chapter-toggle {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin-left: 4px;
+}
+
+.beats-scenes {
+  padding: 8px 14px 12px;
+  border-top: 1px solid var(--border-subtle, rgba(99,102,241,0.15));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.beats-chapter-summary {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin: 0 0 6px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.beats-empty {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin: 0;
+  padding: 4px 0;
+}
+
+.beats-scene-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  background: var(--bg-row, rgba(255,255,255,0.03));
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle, rgba(99,102,241,0.12));
+}
+
+.beats-scene-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-accent, #a78bfa);
+}
+
+.beats-scene-preview {
+  font-size: 12px;
+  color: var(--text-secondary, #ccc);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.beats-add-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px dashed var(--border-subtle, rgba(99,102,241,0.3));
+  border-radius: 5px;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.beats-add-btn:hover {
+  color: var(--text-accent, #a78bfa);
+  border-color: var(--text-accent, #a78bfa);
+  background: rgba(99,102,241,0.06);
+}
+
+.beats-add-scene {
+  margin-top: 6px;
+}

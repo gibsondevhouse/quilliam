@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams, useParams } from "next/navigation";
 import type { CanonicalDocDashboardProps } from "./types";
 import { DocForm } from "./DocForm";
@@ -7,12 +8,15 @@ import { EntryRelatedPanel } from "./EntryRelatedPanel";
 import { useEntryDashboard } from "./hooks/useEntryDashboard";
 import { useEntryRelatedData } from "./hooks/useEntryRelatedData";
 import { CultureVersionPanel } from "@/components/CultureVersionPanel";
+import { EntityVersionPanel } from "@/components/EntityVersionPanel";
+import { BulkImportPanel } from "@/components/BulkImportPanel";
 
 export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProps) {
   const searchParams = useSearchParams();
   const params = useParams<{ libraryId: string }>();
   const libraryId = params.libraryId;
   const highlightId = searchParams.get("highlight");
+  const [showBulk, setShowBulk] = useState(false);
 
   const {
     docs,
@@ -38,7 +42,12 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
       <div className="split-page-list">
         <div className="library-page-header">
           <h2>{title}</h2>
-          <button className="library-page-action" onClick={handleAdd}>+ Add</button>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button className="library-page-action" onClick={() => setShowBulk((v) => !v)}>
+              {showBulk ? "✕ Bulk" : "⬆ Bulk"}
+            </button>
+            <button className="library-page-action" onClick={handleAdd}>+ Add</button>
+          </div>
         </div>
 
         <div className="canonical-dashboard-controls">
@@ -79,6 +88,16 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
             </select>
           </div>
         </div>
+
+        {showBulk && (
+          <BulkImportPanel
+            defaultEntryType={type}
+            onImported={(count) => {
+              window.alert(`Imported ${count} ${count === 1 ? "entry" : "entries"}.`);
+              setShowBulk(false);
+            }}
+          />
+        )}
 
         {loading ? (
           <div className="library-page-empty"><p>Loading…</p></div>
@@ -146,6 +165,9 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
             )}
             {type === "culture" && (
               <CultureVersionPanel cultureEntryId={activeDoc.id} />
+            )}
+            {(type === "organization" || type === "religion") && (
+              <EntityVersionPanel entityKind={type} entryId={activeDoc.id} />
             )}
           </>
         ) : (

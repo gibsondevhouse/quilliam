@@ -1,0 +1,177 @@
+/*
+   MEDIA LIBRARY PAGE
+   ============================================================ */
+
+.library-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.media-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.media-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  transition: border-color 0.15s;
+}
+
+.media-card:hover {
+  border-color: var(--accent, #6366f1);
+}
+
+.media-card-preview {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary, #1e1e2e);
+  overflow: hidden;
+}
+
+.media-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-card-icon {
+  font-size: 36px;
+  opacity: 0.6;
+}
+
+.media-card-meta {
+  padding: 6px 10px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.media-card-name {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.media-card-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.media-card-actions {
+  display: flex;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+.media-card-btn {
+  flex: 1;
+  padding: 5px 4px;
+  font-size: 11px;
+  text-align: center;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.1s, color 0.1s;
+}
+
+.media-card-btn:last-child {
+  border-right: none;
+}
+
+.media-card-btn:hover {
+  background: var(--bg-hover, rgba(99, 102, 241, 0.1));
+  color: var(--text-primary);
+}
+
+.media-card-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+/* ── Bulk Import Panel ───────────────────────────────────────────── */
+.bulk-import-panel {
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle, rgba(99,102,241,0.2));
+  border-radius: 8px;
+  background: var(--bg-secondary, rgba(0,0,0,0.25));
+  margin-bottom: 14px;
+}
+
+.bulk-import-hint {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.bulk-import-hint code {
+  background: rgba(99,102,241,0.12);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 11px;
+  color: var(--text-accent, #a78bfa);
+}
+
+.bulk-import-preview {
+  margin-top: 10px;
+}
+
+.bulk-import-count {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin-bottom: 4px;
+}
+
+.bulk-import-errors {
+  padding: 0;
+  margin: 0 0 8px;
+}
+
+.bulk-import-row-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bulk-import-row {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--bg-row, rgba(255,255,255,0.03));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
