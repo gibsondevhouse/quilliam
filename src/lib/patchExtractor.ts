@@ -8,6 +8,7 @@
 import { OLLAMA_BASE_URL } from "@/lib/ollama";
 import { getSystemInfo } from "@/lib/system";
 import { applyEntryPatch, type EntryPatchStore } from "@/lib/domain/patch";
+import { applyCultureDetails, createDefaultCultureDetails } from "@/lib/domain/culture";
 import type {
   Entry,
   EntryPatch,
@@ -132,6 +133,11 @@ function makeId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function defaultEntryDetails(entryType: EntryType): Record<string, unknown> {
+  if (entryType !== "culture") return {};
+  return applyCultureDetails({}, createDefaultCultureDetails());
+}
+
 async function callOllamaExtraction(text: string): Promise<ExtractionResult> {
   const { model } = getSystemInfo();
   const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
@@ -205,7 +211,7 @@ export async function extractCanonical(
         canonStatus: "draft",
         status: "draft",
         visibility: "private",
-        details: {},
+        details: defaultEntryDetails(entryType),
         sources: [source],
         relationships: [],
         lastVerified: 0,
@@ -338,7 +344,7 @@ export async function extractPatches(
         canonStatus: "draft",
         status: "draft",
         visibility: "private",
-        details: {},
+        details: defaultEntryDetails(entryType),
         sources: [sourceRef],
         relationships: [],
         lastVerified: 0,

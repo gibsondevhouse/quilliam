@@ -14,6 +14,7 @@ import {
   mapLegacyLocationToEntry,
   mapLegacyWorldEntryToEntry,
 } from "@/lib/domain/mappers";
+import { applyCultureDetails, normalizeCultureDetails } from "@/lib/domain/culture";
 
 export interface Imp002MigrationReport {
   libraryId: string;
@@ -180,7 +181,10 @@ async function migrateEntries(store: RAGStore, libraryId: string, universeId: st
 
   for (const entry of entries.values()) {
     if (!entry.name) warnings.push(`Entry ${entry.id} has empty name.`);
-    await store.addEntry({ ...entry, universeId });
+    const details = entry.entryType === "culture"
+      ? applyCultureDetails(entry.details, normalizeCultureDetails(entry.details))
+      : entry.details;
+    await store.addEntry({ ...entry, details, universeId });
   }
 
   return { entries: [...entries.values()], warnings };

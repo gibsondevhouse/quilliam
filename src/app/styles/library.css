@@ -1397,6 +1397,124 @@
 }
 
 /* ================================================================
+   Canonical Doc Form + Culture Ontology Editor
+   ================================================================ */
+
+.canonical-doc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  max-width: 920px;
+}
+
+.canonical-doc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.canonical-doc-field label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.canonical-doc-input,
+.canonical-doc-textarea {
+  width: 100%;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-input, var(--bg-surface));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.canonical-doc-textarea {
+  resize: vertical;
+  min-height: 84px;
+}
+
+.canonical-doc-textarea--lg {
+  min-height: 140px;
+}
+
+.canonical-doc-input:focus,
+.canonical-doc-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.canonical-doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.canonical-doc-status {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.canonical-doc-status--canon {
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #22c55e;
+}
+
+.canonical-doc-sources {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.canonical-culture-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.canonical-culture-section h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.canonical-culture-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.canonical-doc-field--full {
+  grid-column: 1 / -1;
+}
+
+.canonical-doc-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 920px) {
+  .canonical-culture-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ================================================================
    Canon (global) page
    ================================================================ */
 
@@ -1462,5 +1580,4 @@
   padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
 }
-
 

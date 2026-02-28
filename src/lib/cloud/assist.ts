@@ -14,6 +14,7 @@ import {
 } from "@/lib/types";
 import type { LineEdit } from "@/lib/changeSets";
 import { callAnthropicText, extractJsonObject } from "@/lib/cloud/anthropic";
+import { applyCultureDetails, createDefaultCultureDetails } from "@/lib/domain/culture";
 
 export interface AssistInput {
   query: string;
@@ -139,6 +140,9 @@ function normalizeEntryPatchOp(raw: {
   if ((op === "create" || op === "create-entry") && (raw.entry || raw.fields)) {
     const payload = raw.entry ?? raw.fields ?? {};
     const entryType = normalizeEntryType(raw.entryType ?? raw.docType ?? payload.entryType ?? payload.type?.toString());
+    const details = entryType === "culture"
+      ? applyCultureDetails((payload.details as Record<string, unknown>) ?? {}, createDefaultCultureDetails())
+      : payload.details;
     return {
       op: "create-entry",
       entryType,
@@ -148,6 +152,7 @@ function normalizeEntryPatchOp(raw: {
         type: entryType,
         name: payload.name ?? "",
         summary: payload.summary ?? "",
+        details,
       },
     };
   }

@@ -285,6 +285,69 @@ export interface SystemTimeWindow {
   supersededAt?: number;
 }
 
+export type ConfidenceLevel = "low" | "medium" | "high";
+
+/**
+ * Per-trait inheritance override used by subcultures.
+ * Trait resolution order: inherit -> override -> extend.
+ */
+export interface CultureTraitInheritance {
+  inheritsFromParent?: boolean;
+  overrideReason?: string;
+}
+
+/**
+ * Optional trait-level provenance payload for CultureVersion.traits values.
+ */
+export interface CultureTraitValue extends CultureTraitInheritance {
+  value: unknown;
+  confidence?: ConfidenceLevel;
+  source?: string;
+  changedByEvent?: string;
+}
+
+export type CultureTraitMap = Record<string, unknown | CultureTraitValue>;
+
+/**
+ * V1 culture payload stored in Entry.details.
+ * When `isVersioned` is false, this is the active trait source of truth.
+ */
+export interface CultureDetails {
+  isVersioned?: boolean;
+  parentCultureEntryId?: string;
+  inheritAll?: boolean;
+  traitInheritance?: Record<string, CultureTraitInheritance>;
+  traits?: CultureTraitMap;
+  identity?: {
+    endonyms?: string[];
+    exonyms?: string[];
+    distinctives?: string;
+  };
+  homelandDiaspora?: {
+    homelandLocationEntryId?: string;
+    diasporaLocationEntryIds?: string[];
+    migrationEventIds?: string[];
+  };
+  language?: {
+    primaryLanguageEntryIds?: string[];
+    scripts?: string[];
+    registers?: string[];
+    namingConventions?: string;
+  };
+  socialStructure?: { summaryMd?: string };
+  economy?: { summaryMd?: string };
+  warfare?: { summaryMd?: string };
+  religionMyth?: { summaryMd?: string };
+  materialCulture?: { summaryMd?: string };
+  customsEtiquette?: { summaryMd?: string };
+  relationshipToMagic?: { summaryMd?: string };
+  interculturalRelations?: {
+    summaryMd?: string;
+    allies?: string[];
+    enemies?: string[];
+  };
+}
+
 export interface Character {
   entryId: string;
   pronouns?: string;
@@ -304,6 +367,10 @@ export interface Culture {
   entryId: string;
   parentCultureEntryId?: string;
   homelandLocationEntryId?: string;
+  inheritAll?: boolean;
+  isVersioned?: boolean;
+  traitInheritance?: Record<string, CultureTraitInheritance>;
+  traits?: CultureTraitMap;
 }
 
 export interface Language {
@@ -469,10 +536,23 @@ export interface TimeAnchor {
  * Transitional relation shape; keeps legacy fields while introducing Plan-002
  * semantics (`fromEntryId`, `toEntryId`, `relationType`, validity interval).
  */
+export type CultureRelationType =
+  | "diaspora_region"
+  | "speaks"
+  | "practices"
+  | "founded_by_culture"
+  | "allied_with"
+  | "at_war_with"
+  | "tributary_of"
+  | "trade_partner"
+  | "historical_enemy";
+
+export type RelationType = CultureRelationType | string;
+
 export interface Relationship {
   id: string;
   from: string;
-  type: string;
+  type: RelationType;
   to: string;
   metadata: Record<string, unknown>;
   sources: SourceRef[];
@@ -480,7 +560,7 @@ export interface Relationship {
 
   fromEntryId?: string;
   toEntryId?: string;
-  relationType?: string;
+  relationType?: RelationType;
   validFromEventId?: string;
   validToEventId?: string;
   meta?: Record<string, unknown>;
@@ -623,7 +703,7 @@ export interface CultureVersion {
   eraId?: string;
   validFromEventId: string;
   validToEventId?: string;
-  traits: Record<string, unknown>;
+  traits: CultureTraitMap;
   changeTrigger?: string;
   sourceSceneId?: string;
   recordedAt?: number;

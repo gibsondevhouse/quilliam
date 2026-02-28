@@ -6,6 +6,7 @@ import type {
   VisibilityScope,
 } from "@/lib/types";
 import { isCanonStatus, isEntryType, isVisibilityScope } from "@/lib/domain/enums";
+import { applyCultureDetails, normalizeCultureDetails } from "@/lib/domain/culture";
 
 export interface EntryCreateInput {
   universeId: string;
@@ -77,6 +78,10 @@ export function createEntryRecord(input: EntryCreateInput & { id: string; now?: 
   const slug = makeSlug(input.name || input.id);
   const canonStatus = input.canonStatus ?? "draft";
   const status = canonStatus === "canon" ? "canon" : "draft";
+  const baseDetails = input.details ?? {};
+  const details = input.entryType === "culture"
+    ? applyCultureDetails(baseDetails, normalizeCultureDetails(baseDetails))
+    : baseDetails;
 
   return {
     id: input.id,
@@ -92,7 +97,7 @@ export function createEntryRecord(input: EntryCreateInput & { id: string; now?: 
     aliases: input.aliases ?? [],
     coverMediaId: undefined,
     type: input.entryType,
-    details: input.details ?? {},
+    details,
     status,
     sources: [],
     relationships: [],
@@ -105,6 +110,10 @@ export function createEntryRecord(input: EntryCreateInput & { id: string; now?: 
 export function applyEntryUpdate(entry: Entry, patch: EntryUpdateInput, now = Date.now()): Entry {
   const canonStatus = patch.canonStatus ?? entry.canonStatus;
   const status = canonStatus === "canon" ? "canon" : "draft";
+  const rawDetails = patch.details ?? entry.details;
+  const details = entry.entryType === "culture"
+    ? applyCultureDetails(rawDetails, normalizeCultureDetails(rawDetails))
+    : rawDetails;
 
   return {
     ...entry,
@@ -116,7 +125,7 @@ export function applyEntryUpdate(entry: Entry, patch: EntryUpdateInput, now = Da
     visibility: patch.visibility ?? entry.visibility,
     tags: patch.tags ?? entry.tags,
     aliases: patch.aliases ?? entry.aliases,
-    details: patch.details ?? entry.details,
+    details,
     status,
     updatedAt: now,
   };

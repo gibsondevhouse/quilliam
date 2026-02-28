@@ -8,6 +8,7 @@ import type {
   Relationship,
   SourceRef,
 } from "@/lib/types";
+import { applyCultureDetails, normalizeCultureDetails } from "@/lib/domain/culture";
 
 export function makeEntryPatchId(prefix = "epatch"): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -67,6 +68,10 @@ export async function applyEntryPatch(patch: EntryPatch, store: EntryPatchStore)
       case "create": {
         const resolved = resolveCreateEntry(op);
         if (!resolved) break;
+        const baseDetails = (resolved.entry.details ?? {}) as Record<string, unknown>;
+        const details = resolved.entryType === "culture"
+          ? applyCultureDetails(baseDetails, normalizeCultureDetails(baseDetails))
+          : baseDetails;
         const entry: Entry = {
           id: resolved.entry.id ?? `ent_${now}`,
           universeId: resolved.entry.universeId ?? "",
@@ -81,7 +86,7 @@ export async function applyEntryPatch(patch: EntryPatch, store: EntryPatchStore)
           aliases: resolved.entry.aliases ?? [],
           coverMediaId: resolved.entry.coverMediaId,
           type: resolved.entry.type ?? resolved.entryType,
-          details: resolved.entry.details ?? {},
+          details,
           status: resolved.entry.status ?? "draft",
           sources: resolved.entry.sources ?? [],
           relationships: resolved.entry.relationships ?? [],
