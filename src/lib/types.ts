@@ -302,7 +302,12 @@ export interface CultureTraitInheritance {
 export interface CultureTraitValue extends CultureTraitInheritance {
   value: unknown;
   confidence?: ConfidenceLevel;
-  source?: string;
+  source?: SourceRef | string;
+  validTime?: {
+    from?: string;
+    to?: string;
+  };
+  recordTime?: number;
   changedByEvent?: string;
 }
 
@@ -592,6 +597,7 @@ export interface CultureMembership {
   characterEntryId: string;
   cultureEntryId: string;
   membershipKind: CultureMembershipKind;
+  dualHeritage?: boolean;
   validFromEventId?: string;
   validToEventId?: string;
   createdAt: number;

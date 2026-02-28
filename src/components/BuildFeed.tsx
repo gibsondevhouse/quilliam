@@ -7,9 +7,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { useParams } from "next/navigation";
 import { useRAGContext } from "@/lib/context/RAGContext";
 import { applyEntryPatch } from "@/lib/domain/patch";
-import type { EntryPatch, EntryPatchOperation } from "@/lib/types";
+import { syncContinuityIssues, type ContinuitySyncReport } from "@/lib/rag/continuity";
+import type { ContinuityIssue, EntryPatch, EntryPatchOperation, Revision } from "@/lib/types";
+import type { RAGStore } from "@/lib/rag/store";
 
 function groupBySource(patches: EntryPatch[]): Map<string, EntryPatch[]> {
   const groups = new Map<string, EntryPatch[]>();
@@ -79,6 +82,40 @@ function confidenceBadgeProps(score: number): { label: string; cls: string } {
   return { label: `${pct}%`, cls: "build-feed-confidence--low" };
 }
 
+function makeId(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function issueSort(a: ContinuityIssue, b: ContinuityIssue): number {
+  const severityRank: Record<ContinuityIssue["severity"], number> = {
+    blocker: 0,
+    warning: 1,
+    note: 2,
+  };
+  const statusRank: Record<ContinuityIssue["status"], number> = {
+    open: 0,
+    in_review: 1,
+    wont_fix: 2,
+    resolved: 3,
+  };
+  if (statusRank[a.status] !== statusRank[b.status]) {
+    return statusRank[a.status] - statusRank[b.status];
+  }
+  if (severityRank[a.severity] !== severityRank[b.severity]) {
+    return severityRank[a.severity] - severityRank[b.severity];
+  }
+  return b.updatedAt - a.updatedAt;
+}
+
+function compactStatus(status: ContinuityIssue["status"]): string {
+  return status.replace(/_/g, " ");
+}
+
+function evidenceLabel(issue: ContinuityIssue): string {
+  if (issue.evidence.length === 0) return "No linked evidence";
+  return `${issue.evidence.length} evidence link${issue.evidence.length === 1 ? "" : "s"}`;
+}
+
 interface PatchCardProps {
   patch: EntryPatch;
   onAccept: (id: string) => void;
@@ -145,36 +182,155 @@ function PatchCard({ patch, onAccept, onReject, resolved, resolvedAs }: PatchCar
   );
 }
 
+interface ContinuityIssueCardProps {
+  issue: ContinuityIssue;
+  busy?: boolean;
+  onSetStatus: (issue: ContinuityIssue, status: ContinuityIssue["status"]) => void;
+}
+
+function ContinuityIssueCard({ issue, busy, onSetStatus }: ContinuityIssueCardProps) {
+  const canMarkOpen = issue.status !== "open";
+  const canMarkInReview = issue.status !== "in_review";
+  const canResolve = issue.status !== "resolved";
+  const canWontFix = issue.status !== "wont_fix";
+
+  return (
+    <div className="build-feed-card build-feed-card--issue">
+      <div className="build-feed-card-header">
+        <div className="build-feed-card-meta">
+          <span className={`build-feed-severity build-feed-severity--${issue.severity}`}>
+            {issue.severity}
+          </span>
+          <span className={`build-feed-issue-status build-feed-issue-status--${issue.status}`}>
+            {compactStatus(issue.status)}
+          </span>
+          <span className="build-feed-card-source">{issue.checkType}</span>
+          <span className="build-feed-card-count">{evidenceLabel(issue)}</span>
+        </div>
+        <div className="build-feed-card-actions">
+          <button
+            className="build-feed-btn"
+            disabled={!canMarkOpen || busy}
+            onClick={() => onSetStatus(issue, "open")}
+            title="Move issue back to open"
+          >
+            Open
+          </button>
+          <button
+            className="build-feed-btn"
+            disabled={!canMarkInReview || busy}
+            onClick={() => onSetStatus(issue, "in_review")}
+            title="Mark issue as in review"
+          >
+            Review
+          </button>
+          <button
+            className="build-feed-btn build-feed-btn--accept"
+            disabled={!canResolve || busy}
+            onClick={() => onSetStatus(issue, "resolved")}
+            title="Resolve issue"
+          >
+            Resolve
+          </button>
+          <button
+            className="build-feed-btn build-feed-btn--reject"
+            disabled={!canWontFix || busy}
+            onClick={() => onSetStatus(issue, "wont_fix")}
+            title="Mark issue as won't-fix"
+          >
+            Won&apos;t Fix
+          </button>
+        </div>
+      </div>
+      <div className="build-feed-issue-description">{issue.description}</div>
+      {issue.evidence.length > 0 && (
+        <ul className="build-feed-issue-evidence">
+          {issue.evidence.slice(0, 4).map((row) => (
+            <li key={`${issue.id}:${row.type}:${row.id}`} className="build-feed-issue-evidence-item">
+              <code>{row.type}</code>
+              <span>{row.excerpt ?? row.id}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {issue.resolution && (
+        <div className="build-feed-issue-resolution">
+          Resolution: {issue.resolution}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type ResolvedPatch = EntryPatch & { resolvedAs: "accepted" | "rejected" };
 
 export function BuildFeed() {
+  const params = useParams<{ libraryId: string }>();
+  const libraryId = params.libraryId;
   const { storeRef, storeReady } = useRAGContext();
   const [patches, setPatches] = useState<EntryPatch[]>([]);
   const [resolvedPatches, setResolvedPatches] = useState<ResolvedPatch[]>([]);
+  const [issues, setIssues] = useState<ContinuityIssue[]>([]);
+  const [scanReport, setScanReport] = useState<ContinuitySyncReport | null>(null);
+  const [scanPending, setScanPending] = useState(false);
+  const [busyIssueId, setBusyIssueId] = useState<string | null>(null);
+  const [issueError, setIssueError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
 
-  useEffect(() => {
-    if (!storeReady || loadedRef.current) return;
+  const recordRevision = useCallback(
+    async (
+      store: RAGStore,
+      targetType: string,
+      targetId: string,
+      patch: Record<string, unknown>,
+      message: string,
+    ) => {
+      const now = Date.now();
+      const revision: Revision = {
+        id: makeId("rev"),
+        universeId: libraryId,
+        targetType,
+        targetId,
+        authorId: undefined,
+        createdAt: now,
+        recordedAt: now,
+        patch,
+        message,
+      };
+      await store.addRevision(revision);
+    },
+    [libraryId],
+  );
+
+  const loadFeedData = useCallback(async () => {
     const store = storeRef.current;
     if (!store) return;
+    const [pending, continuity] = await Promise.all([
+      store.getPendingPatches(),
+      store.listContinuityIssuesByUniverse(libraryId),
+    ]);
+    setPatches(pending.sort((a, b) => b.createdAt - a.createdAt));
+    setIssues(continuity.sort(issueSort));
+  }, [libraryId, storeRef]);
+
+  useEffect(() => {
+    if (!storeReady || loadedRef.current) return;
     loadedRef.current = true;
 
     void (async () => {
-      const pending = await store.getPendingPatches();
-      setPatches(pending.sort((a, b) => b.createdAt - a.createdAt));
+      await loadFeedData();
       setLoading(false);
     })();
-  }, [storeReady, storeRef]);
+  }, [loadFeedData, storeReady]);
 
   const groups = useMemo(() => groupBySource(patches), [patches]);
+  const openIssues = useMemo(
+    () => issues.filter((issue) => issue.status === "open" || issue.status === "in_review"),
+    [issues],
+  );
 
-  const handleAccept = useCallback(async (patchId: string) => {
-    const store = storeRef.current;
-    if (!store) return;
-    const patch = patches.find((p) => p.id === patchId);
-    if (!patch) return;
-
+  const acceptPatch = useCallback(async (store: RAGStore, patch: EntryPatch) => {
     await applyEntryPatch(patch, {
       addEntry: store.addEntry,
       updateEntry: store.updateEntry,
@@ -187,10 +343,26 @@ export function BuildFeed() {
       updatePatchStatus: store.updatePatchStatus,
       getEntryById: store.getEntryById,
     });
+    await recordRevision(
+      store,
+      "entry_patch",
+      patch.id,
+      { op: "accept-patch", source: patch.sourceRef, operations: patch.operations },
+      "Accepted entry patch from build feed",
+    );
+  }, [recordRevision]);
+
+  const handleAccept = useCallback(async (patchId: string) => {
+    const store = storeRef.current;
+    if (!store) return;
+    const patch = patches.find((p) => p.id === patchId);
+    if (!patch) return;
+
+    await acceptPatch(store, patch);
 
     setPatches((prev) => prev.filter((p) => p.id !== patchId));
     setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "accepted" }]);
-  }, [patches, storeRef]);
+  }, [acceptPatch, patches, storeRef]);
 
   const handleReject = useCallback(async (patchId: string) => {
     const store = storeRef.current;
@@ -199,9 +371,16 @@ export function BuildFeed() {
     if (!patch) return;
 
     await store.updatePatchStatus(patchId, "rejected");
+    await recordRevision(
+      store,
+      "entry_patch",
+      patch.id,
+      { op: "reject-patch", source: patch.sourceRef, operations: patch.operations },
+      "Rejected entry patch from build feed",
+    );
     setPatches((prev) => prev.filter((p) => p.id !== patchId));
     setResolvedPatches((prev) => [...prev, { ...patch, resolvedAs: "rejected" }]);
-  }, [patches, storeRef]);
+  }, [patches, recordRevision, storeRef]);
 
   const handleAcceptAll = useCallback(async (sourceKey: string) => {
     const store = storeRef.current;
@@ -210,24 +389,13 @@ export function BuildFeed() {
     const newlyResolved: ResolvedPatch[] = [];
 
     for (const patch of group) {
-      await applyEntryPatch(patch, {
-        addEntry: store.addEntry,
-        updateEntry: store.updateEntry,
-        deleteEntry: store.deleteEntry,
-        addEntryRelation: store.addEntryRelation,
-        removeEntryRelation: store.removeEntryRelation,
-        addContinuityIssue: store.addContinuityIssue,
-        updateContinuityIssueStatus: store.updateContinuityIssueStatus,
-        addCultureVersion: store.addCultureVersion,
-        updatePatchStatus: store.updatePatchStatus,
-        getEntryById: store.getEntryById,
-      });
+      await acceptPatch(store, patch);
       newlyResolved.push({ ...patch, resolvedAs: "accepted" });
     }
 
     setPatches((prev) => prev.filter((p) => `${p.sourceRef.kind}:${p.sourceRef.id}` !== sourceKey));
     setResolvedPatches((prev) => [...prev, ...newlyResolved]);
-  }, [groups, storeRef]);
+  }, [acceptPatch, groups, storeRef]);
 
   const handleRejectAll = useCallback(async (sourceKey: string) => {
     const store = storeRef.current;
@@ -237,18 +405,76 @@ export function BuildFeed() {
 
     for (const patch of group) {
       await store.updatePatchStatus(patch.id, "rejected");
+      await recordRevision(
+        store,
+        "entry_patch",
+        patch.id,
+        { op: "reject-patch", source: patch.sourceRef, operations: patch.operations },
+        "Rejected entry patch from build feed",
+      );
       newlyResolved.push({ ...patch, resolvedAs: "rejected" });
     }
 
     setPatches((prev) => prev.filter((p) => `${p.sourceRef.kind}:${p.sourceRef.id}` !== sourceKey));
     setResolvedPatches((prev) => [...prev, ...newlyResolved]);
-  }, [groups, storeRef]);
+  }, [groups, recordRevision, storeRef]);
+
+  const handleRunChecks = useCallback(async () => {
+    const store = storeRef.current;
+    if (!store) return;
+    setScanPending(true);
+    setIssueError(null);
+    try {
+      const report = await syncContinuityIssues(store, libraryId);
+      const latest = await store.listContinuityIssuesByUniverse(libraryId);
+      setScanReport(report);
+      setIssues(latest.sort(issueSort));
+    } catch (error) {
+      setIssueError(error instanceof Error ? error.message : "Failed to run continuity checks.");
+    } finally {
+      setScanPending(false);
+    }
+  }, [libraryId, storeRef]);
+
+  const handleSetIssueStatus = useCallback(async (
+    issue: ContinuityIssue,
+    status: ContinuityIssue["status"],
+  ) => {
+    const store = storeRef.current;
+    if (!store) return;
+    setBusyIssueId(issue.id);
+    setIssueError(null);
+    try {
+      const resolution = status === "resolved"
+        ? `Resolved in build feed at ${new Date().toISOString()}`
+        : status === "wont_fix"
+          ? `Marked won't-fix in build feed at ${new Date().toISOString()}`
+          : undefined;
+      await store.updateContinuityIssueStatus(issue.id, status, resolution);
+      await recordRevision(
+        store,
+        "continuity_issue",
+        issue.id,
+        { op: "set-status", from: issue.status, to: status, resolution },
+        `Continuity issue ${status}: ${issue.checkType}`,
+      );
+      setIssues((prev) => prev
+        .map((row) => (row.id === issue.id
+          ? { ...row, status, resolution: resolution ?? row.resolution, updatedAt: Date.now() }
+          : row))
+        .sort(issueSort));
+    } catch (error) {
+      setIssueError(error instanceof Error ? error.message : "Failed to update issue status.");
+    } finally {
+      setBusyIssueId(null);
+    }
+  }, [recordRevision, storeRef]);
 
   if (loading) {
     return (
       <div className="build-feed">
-        <div className="build-feed-header"><h2>Suggestions</h2></div>
-        <div className="build-feed-empty">Loading suggestions…</div>
+        <div className="build-feed-header"><h2>Continuity + Suggestions</h2></div>
+        <div className="build-feed-empty">Loading build feed…</div>
       </div>
     );
   }
@@ -256,9 +482,50 @@ export function BuildFeed() {
   return (
     <div className="build-feed">
       <div className="build-feed-header">
-        <h2>Suggestions</h2>
-        <span className="build-feed-count">{patches.length} pending</span>
+        <h2>Continuity + Suggestions</h2>
+        <span className="build-feed-count">
+          {openIssues.length} open issue(s) · {patches.length} pending patch(es)
+        </span>
       </div>
+      <section className="build-feed-group">
+        <div className="build-feed-group-header">
+          <div className="build-feed-group-title">Continuity Issues</div>
+          <div className="build-feed-group-actions">
+            <button
+              className="build-feed-btn"
+              disabled={scanPending}
+              onClick={() => void handleRunChecks()}
+            >
+              {scanPending ? "Running…" : "Run Checks"}
+            </button>
+          </div>
+        </div>
+
+        {issueError && (
+          <div className="build-feed-error">{issueError}</div>
+        )}
+
+        {scanReport && (
+          <div className="build-feed-continuity-report">
+            Detected: {scanReport.detected} · New: {scanReport.created} · Reopened: {scanReport.reopened} · Auto-resolved: {scanReport.autoResolved}
+          </div>
+        )}
+
+        <div className="build-feed-group-list">
+          {openIssues.length === 0 ? (
+            <div className="build-feed-empty">No open continuity issues.</div>
+          ) : (
+            openIssues.map((issue) => (
+              <ContinuityIssueCard
+                key={issue.id}
+                issue={issue}
+                busy={busyIssueId === issue.id}
+                onSetStatus={(row, status) => void handleSetIssueStatus(row, status)}
+              />
+            ))
+          )}
+        </div>
+      </section>
 
       {patches.length === 0 && resolvedPatches.length === 0 ? (
         <div className="build-feed-empty">No pending suggestions.</div>
