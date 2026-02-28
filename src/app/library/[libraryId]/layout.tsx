@@ -43,26 +43,66 @@ import { applyEntryPatch } from "@/lib/domain/patch";
 /* ----------------------------------------------------------------
    Library sub-nav link
    ---------------------------------------------------------------- */
-const SUB_NAV_ITEMS = [
-  { label: "Universe", path: "universe" },
-  { label: "Master Timeline", path: "master-timeline" },
-  { label: "Locations", path: "locations" },
-  { label: "Cultures", path: "cultures" },
-  { label: "Religions", path: "religions" },
-  { label: "Languages", path: "languages" },
-  { label: "Economics", path: "economics" },
-  { label: "Organizations", path: "organizations" },
-  { label: "Characters", path: "characters" },
-  { label: "Lineages", path: "lineages" },
-  { label: "Items", path: "items" },
-  { label: "Maps", path: "maps" },
-  { label: "Media", path: "media" },
-  { label: "Books", path: "books" },
-  { label: "Scenes", path: "scenes" },
-  { label: "Suggestions", path: "suggestions" },
-  { label: "Continuity Issues", path: "continuity-issues" },
-  { label: "Change Log", path: "change-log" },
-  { label: "Settings", path: "settings" },
+const SIDEBAR_GROUPS = [
+  {
+    label: "Universe Core",
+    items: [
+      { label: "Overview", path: "universe" },
+      { label: "Master Timeline", path: "master-timeline" },
+      { label: "Cosmology", path: "cosmology" },
+      { label: "Magic Systems", path: "magic-systems" },
+      { label: "Rules", path: "rules" },
+    ],
+  },
+  {
+    label: "World Structures",
+    items: [
+      { label: "Locations", path: "locations" },
+      { label: "Cultures", path: "cultures" },
+      { label: "Religions", path: "religions" },
+      { label: "Languages", path: "languages" },
+      { label: "Economics", path: "economics" },
+    ],
+  },
+  {
+    label: "Power Structures",
+    items: [
+      { label: "Organizations", path: "organizations" },
+      { label: "Factions", path: "factions" },
+      { label: "Conflicts", path: "conflicts" },
+    ],
+  },
+  {
+    label: "Cast & Lineages",
+    items: [
+      { label: "Characters", path: "characters" },
+      { label: "Lineages", path: "lineages" },
+      { label: "Relationship Web", path: "relationship-web" },
+    ],
+  },
+  {
+    label: "Artifacts & Media",
+    items: [
+      { label: "Items & Relics", path: "items" },
+      { label: "Maps", path: "maps" },
+      { label: "Media Library", path: "media" },
+    ],
+  },
+  {
+    label: "Manuscripts",
+    items: [
+      { label: "Books", path: "books" },
+      { label: "Scenes", path: "scenes" },
+    ],
+  },
+  {
+    label: "Intelligence",
+    items: [
+      { label: "Suggestions", path: "suggestions" },
+      { label: "Continuity Issues", path: "continuity-issues" },
+      { label: "Change Log", path: "change-log" },
+    ],
+  },
 ] as const;
 
 /* ----------------------------------------------------------------
@@ -755,6 +795,17 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     return match ? match[1] : "universe";
   }, [pathname]);
 
+  /* ---- Sidebar collapsed groups ---- */
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = useCallback((label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }, []);
+
   /* ---- Chat context for AI ---- */
   const chatContext = useMemo(() => {
     return createChatContext({
@@ -883,46 +934,73 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
           </div>
         )}
 
-        {/* Secondary nav: library-scoped tabs */}
-        <nav className="library-subnav">
+        {/* Topbar: universe title + panel toggles */}
+        <div className="library-subnav">
           <span className="library-subnav-title" title={libraryTitle}>
             {libraryTitle}
           </span>
-          <div className="library-subnav-links">
-            {SUB_NAV_ITEMS.map((item) => (
-              <Link
-                key={item.path}
-                href={`/library/${libraryId}/${item.path}`}
-                className={`library-subnav-link ${activeSegment === item.path ? "active" : ""}`}
-              >
-                {item.label}
-              </Link>
-            ))}
+          <div className="library-subnav-actions">
+            <button
+              className={`library-subnav-chat-btn ${buildFeedOpen ? "active" : ""}`}
+              onClick={() => setBuildFeedOpen(!buildFeedOpen)}
+              title="Toggle Build Feed Panel"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              Feed
+            </button>
+            <button
+              className={`library-subnav-chat-btn ${bottomPanelOpen ? "active" : ""}`}
+              onClick={() => setBottomPanelOpen(!bottomPanelOpen)}
+              title="Toggle AI Thread Panel"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              AI
+            </button>
           </div>
-          <button
-            className={`library-subnav-chat-btn ${buildFeedOpen ? "active" : ""}`}
-            onClick={() => setBuildFeedOpen(!buildFeedOpen)}
-            title="Toggle Build Feed Panel"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-            </svg>
-            Feed
-          </button>
-          <button
-            className={`library-subnav-chat-btn ${bottomPanelOpen ? "active" : ""}`}
-            onClick={() => setBottomPanelOpen(!bottomPanelOpen)}
-            title="Toggle AI Thread Panel"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            AI
-          </button>
-        </nav>
+        </div>
 
-        {/* Body: content + optional build feed panel + optional tabs + optional chat panel */}
+        {/* Body: sidebar + content + optional panels */}
         <div className="library-body">
+          {/* Left sidebar nav */}
+          <nav className="library-sidebar">
+            {SIDEBAR_GROUPS.map((group) => {
+              const isCollapsed = collapsedGroups.has(group.label);
+              return (
+                <div key={group.label} className="library-sidebar-group">
+                  <button
+                    className="library-sidebar-group-header"
+                    onClick={() => toggleGroup(group.label)}
+                    type="button"
+                  >
+                    <svg
+                      className={`library-sidebar-chevron${isCollapsed ? "" : " expanded"}`}
+                      width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                    <span>{group.label}</span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="library-sidebar-group-items">
+                      {group.items.map((item) => (
+                        <Link
+                          key={item.path}
+                          href={`/library/${libraryId}/${item.path}`}
+                          className={`library-sidebar-item${activeSegment === item.path ? " active" : ""}`}
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </nav>
           {/* Left Build Feed panel */}
           {buildFeedOpen && (
             <div className="library-build-feed-panel">

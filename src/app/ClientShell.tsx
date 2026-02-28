@@ -355,19 +355,21 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
       <RAGContext.Provider value={{ storeRef, storeReady, tree, ragNodes, addNode, renameNode, deleteNode, toggleExpand, moveNode, putRagNode }}>
         <div className="ide-root">
           <div className="ide-body">
-            <AppNav
-              tree={tree}
-              ragNodes={ragNodes}
-              libraryId={activeLibraryId}
-              activeNodeId={activeLibraryId}
-              onNodeSelect={handleNodeSelect}
-              onAddChild={handleAddChild}
-              onRenameNode={renameNode}
-              onDeleteNode={deleteNode}
-              onToggleExpand={toggleExpand}
-              onMoveNode={moveNode}
-              dirtyIds={dirtyIds}
-            />
+            {!pathname?.startsWith("/library/") && (
+              <AppNav
+                tree={tree}
+                ragNodes={ragNodes}
+                libraryId={activeLibraryId}
+                activeNodeId={activeLibraryId}
+                onNodeSelect={handleNodeSelect}
+                onAddChild={handleAddChild}
+                onRenameNode={renameNode}
+                onDeleteNode={deleteNode}
+                onToggleExpand={toggleExpand}
+                onMoveNode={moveNode}
+                dirtyIds={dirtyIds}
+              />
+            )}
             <div className="ide-main">
               {children}
             </div>
