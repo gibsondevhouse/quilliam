@@ -1,0 +1,187 @@
+/* ── Provenance Panel ────────────────────────────────────────────── */
+.prov-panel {
+  border: 1px solid var(--border-subtle, rgba(99,102,241,0.2));
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0 0;
+}
+
+.prov-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-secondary, rgba(0,0,0,0.2));
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary, #e2e8f0);
+  transition: background 0.15s;
+}
+
+.prov-header:hover { background: var(--bg-hover, rgba(99,102,241,0.08)); }
+
+.prov-header-title {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.prov-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(99,102,241,0.18);
+  color: var(--text-accent, #a78bfa);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.prov-toggle { font-size: 12px; color: var(--text-muted, #888); }
+
+.prov-body {
+  border-top: 1px solid var(--border-subtle, rgba(99,102,241,0.12));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.prov-section {
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));
+}
+
+.prov-section:last-child { border-bottom: none; }
+
+.prov-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prov-section-count {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.06);
+  color: var(--text-muted, #888);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.prov-loading,
+.prov-empty {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin: 0;
+  padding: 2px 0;
+}
+
+.prov-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* mention rows */
+.prov-mention-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  padding: 5px 8px;
+  background: var(--bg-row, rgba(255,255,255,0.03));
+  border-radius: 5px;
+}
+
+/* source rows */
+.prov-source-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  padding: 5px 8px;
+  background: var(--bg-row, rgba(255,255,255,0.03));
+  border-radius: 5px;
+}
+
+/* kind chip */
+.prov-kind {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.prov-kind--scene    { background: rgba(59,130,246,0.18); color: #60a5fa; }
+.prov-kind--manual   { background: rgba(34,197,94,0.15);  color: #4ade80; }
+.prov-kind--chat     { background: rgba(167,139,250,0.18); color: #a78bfa; }
+.prov-kind--research { background: rgba(245,158,11,0.18); color: #fbbf24; }
+
+.prov-mention-loc {
+  flex: 1;
+  color: var(--text-secondary, #ccc);
+  font-weight: 500;
+}
+
+.prov-source-id {
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--text-muted, #888);
+}
+
+.prov-excerpt {
+  flex: 1;
+  color: var(--text-muted, #888);
+  font-style: italic;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prov-remove-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 3px;
+  transition: color 0.15s;
+}
+.prov-remove-btn:hover { color: #ef4444; }
+
+.prov-add-btn {
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px dashed var(--border-subtle, rgba(99,102,241,0.3));
+  border-radius: 5px;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.prov-add-btn:hover {
+  color: var(--text-accent, #a78bfa);
+  border-color: var(--text-accent, #a78bfa);
+  background: rgba(99,102,241,0.06);
+}
+
+.prov-add-form { margin-top: 8px; }

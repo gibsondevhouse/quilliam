@@ -6,9 +6,15 @@ import type { editor as MonacoEditor } from "monaco-editor";
 import type { ChangeSet } from "@/lib/changeSets";
 import { EditorTitleBar } from "./EditorTitleBar";
 import { useMonacoDecorations } from "./hooks/useMonacoDecorations";
+import { useYjsBinding } from "./hooks/useYjsBinding";
 import { defineQuilliamTheme } from "./editorTheme";
 
 export interface EditorAreaProps {
+  /**
+   * When provided, a Yjs Y.Doc backed by IndexeddbPersistence is created for
+   * this ID and authoritative over the Monaco model.
+   */
+  chapterId?: string;
   initialContent?: string;
   /**
    * Live working content driven externally (e.g. AI-patched text).
@@ -27,6 +33,7 @@ export interface EditorAreaProps {
 }
 
 export function EditorArea({
+  chapterId,
   initialContent = "",
   content,
   documentTitle = "Untitled",
@@ -41,10 +48,14 @@ export function EditorArea({
   const [title, setTitle] = useState(documentTitle);
   const [wordCount, setWordCount] = useState(0);
   const [charCount, setCharCount] = useState(0);
+  const [editorReady, setEditorReady] = useState(false);
 
   const monacoRef = useRef<Monaco | null>(null);
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
   const suppressChange = useRef(false);
+  // When Yjs is active it owns onContentChange; suppress double-fire from Monaco model handler.
+  const chapterIdRef = useRef(chapterId);
+  useEffect(() => { chapterIdRef.current = chapterId; }, [chapterId]);
 
   useEffect(() => { setTitle(documentTitle); }, [documentTitle]);
 
@@ -63,7 +74,17 @@ export function EditorArea({
     suppressChange.current = false;
   }, []);
 
+  // ---- Yjs binding ----
+  const { synced, setExternalContent } = useYjsBinding({
+    chapterId,
+    editorRef,
+    editorReady,
+    initialContent,
+    onContentChange,
+  });
+
   useEffect(() => {
+    if (chapterId) return; // Yjs path handles seeding
     setEditorContent(initialContent);
     refreshCounts(initialContent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -71,9 +92,14 @@ export function EditorArea({
 
   useEffect(() => {
     if (content === undefined) return;
-    setEditorContent(content);
-    refreshCounts(content);
-  }, [content, setEditorContent, refreshCounts]);
+    if (setExternalContent) {
+      setExternalContent(content);
+      refreshCounts(content);
+    } else {
+      setEditorContent(content);
+      refreshCounts(content);
+    }
+  }, [content, setEditorContent, setExternalContent, refreshCounts]);
 
   const handleEditorMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -81,7 +107,8 @@ export function EditorArea({
       monacoRef.current = monaco;
       defineQuilliamTheme(monaco);
 
-      if (initialContent) {
+      // Only seed through the legacy path when Yjs is not active.
+      if (!chapterIdRef.current && initialContent) {
         suppressChange.current = true;
         editor.setValue(initialContent);
         suppressChange.current = false;
@@ -92,12 +119,17 @@ export function EditorArea({
         if (suppressChange.current) return;
         const value = editor.getValue();
         refreshCounts(value);
-        onContentChange?.(value);
+        // When Yjs is active, the Y.Text observer fires onContentChange instead.
+        if (!chapterIdRef.current) {
+          onContentChange?.(value);
+        }
       });
 
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         window.dispatchEvent(new CustomEvent("quilliam:save"));
       });
+
+      setEditorReady(true);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [] // intentionally run once on mount
@@ -115,6 +147,7 @@ export function EditorArea({
   );
 
   const pendingCount = pendingChangeSets.filter((cs) => cs.status === "pending").length;
+  const showSyncing = chapterId && !synced;
 
   return (
     <div className="editor-area">
@@ -126,7 +159,15 @@ export function EditorArea({
         onRejectAll={onRejectAll}
       />
 
-      <div className="editor-surface editor-surface--monaco">
+      <div className="editor-surface editor-surface--monaco" style={{ position: "relative" }}>
+        {showSyncing && (
+          <div className="editor-yjs-syncing">
+            <span className="chat-dot" />
+            <span className="chat-dot" />
+            <span className="chat-dot" />
+            <span className="editor-yjs-syncing-label">Loading document…</span>
+          </div>
+        )}
         <Editor
           defaultLanguage="markdown"
           theme="quilliam-dark"
@@ -164,6 +205,11 @@ export function EditorArea({
       <div className="editor-stats">
         <span>{wordCount} words</span>
         <span>{charCount} characters</span>
+        {chapterId && (
+          <span className="editor-stats-yjs" title="CRDT collaborative editing active">
+            ⊕ live
+          </span>
+        )}
         {pendingCount > 0 && (
           <span className="editor-stats-pending">
             {pendingCount} pending change{pendingCount !== 1 ? "s" : ""}

@@ -1,64 +1,96 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useLibraryContext } from "@/lib/context/LibraryContext";
-import { useWorkspaceContext } from "@/lib/context/WorkspaceContext";
+import { useStore } from "@/lib/context/useStore";
+import type { Book, BookStatus, Chapter } from "@/lib/types";
+
+const STATUS_CYCLE: BookStatus[] = ["idea", "planning", "drafting", "editing", "published", "archived"];
+const STATUS_COLORS: Record<BookStatus, string> = {
+  idea: "#6b7280",
+  planning: "#8b5cf6",
+  drafting: "#3b82f6",
+  editing: "#f59e0b",
+  published: "#22c55e",
+  archived: "#4b5563",
+};
 
 export default function BookDashboardPage() {
   const params = useParams<{ libraryId: string; storyId: string }>();
   const { libraryId, storyId } = params;
-  const lib = useLibraryContext();
-  const { ragNodes, addNode } = useWorkspaceContext();
+  const store = useStore();
   const router = useRouter();
 
-  const story = lib.stories.find((s) => s.id === storyId);
+  const [book, setBook] = useState<Book | null>(null);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(story?.title ?? "");
-  const [editingSynopsis, setEditingSynopsis] = useState(false);
-  const [synopsisDraft, setSynopsisDraft] = useState(story?.synopsis ?? "");
+  const [titleDraft, setTitleDraft] = useState("");
+  const loadedRef = useRef(false);
 
-  // Chapters are RAG nodes whose parentId === storyId
-  const storyChapters = Object.values(ragNodes).filter(
-    (n) => n.parentId === storyId && (n.type === "chapter" || n.type === "scene")
-  );
+  const reload = useCallback(async () => {
+    setLoading(true);
+    const books = await store.listBooksByUniverse(libraryId);
+    const found = books.find((b) => b.id === storyId) ?? null;
+    setBook(found);
+    if (found) setTitleDraft(found.title);
+    const chs = await store.listChaptersByBook(storyId);
+    setChapters([...chs].sort((a, b) => a.number - b.number));
+    setLoading(false);
+  }, [store, libraryId, storyId]);
 
-  const handleNewChapter = useCallback(() => {
-    const chapterId = addNode(storyId, "chapter");
-    router.push(`/library/${libraryId}/books/${storyId}/chapters/${chapterId}`);
-  }, [addNode, storyId, libraryId, router]);
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void reload();
+  }, [reload]);
 
-  const commitTitle = useCallback(() => {
+  const commitTitle = useCallback(async () => {
     setEditingTitle(false);
-    if (story && titleDraft.trim()) {
-      lib.updateStory({ ...story, title: titleDraft.trim() });
-    }
-  }, [story, titleDraft, lib]);
+    if (!book || !titleDraft.trim() || titleDraft.trim() === book.title) return;
+    const updated: Book = { ...book, title: titleDraft.trim(), updatedAt: Date.now() };
+    await store.putBook(updated);
+    setBook(updated);
+  }, [store, book, titleDraft]);
 
-  const commitSynopsis = useCallback(() => {
-    setEditingSynopsis(false);
-    if (story) {
-      lib.updateStory({ ...story, synopsis: synopsisDraft });
-    }
-  }, [story, synopsisDraft, lib]);
+  const cycleStatus = useCallback(async () => {
+    if (!book) return;
+    const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(book.status) + 1) % STATUS_CYCLE.length];
+    const updated: Book = { ...book, status: next, updatedAt: Date.now() };
+    await store.putBook(updated);
+    setBook(updated);
+  }, [store, book]);
 
-  if (!story) {
+  const handleNewChapter = useCallback(async () => {
+    const nextNum = chapters.length + 1;
+    const now = Date.now();
+    const newChapter: Chapter = {
+      id: crypto.randomUUID(),
+      bookId: storyId,
+      number: nextNum,
+      title: `Chapter ${nextNum}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await store.putChapter(newChapter);
+    router.push(`/library/${libraryId}/books/${storyId}/chapters/${newChapter.id}`);
+  }, [store, storyId, libraryId, chapters.length, router]);
+
+  if (loading) {
+    return <div className="library-page"><div className="library-page-empty"><p>Loading…</p></div></div>;
+  }
+
+  if (!book) {
     return (
       <div className="library-page-empty">
-        <p>Story not found.</p>
+        <p>Book not found.</p>
         <button className="library-page-action" onClick={() => router.push(`/library/${libraryId}/books`)}>
           ← Back to Books
         </button>
       </div>
     );
   }
-
-  const STATUS_CYCLE: Array<"drafting" | "editing" | "archived"> = ["drafting", "editing", "archived"];
-  const STATUS_COLORS: Record<string, string> = {
-    drafting: "#3b82f6",
-    editing: "#f59e0b",
-    archived: "#6b7280",
-  };
 
   return (
     <div className="library-dashboard">
@@ -71,51 +103,33 @@ export default function BookDashboardPage() {
               value={titleDraft}
               autoFocus
               onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={commitTitle}
-              onKeyDown={(e) => { if (e.key === "Enter") commitTitle(); if (e.key === "Escape") setEditingTitle(false); }}
+              onBlur={() => void commitTitle()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void commitTitle();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
             />
           ) : (
             <h1
               className="library-dashboard-title"
-              onClick={() => { setTitleDraft(story.title); setEditingTitle(true); }}
+              onClick={() => { setTitleDraft(book.title); setEditingTitle(true); }}
               title="Click to edit"
             >
-              {story.title}
+              {book.title}
             </h1>
           )}
           <span
             className="library-dashboard-status"
-            style={{ "--status-color": STATUS_COLORS[story.status] } as React.CSSProperties}
-            onClick={() => {
-              const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(story.status) + 1) % STATUS_CYCLE.length];
-              lib.updateStory({ ...story, status: next });
-            }}
+            style={{ "--status-color": STATUS_COLORS[book.status] } as React.CSSProperties}
+            onClick={() => void cycleStatus()}
             title="Click to cycle status"
           >
-            {story.status}
+            {book.status}
           </span>
         </div>
 
-        {editingSynopsis ? (
-          <textarea
-            className="library-dashboard-title-input"
-            style={{ fontSize: 14, fontWeight: 400, minHeight: 64 }}
-            value={synopsisDraft}
-            autoFocus
-            onChange={(e) => setSynopsisDraft(e.target.value)}
-            onBlur={commitSynopsis}
-          />
-        ) : (
-          <p
-            className={`library-dashboard-logline${story.synopsis ? "" : " placeholder"}`}
-            onClick={() => { setSynopsisDraft(story.synopsis); setEditingSynopsis(true); }}
-          >
-            {story.synopsis || "Add a synopsis…"}
-          </p>
-        )}
-
         <div className="library-dashboard-quick-actions">
-          <button className="library-dashboard-action" onClick={handleNewChapter}>
+          <button className="library-dashboard-action" onClick={() => void handleNewChapter()}>
             + New Chapter
           </button>
           <button
@@ -135,28 +149,27 @@ export default function BookDashboardPage() {
 
       {/* Cards */}
       <div className="library-dashboard-cards">
-        {/* Chapters */}
         <div className="library-dashboard-card" style={{ gridColumn: "1 / -1" }}>
           <div className="library-dashboard-card-header">
-            <h3>§ Chapters <span className="library-dashboard-count">{storyChapters.length}</span></h3>
+            <h3>§ Chapters <span className="library-dashboard-count">{chapters.length}</span></h3>
             <button onClick={() => router.push(`/library/${libraryId}/books/${storyId}/chapters`)}>
               View all →
             </button>
           </div>
-          {storyChapters.length === 0 ? (
+          {chapters.length === 0 ? (
             <p className="library-dashboard-empty">
               No chapters yet.{" "}
-              <button onClick={handleNewChapter}>Write the first chapter</button>
+              <button onClick={() => void handleNewChapter()}>Write the first chapter</button>
             </p>
           ) : (
             <ul className="library-dashboard-list">
-              {storyChapters.slice(0, 8).map((ch) => (
+              {chapters.slice(0, 8).map((ch) => (
                 <li key={ch.id}>
                   <button
                     onClick={() => router.push(`/library/${libraryId}/books/${storyId}/chapters/${ch.id}`)}
                   >
                     <span className="item-icon">§</span>
-                    <span className="item-title">{ch.title || "Untitled Chapter"}</span>
+                    <span className="item-title">{ch.title || `Chapter ${ch.number}`}</span>
                   </button>
                 </li>
               ))}
@@ -164,15 +177,24 @@ export default function BookDashboardPage() {
           )}
         </div>
 
-        {/* Beats placeholder */}
-        <div className="library-dashboard-card placeholder-card">
+        <div className="library-dashboard-card">
           <div className="library-dashboard-card-header">
             <h3>Beats &amp; Outline</h3>
             <button onClick={() => router.push(`/library/${libraryId}/books/${storyId}/beats`)}>
               View →
             </button>
           </div>
-          <p className="library-dashboard-empty">Story beats, act structure &amp; outline — coming soon.</p>
+          <p className="library-dashboard-empty">Plan scenes and act structure.</p>
+        </div>
+
+        <div className="library-dashboard-card">
+          <div className="library-dashboard-card-header">
+            <h3>Book Timeline</h3>
+            <button onClick={() => router.push(`/library/${libraryId}/books/${storyId}/timeline`)}>
+              View →
+            </button>
+          </div>
+          <p className="library-dashboard-empty">Narrative events anchored to canon.</p>
         </div>
       </div>
     </div>

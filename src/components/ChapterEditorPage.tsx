@@ -78,6 +78,7 @@ export function ChapterEditorPage({ chapterId }: ChapterEditorPageProps) {
     <div className="chapter-editor-wrap">
       <EditorArea
         key={chapterId}
+        chapterId={chapterId}
         initialContent={currentDoc.content}
         content={liveContent}
         documentTitle={currentDoc.title}

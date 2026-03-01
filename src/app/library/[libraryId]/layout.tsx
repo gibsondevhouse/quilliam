@@ -101,6 +101,8 @@ const SIDEBAR_GROUPS = [
     items: [
       { label: "Suggestions", path: "suggestions" },
       { label: "Continuity Issues", path: "continuity-issues" },
+      { label: "Analytics", path: "analytics" },
+      { label: "Branch Diff", path: "branches" },
       { label: "Change Log", path: "change-log" },
     ],
   },

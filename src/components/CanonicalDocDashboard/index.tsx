@@ -10,6 +10,7 @@ import { useEntryRelatedData } from "./hooks/useEntryRelatedData";
 import { CultureVersionPanel } from "@/components/CultureVersionPanel";
 import { EntityVersionPanel } from "@/components/EntityVersionPanel";
 import { BulkImportPanel } from "@/components/BulkImportPanel";
+import { ProvenancePanel } from "@/components/ProvenancePanel";
 
 export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProps) {
   const searchParams = useSearchParams();
@@ -32,6 +33,7 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
     handleAdd,
     handleSave,
     handleDelete,
+    refreshActiveDoc,
   } = useEntryDashboard({ libraryId, type, title, highlightId });
 
   const { members, appearances, linkedCultures, handleAddMember, handleRemoveMember } =
@@ -169,6 +171,10 @@ export function CanonicalDocDashboard({ type, title }: CanonicalDocDashboardProp
             {(type === "organization" || type === "religion") && (
               <EntityVersionPanel entityKind={type} entryId={activeDoc.id} />
             )}
+            <ProvenancePanel
+              entry={activeDoc}
+              onEntryUpdated={refreshActiveDoc}
+            />
           </>
         ) : (
           <div className="library-page-empty">

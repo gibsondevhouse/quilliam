@@ -37,6 +37,7 @@ interface UseEntryDashboardReturn {
   handleAdd: () => void;
   handleSave: (fields: DocFormSaveFields) => void;
   handleDelete: (id: string) => void;
+  refreshActiveDoc: () => void;
 }
 
 export function useEntryDashboard({
@@ -162,6 +163,16 @@ export function useEntryDashboard({
     if (activeId === id) setActiveId(null);
   }, [activeId, store]);
 
+  const refreshActiveDoc = useCallback(() => {
+    if (!activeId) return;
+    void (async () => {
+      const fresh = await store.getEntryById(activeId);
+      if (fresh) {
+        setDocs((prev) => prev.map((d) => (d.id === activeId ? (fresh as Entry) : d)));
+      }
+    })();
+  }, [activeId, store]);
+
   return {
     docs,
     activeId,
@@ -176,5 +187,6 @@ export function useEntryDashboard({
     handleAdd: () => { void handleAdd(); },
     handleSave: (fields) => { void handleSave(fields); },
     handleDelete: (id) => { void handleDelete(id); },
+    refreshActiveDoc,
   };
 }

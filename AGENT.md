@@ -59,24 +59,30 @@ Non-negotiables:
 
 ### Library sub-routes
 
-`universe/`, `books/`, `chapters/`, `scenes/`, `characters/`, `locations/`, `cultures/`, `organizations/`, `factions/`, `magic-systems/`, `items/`, `languages/`, `religions/`, `lineages/`, `economics/`, `rules/`, `cosmology/`, `master-timeline/`, `maps/`, `media/`, `relationship-web/`, `continuity-issues/`, `conflicts/`, `suggestions/`, `change-log/`, `threads/[id]/`, `settings/`
+`universe/`, `books/`, `chapters/`, `scenes/`, `characters/`, `locations/`, `cultures/`, `organizations/`, `factions/`, `magic-systems/`, `items/`, `languages/`, `religions/`, `lineages/`, `economics/`, `rules/`, `cosmology/`, `master-timeline/`, `maps/`, `media/`, `relationship-web/`, `continuity-issues/`, `conflicts/`, `analytics/`, `branches/`, `suggestions/`, `change-log/`, `threads/[id]/`, `settings/`
 
 ### Component inventory (`src/components/`)
 
 | Component | Purpose |
 |---|---|
+| `AnalyticsPage/` | Deep analytics dashboard — entry counts by type/canon status, orphaned entries, unanchored characters, unused orgs, uncited rules, manuscript stats |
 | `AppNav/` | Sidebar navigation tree + context menu |
 | `BookTimelinePage/` | Per-book timeline view |
+| `BranchDiffPage/` | Branch comparison UI — groups `alternate-branch` entries by `branch:Name` tag, side-by-side field diff vs canon counterpart, promote-to-canon action with optional retcon |
 | `BuildFeed/` | AI suggestion feed with patch cards and continuity issues |
 | `CanonicalDocDashboard/` | Entry editor + relations panel |
 | `ChangeLogPage.tsx` | Revision history view |
 | `ChapterEditorPage.tsx` | Monaco-based chapter editor |
 | `Chat/` | Multi-mode AI chat (local / cloud / research) |
 | `CultureVersionPanel/` | Era-aware culture snapshot management |
+| `EntityVersionPanel/` | Era-aware org/religion snapshot panels (generic, parameterized by `entityKind`) |
 | `Editor/` | Shared prose editor primitives |
+| `BulkImportPanel/` | CSV bulk import for encyclopedia entries |
 | `LibraryDashboard/` | Library landing page |
 | `MapsPage/` | Interactive map + pin management |
 | `MasterTimelinePage/` | Universe-level timeline + eras |
+| `MediaLibraryPage/` | Media asset library (images, audio, video, documents) |
+| `ProvenancePanel/` | Per-entry provenance panel — scene mentions resolved to Book/Chapter/Scene labels, source citations by kind (scene/manual/chat/research), add/remove manual citations |
 | `RelationshipWeb/` | Visual entity relationship graph |
 | `SceneMetaPanel.tsx` | Scene metadata (POV, location, time anchor) |
 | `SystemStatus.tsx` | AI provider health indicator |
@@ -147,6 +153,30 @@ Full store inventory by version added:
 Schema definition: `src/lib/rag/db/schema.ts`  
 Store access helpers: `src/lib/rag/db/` (decomposed per domain — entries, manuscript, relations, patches, timeline, chat, research, media, nodes)
 
+### Yjs CRDT document stores (`quilliam-yjs-<chapterId>`)
+
+Each open chapter/scene gets its own `IndexeddbPersistence` database (`quilliam-yjs-<nodeId>`).
+The Y.Doc holds a single `Y.Text` at key `"content"` that is the authoritative source of truth for
+the editor while open. Changes are also written to the main `quilliam-rag` `nodes` store via the
+existing `quilliam:save` / `handleContentChange` pipeline.
+
+Key files:
+- `src/lib/yjs/yjsDoc.ts` — singleton registry (`getYjsDoc`, `destroyYjsDoc`)
+- `src/components/Editor/EditorArea/hooks/useYjsBinding.ts` — React hook
+- `src/components/Editor/EditorArea/index.tsx` — `chapterId` prop activates Yjs path
+
+### Yjs CRDT document stores (`quilliam-yjs-<chapterId>`)
+
+Each open chapter/scene gets its own `IndexeddbPersistence` database (`quilliam-yjs-<nodeId>`).
+The Y.Doc holds a single `Y.Text` at key `"content"` that is the authoritative source of truth for
+the editor while open. Changes are also persisted to the main `quilliam-rag` `nodes` store via the
+existing `quilliam:save` event / `handleContentChange` pipeline.
+
+Key files:
+- `src/lib/yjs/yjsDoc.ts` — singleton registry (`getYjsDoc`, `destroyYjsDoc`)
+- `src/components/Editor/EditorArea/hooks/useYjsBinding.ts` — React hook (`useYjsBinding`)
+- `src/components/Editor/EditorArea/index.tsx` — `chapterId` prop activates Yjs path
+
 ### RAG node hierarchy (7 levels)
 
 ```
@@ -211,7 +241,32 @@ Key types defined in `src/lib/types.ts`:
 | `AiExecutionMode` | `local \| assisted_cloud \| deep_research` |
 | `RunBudget` | Hard caps: USD, tokens, time, sources |
 
-## 7) Verification Checklist
+## 7) Implementation Status
+
+### V1 — complete
+All core encyclopedia CRUD, manuscript hierarchy (Series/Book/Chapter/Scene), relationships/memberships/mentions, calendar/timeline/era, map+pins, revision changelog, library dashboard, command palette.
+
+### V1.5 — complete
+- `CultureVersionPanel` — era-aware culture snapshots ✅
+- `EntityVersionPanel` — era-aware org/religion snapshots wired into `CanonicalDocDashboard` ✅
+- `MediaLibraryPage` — media asset grid (`/media` route) ✅
+- `BulkImportPanel` — CSV bulk import embedded in `CanonicalDocDashboard` ✅
+- Conflicts & Treaties page (`/conflicts`) — full relationship-based implementation ✅
+- Beats & Outline page (`/books/[id]/beats`) — chapter+scene beats per book ✅
+
+### Legacy holdovers (pre-Plan-002 manuscript model)
+These sub-routes still read from `useLibraryContext().stories` / `useWorkspaceContext().ragNodes` instead of IDB store.
+The Book dashboard (`/books/[storyId]`) has been migrated. Remaining legacy files:
+- `src/app/library/[libraryId]/books/[storyId]/chapters/page.tsx` — reads `ragNodes`
+- `src/app/library/[libraryId]/books/[storyId]/chapters/[chapterId]/page.tsx` — uses `ragNodes`
+
+### V2 — in progress
+- **Deep analytics** (`/analytics` route, `AnalyticsPage` component) — entry type breakdown with canon-rate bars, orphaned entries, unanchored characters, unused organizations, uncited rules, manuscript stats (books/chapters/scenes/POV coverage) ✅
+- **Rich provenance** (`ProvenancePanel` in `CanonicalDocDashboard`) — scene mentions resolved to Book/Chapter/Scene, source citations by kind (scene/manual/chat/research), add/remove manual `SourceRef` citations ✅
+- **Branching timeline diff** (`/branches` route, `BranchDiffPage` component) — groups `alternate-branch` entries by `branch:Name` tag, side-by-side field diff vs canon counterpart, promote-to-canon with optional retcon of existing canon entry ✅
+- **CRDT real-time co-editing (Yjs)** — `yjs` + `y-indexeddb` + `y-monaco` wired into `EditorArea`; `chapterId` prop activates a `Y.Doc` backed by `IndexeddbPersistence` (`quilliam-yjs-<id>` IDB store); `MonacoBinding` syncs Y.Text ↔ Monaco model; external content (AI patches) applied via Yjs transactions; falls back to legacy `setValue` path when `chapterId` is absent ✅
+
+## 8) Verification Checklist
 
 Before finalizing any change:
 
