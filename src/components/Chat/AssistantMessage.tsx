@@ -2,6 +2,7 @@
 
 import { QuestionWorkspace } from "./QuestionWorkspace";
 import { parseAssistantMessage } from "./chatUtils";
+import { MarkdownContent } from "./MarkdownContent";
 import type { QuestionCard } from "./types";
 
 interface AssistantMessageProps {
@@ -23,10 +24,11 @@ export function AssistantMessage({
 }: AssistantMessageProps) {
   const parsed = parseAssistantMessage(content);
   const cards = questionStates.get(messageIndex) ?? parsed.questions;
+  const text = parsed.vibe || content;
 
   return (
     <>
-      <div className="chat-msg-content">{parsed.vibe || content}</div>
+      <MarkdownContent>{text}</MarkdownContent>
       {parsed.questions.length > 0 && (
         <QuestionWorkspace
           questions={cards}
@@ -38,3 +40,4 @@ export function AssistantMessage({
     </>
   );
 }
+

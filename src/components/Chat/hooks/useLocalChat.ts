@@ -73,12 +73,18 @@ export function useLocalChat(params: {
       const { prose, fence } = extractFence(fullContent);
       const displayContent = prose || fullContent;
 
+      // Guard: if the model produced nothing (context overflow before first token,
+      // or an error was swallowed), surface a clear message rather than a blank bubble.
+      const finalContent = displayContent.trim()
+        ? displayContent
+        : "⚠ The model stopped without generating any text. The conversation history may be too long — try starting a new chat or asking for a shorter response.";
+
       const assistantIndex = newMessages.length;
       setMessages((prev) => [
         ...prev,
-        { role: "assistant" as const, content: displayContent },
+        { role: "assistant" as const, content: finalContent },
       ]);
-      initQuestionStates(assistantIndex, displayContent);
+      initQuestionStates(assistantIndex, finalContent);
       setStreamingContent("");
 
       // Build patches locally from the inline fence — zero extra network calls.

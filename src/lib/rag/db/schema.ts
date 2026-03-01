@@ -13,6 +13,7 @@ import type {
   PersistedChatMessage,
   PersistedChatSession,
   PersistedCharacter,
+  PersistedGeneralThread,
   PersistedContinuityIssue,
   PersistedCultureMembership,
   PersistedCultureVersion,
@@ -76,6 +77,11 @@ export interface RAGDBSchema extends DBSchema {
     key: string;
     value: PersistedChatSession;
     indexes: { by_updated: number; by_library: string };
+  };
+  generalThreads: {
+    key: string;
+    value: PersistedGeneralThread;
+    indexes: { by_updated: number; by_context_type: string; by_library: string };
   };
   chatMessages: {
     key: string;
@@ -312,7 +318,7 @@ export type QuillDB = IDBPDatabase<RAGDBSchema>;
 // ---------------------------------------------------------------------------
 
 export const DB_NAME = "quilliam-rag";
-export const DB_VERSION = 11;
+export const DB_VERSION = 12;
 
 /** Human-readable metadata key used to persist library meta in the `metadata` store. */
 export function libraryMetaKey(libraryId: string): string {
@@ -749,6 +755,24 @@ export function getDb(): Promise<QuillDB> {
             await transaction.objectStore("metadata").put({
               key: "schemaVersion",
               value: 11,
+              updatedAt: Date.now(),
+            });
+          }
+        }
+
+        // --- v12: general (landing-page) threads store ---
+        if (oldVersion < 12) {
+          if (!database.objectStoreNames.contains("generalThreads")) {
+            const threads = database.createObjectStore("generalThreads", { keyPath: "id" });
+            threads.createIndex("by_updated", "updatedAt");
+            threads.createIndex("by_context_type", "contextType");
+            threads.createIndex("by_library", "libraryId");
+          }
+
+          if (database.objectStoreNames.contains("metadata")) {
+            await transaction.objectStore("metadata").put({
+              key: "schemaVersion",
+              value: 12,
               updatedAt: Date.now(),
             });
           }

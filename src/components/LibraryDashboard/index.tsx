@@ -18,6 +18,8 @@ import { ModuleGrid } from "./ModuleGrid";
 import { BooksGrid } from "./BooksGrid";
 import { QuickAdd } from "./QuickAdd";
 import { CommandPalette } from "./CommandPalette";
+import { FirstRunBanner } from "./FirstRunBanner";
+import { ExportButton } from "./ExportButton";
 import { useDashboardStats, useQuickCreate } from "./hooks/useDashboardStats";
 import { useCommandPalette } from "./hooks/useCommandPalette";
 
@@ -186,6 +188,7 @@ export function LibraryDashboard() {
             Global Search
             <span className="library-dashboard-toolbar-kbd">⌘K</span>
           </button>
+          <ExportButton />
           <QuickAdd
             open={quickAddOpen}
             onToggle={() => setQuickAddOpen((o) => !o)}
@@ -194,6 +197,16 @@ export function LibraryDashboard() {
           />
         </div>
       </div>
+
+      {/* First-run onboarding — shown when universe is empty and stats have loaded */}
+      {Object.keys(moduleStats).length > 0 && bookCards.length === 0 && entryIndex.length === 0 && (
+        <FirstRunBanner
+          libraryId={lib.libraryId}
+          libraryTitle={lib.libraryTitle}
+          onNavigate={router.push}
+          onNewBook={handleNewBook}
+        />
+      )}
 
       {/* Module grid */}
       <ModuleGrid

@@ -47,7 +47,10 @@ export function ChapterEditorPage({ chapterId }: ChapterEditorPageProps) {
       if (stored) {
         initDoc(chapterId, stored.title, stored.content);
       } else {
-        initDoc(chapterId, "Untitled Chapter", "");
+        // Fall back to IDB chapters store (Plan-002 chapters have no RAG node)
+        const chapter = await store.getChapter(chapterId);
+        if (cancelled) return;
+        initDoc(chapterId, chapter?.title ?? "Untitled Chapter", "");
       }
     })();
 

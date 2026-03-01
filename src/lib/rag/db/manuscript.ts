@@ -56,12 +56,19 @@ export function createManuscriptStore(db: QuillDB): ManuscriptStore {
       const all = await db.getAllFromIndex("books", "by_universe", universeId);
       return all.sort((a, b) => a.orderIndex - b.orderIndex);
     },
+    async deleteBook(id: string): Promise<void> {
+      await db.delete("books", id);
+    },
 
     // ------------------------------------------------------------------
     // Chapters
     // ------------------------------------------------------------------
     async putChapter(entry: PersistedChapter): Promise<void> {
       await db.put("chapters", { ...entry, updatedAt: entry.updatedAt ?? Date.now() });
+    },
+    async getChapter(id: string): Promise<PersistedChapter | null> {
+      const record = await db.get("chapters", id);
+      return record ?? null;
     },
     async listChaptersByBook(bookId: string): Promise<PersistedChapter[]> {
       const all = await db.getAllFromIndex("chapters", "by_book", bookId);

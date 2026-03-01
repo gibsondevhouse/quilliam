@@ -79,6 +79,34 @@ export interface PersistedChatSession {
   updatedAt: number;
 }
 
+/**
+ * Context scope for a general thread.
+ * - "general"  → pure assistant mode, no library scope
+ * - "library"  → library-aware, scoped to canon
+ * - "chapter"  → reserved for chapter-bank threads (future)
+ */
+export type GeneralThreadContextType = "general" | "library" | "chapter";
+
+/**
+ * Persisted general (landing-page) thread header.
+ * Messages are stored in the shared `chatMessages` store using the same sessionId key.
+ */
+export interface PersistedGeneralThread {
+  id: string;
+  title: string;
+  preview: string;
+  createdAt: number;
+  updatedAt: number;
+  pinned: boolean;
+  contextType: GeneralThreadContextType;
+  /** Populated when contextType === "library" */
+  libraryId?: string;
+  /** Reserved for contextType === "chapter" */
+  chapterId?: string;
+  /** Active LoRA id at thread creation time */
+  loraId?: string;
+}
+
 /** Persisted character record, library-scoped. */
 export interface PersistedCharacter {
   id: string;
@@ -232,6 +260,7 @@ export interface PersistedChatMessage {
 
 import type { ChatStore } from "./store/ChatStore";
 import type { EntryStore } from "./store/EntryStore";
+import type { GeneralThreadStore } from "./store/GeneralThreadStore";
 import type { ManuscriptStore } from "./store/ManuscriptStore";
 import type { MediaStore } from "./store/MediaStore";
 import type { NodeStore } from "./store/NodeStore";
@@ -247,6 +276,7 @@ import type { TimelineStore } from "./store/TimelineStore";
  */
 export type RAGStore = NodeStore &
   ChatStore &
+  GeneralThreadStore &
   EntryStore &
   ManuscriptStore &
   TimelineStore &

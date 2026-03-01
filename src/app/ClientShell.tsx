@@ -194,7 +194,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
       <WorkspaceContext.Provider value={{ store: storeState, tree, ragNodes, addNode, renameNode, deleteNode, toggleExpand, moveNode, putRagNode }}>
         <div className="ide-root">
           <div className="ide-body">
-            {!pathname?.startsWith("/library/") && (
+            {!pathname?.startsWith("/library/") && pathname !== "/" && (
               <AppNav
                 tree={tree}
                 ragNodes={ragNodes}

@@ -15,6 +15,7 @@ import { getDb, DB_VERSION, libraryMetaKey, type QuillDB } from "./schema";
 import { collectCascadeNodeIds, deleteEmbeddingForFragment } from "./helpers";
 import { createNodeStore } from "./nodes";
 import { createChatStore } from "./chat";
+import { createGeneralThreadStore } from "./generalThreads";
 import { createEntryStore } from "./entries";
 import { createManuscriptStore } from "./manuscript";
 import { createTimelineStore } from "./timeline";
@@ -333,6 +334,7 @@ export async function createRAGStore(): Promise<RAGStore> {
   return {
     ...createNodeStore(db),
     ...createChatStore(db),
+    ...createGeneralThreadStore(db),
     ...createEntryStore(db),
     ...createManuscriptStore(db),
     ...createTimelineStore(db),

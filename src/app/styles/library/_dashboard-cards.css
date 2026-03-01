@@ -272,4 +272,107 @@
   }
 }
 
-/* ============================================================
+/* ============================================================   First-run onboarding banner
+   ============================================================ */
+
+.first-run-banner {
+  margin-bottom: 8px;
+}
+
+.first-run-banner-hero {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, color-mix(in srgb, var(--accent, #6366f1) 8%, var(--bg)) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent, #6366f1) 25%, var(--border));
+  border-radius: 12px;
+  padding: 28px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.first-run-banner-text h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.first-run-banner-text h2 em {
+  font-style: normal;
+  color: var(--accent, #6366f1);
+}
+
+.first-run-banner-text p {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 480px;
+  line-height: 1.5;
+}
+
+.first-run-banner-cta {
+  background: var(--accent, #6366f1);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.first-run-banner-cta:hover { opacity: 0.88; }
+
+.first-run-banner-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.first-run-banner-step {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.first-run-banner-step:hover {
+  border-color: var(--accent, #6366f1);
+  background: color-mix(in srgb, var(--accent, #6366f1) 5%, var(--bg));
+}
+
+.first-run-step-icon { font-size: 20px; flex-shrink: 0; }
+
+.first-run-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.first-run-step-body strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.first-run-step-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .first-run-banner-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

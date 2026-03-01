@@ -28,6 +28,7 @@ import {
   type CloudProviderConfig,
   ResearchRunRecord,
   Story,
+  type Book,
   type RunBudget,
 } from "@/lib/types";
 import type { PersistedLibraryMeta } from "@/lib/rag/store";
@@ -449,6 +450,17 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     setStories((prev) => [...prev, entry]);
     setActiveStoryId(id);
     void store?.putStory({ ...entry, updatedAt: now });
+    // Bridge-write to the Plan-002 books store so books/[storyId]/page.tsx can find it
+    const bookRecord: Book = {
+      id,
+      universeId: libraryId,
+      title: "Untitled Book",
+      status: "drafting",
+      orderIndex: now,
+      createdAt: now,
+      updatedAt: now,
+    };
+    void store?.putBook(bookRecord);
     return entry;
   }, [libraryId, store, addNode]);
 
@@ -460,7 +472,20 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     const node = ragNodes[entry.id];
     if (node) putRagNode({ ...node, title: entry.title, updatedAt: Date.now() });
     void store?.putStory({ ...entry, updatedAt: Date.now() });
-  }, [store, ragNodes, putRagNode]);
+    // Sync to Plan-002 books store
+    void (async () => {
+      const now = Date.now();
+      await store?.putBook({
+        id: entry.id,
+        universeId: libraryId,
+        title: entry.title,
+        status: entry.status as Book["status"],
+        orderIndex: entry.createdAt,
+        createdAt: entry.createdAt,
+        updatedAt: now,
+      } satisfies Book);
+    })();
+  }, [libraryId, store, ragNodes, putRagNode]);
 
   const deleteStory = useCallback((id: string) => {
     const removedNodeIds = new Set<string>();
@@ -563,6 +588,37 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       setLocations(locs.map((l) => ({ id: l.id, libraryId: l.libraryId, name: l.name, description: l.description })));
       setWorldEntries(world.map((w) => ({ id: w.id, libraryId: w.libraryId, title: w.title, category: w.category, notes: w.notes })));
       setStories(storyRows.map((s) => ({ id: s.id, libraryId: s.libraryId, title: s.title, synopsis: s.synopsis, genre: s.genre, status: s.status, createdAt: s.createdAt })));
+
+      // Auto-init Universe record (Plan-002: libraryId === universeId)
+      const existingUniverse = await store.getUniverse(libraryId);
+      if (!existingUniverse) {
+        const libMeta = await store.getLibraryMeta(libraryId);
+        await store.putUniverse({
+          id: libraryId,
+          name: libMeta?.title ?? "My Universe",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+
+      // Bridge-migrate any legacy Story records that don't yet have a Book record
+      const existingBooks = await store.listBooksByUniverse(libraryId);
+      const existingBookIds = new Set(existingBooks.map((b) => b.id));
+      for (const s of storyRows) {
+        if (!existingBookIds.has(s.id)) {
+          const now = Date.now();
+          await store.putBook({
+            id: s.id,
+            universeId: libraryId,
+            title: s.title,
+            status: (s.status as Book["status"]) ?? "drafting",
+            orderIndex: s.createdAt,
+            createdAt: s.createdAt,
+            updatedAt: now,
+          } satisfies Book);
+        }
+      }
+
       if (entryRows.length > 0) {
         setExistingEntries(entryRows);
       } else {
@@ -675,7 +731,11 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     setOpenTabs((prev) => prev.map((t) => (t.id === chapterId ? { ...t, title } : t)));
     const node = ragNodesRef.current[chapterId];
     if (node) putRagNode({ ...node, title, updatedAt: Date.now() });
-  }, [putRagNode, ragNodesRef]);
+    // Sync to IDB chapters store for Plan-002 chapters (may have no RAG node)
+    void store?.getChapter(chapterId).then((chapter) => {
+      if (chapter) void store?.putChapter({ ...chapter, title, updatedAt: Date.now() });
+    });
+  }, [putRagNode, ragNodesRef, store]);
 
   /* ---- AI ChangeSets ---- */
   const {
@@ -957,6 +1017,19 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
         <div className="library-body">
           {/* Left sidebar nav */}
           <nav className="library-sidebar">
+            {/* Library switcher link */}
+            <div className="library-sidebar-switcher">
+              <Link href="/" className="library-sidebar-home-link" title="All Libraries">
+                ←&nbsp;All Libraries
+              </Link>
+              <Link
+                href={`/library/${libraryId}/settings`}
+                className={`library-sidebar-item${activeSegment === "settings" ? " active" : ""}`}
+                title="Library settings, migration, and export"
+              >
+                Settings
+              </Link>
+            </div>
             {SIDEBAR_GROUPS.map((group) => {
               const isCollapsed = collapsedGroups.has(group.label);
               return (

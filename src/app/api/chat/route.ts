@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import { getSystemInfo } from "@/lib/system";
 import { OLLAMA_BASE_URL } from "@/lib/ollama";
 
+// Allow up to 5 minutes for long generations (e.g. full chapters)
+export const maxDuration = 300;
+
 /**
  * POST /api/chat — streaming Ollama proxy.
  *
@@ -29,6 +32,8 @@ export async function POST(request: NextRequest) {
         keep_alive: "24h",
         options: {
           num_batch: 128,
+          num_ctx: 16384,    // match Ollama's configured context window
+          num_predict: -1,   // no token cap — let the model finish
         },
       }),
     });

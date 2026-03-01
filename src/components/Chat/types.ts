@@ -62,6 +62,25 @@ export interface ChatProps {
   existingEntries?: Entry[];
   initialMessages?: { role: "user" | "assistant"; content: string }[];
   onMessagesChange?: (messages: { role: "user" | "assistant"; content: string }[]) => void;
+  /** Landing variant: label shown in the Context pill (e.g. "General" or "My Library") */
+  activeContextLabel?: string;
+  /** Landing variant: name of the active LoRA shown in the LoRA pill */
+  activeLoRALabel?: string;
+  /** Landing variant: called when the user clicks the Context pill */
+  onContextClick?: () => void;
+  /** Landing variant: called when the user clicks the LoRA pill */
+  onLoRAClick?: () => void;
+  /**
+   * Landing variant: called when a starter chip is clicked.
+   * When provided, chips create a new thread and auto-send instead of pre-filling.
+   */
+  onStarterSend?: (prompt: string) => void;
+  /**
+   * When set, Chat auto-sends this prompt immediately on mount.
+   * Used by the landing page to implement starter chip auto-send.
+   * Pass a new `key` to Chat simultaneously to force remount.
+   */
+  autoSendPrompt?: string;
 }
 
 // Re-export for convenience so consumers can import from the folder root

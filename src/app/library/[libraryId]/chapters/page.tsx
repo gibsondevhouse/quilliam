@@ -1,56 +1,92 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useLibraryContext } from "@/lib/context/LibraryContext";
-import { useWorkspaceContext } from "@/lib/context/WorkspaceContext";
-import type { SidebarNode } from "@/lib/navigation";
-import type { NodeType } from "@/lib/rag/hierarchy";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useStore } from "@/lib/context/useStore";
+import type { Book, Chapter } from "@/lib/types";
+
+interface ChapterRow {
+  chapter: Chapter;
+  book: Book;
+}
 
 export default function ChaptersPage() {
-  const { libraryId } = useLibraryContext();
-  const { tree, addNode } = useWorkspaceContext();
+  const params = useParams<{ libraryId: string }>();
+  const libraryId = params.libraryId;
+  const store = useStore();
   const router = useRouter();
 
-  const libraryNode = tree.find((n) => n.id === libraryId);
+  const [rows, setRows] = useState<ChapterRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const gatherChapters = (nodes: SidebarNode[]): { id: string; title: string; type: NodeType }[] => {
-    if (!nodes) return [];
-    const results: { id: string; title: string; type: NodeType }[] = [];
-    for (const n of nodes) {
-      if (n.type === "chapter" || n.type === "scene") results.push(n);
-      if (n.type === "book" || n.type === "section" || n.type === "series") results.push(...gatherChapters(n.children));
-    }
-    return results;
-  };
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const books = await store.listBooksByUniverse(libraryId);
+      const chapterGroups = await Promise.all(
+        books.map(async (book) => {
+          const chapters = await store.listChaptersByBook(book.id);
+          return chapters.map((chapter) => ({ chapter, book }));
+        }),
+      );
+      if (!cancelled) {
+        setRows(chapterGroups.flat().sort((a, b) => a.chapter.createdAt - b.chapter.createdAt));
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [store, libraryId]);
 
-  const chapters = gatherChapters(libraryNode?.children ?? []);
-
-  const handleNewChapter = () => {
-    const id = addNode(libraryId, "chapter");
-    router.push(`/library/${libraryId}/chapters/${id}`);
-  };
+  if (loading) {
+    return (
+      <div className="library-page">
+        <div className="library-page-empty"><p>Loading…</p></div>
+      </div>
+    );
+  }
 
   return (
     <div className="library-page chapters-page">
       <div className="library-page-header">
         <h2>Chapters</h2>
-        <button className="library-page-action" onClick={handleNewChapter}>+ New Chapter</button>
+        <button
+          className="library-page-action"
+          onClick={() => router.push(`/library/${libraryId}/books`)}
+        >
+          + New Book
+        </button>
       </div>
-      {chapters.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="library-page-empty">
           <p>No chapters yet.</p>
-          <button className="library-page-action primary" onClick={handleNewChapter}>Create your first chapter</button>
+          <button
+            className="library-page-action primary"
+            onClick={() => router.push(`/library/${libraryId}/books`)}
+          >
+            Create a book first
+          </button>
         </div>
       ) : (
         <ul className="library-item-list">
-          {chapters.map((ch) => (
-            <li key={ch.id} className="library-item-row">
+          {rows.map(({ chapter, book }) => (
+            <li key={chapter.id} className="library-item-row">
               <button
                 className="library-item-btn"
-                onClick={() => router.push(`/library/${libraryId}/chapters/${ch.id}`)}
+                onClick={() =>
+                  router.push(
+                    `/library/${libraryId}/books/${book.id}/chapters/${chapter.id}`,
+                  )
+                }
               >
-                <span className="library-item-icon">§</span>
-                <span className="library-item-title">{ch.title}</span>
+                <span className="library-item-icon" style={{ color: "var(--text-muted)", minWidth: 20 }}>
+                  §
+                </span>
+                <span className="library-item-info">
+                  <span className="library-item-title">
+                    {chapter.title || `Chapter ${chapter.number}`}
+                  </span>
+                  <span className="library-item-preview">{book.title}</span>
+                </span>
               </button>
             </li>
           ))}

@@ -23,8 +23,10 @@ export interface ManuscriptStore {
   putBook(entry: PersistedBook): Promise<void>;
   listBooksBySeries(seriesId: string): Promise<PersistedBook[]>;
   listBooksByUniverse(universeId: string): Promise<PersistedBook[]>;
+  deleteBook(id: string): Promise<void>;
   // Chapters
   putChapter(entry: PersistedChapter): Promise<void>;
+  getChapter(id: string): Promise<PersistedChapter | null>;
   listChaptersByBook(bookId: string): Promise<PersistedChapter[]>;
   // Scenes
   putScene(entry: PersistedScene): Promise<void>;

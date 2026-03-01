@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useStore } from "@/lib/context/useStore";
 import type { Book, BookStatus, Chapter } from "@/lib/types";
 
+const DEFAULT_BOOK_STATUS: BookStatus = "drafting";
+
 const STATUS_CYCLE: BookStatus[] = ["idea", "planning", "drafting", "editing", "published", "archived"];
 const STATUS_COLORS: Record<BookStatus, string> = {
   idea: "#6b7280",
@@ -31,7 +33,27 @@ export default function BookDashboardPage() {
   const reload = useCallback(async () => {
     setLoading(true);
     const books = await store.listBooksByUniverse(libraryId);
-    const found = books.find((b) => b.id === storyId) ?? null;
+    let found = books.find((b) => b.id === storyId) ?? null;
+
+    // Legacy bridge: if not found in books store, check stories store and auto-migrate
+    if (!found) {
+      const legacy = await store.getStory(storyId);
+      if (legacy) {
+        const now = Date.now();
+        found = {
+          id: legacy.id,
+          universeId: libraryId,
+          title: legacy.title,
+          status: (legacy.status as BookStatus) ?? DEFAULT_BOOK_STATUS,
+          orderIndex: legacy.createdAt,
+          createdAt: legacy.createdAt,
+          updatedAt: now,
+        };
+        // Persist the bridged Book record so future loads are fast
+        await store.putBook(found);
+      }
+    }
+
     setBook(found);
     if (found) setTitleDraft(found.title);
     const chs = await store.listChaptersByBook(storyId);

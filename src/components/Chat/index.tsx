@@ -1,18 +1,18 @@
 "use client";
 
-import {
-  useCallback,
+import { useCallback,
   useEffect,
   useRef,
   useState,
 } from "react";
-import { useSystemContext } from "@/lib/context/SystemContext";
 import type { ResearchRunRecord } from "@/lib/types";
 import { DEFAULT_PROVIDER_CONFIG, DEFAULT_RUN_BUDGET } from "@/lib/types";
 
 import { parseAssistantMessage } from "./chatUtils";
+import { MarkdownContent } from "./MarkdownContent";
 import {
   SYSTEM_PROMPT_LOCAL,
+  SYSTEM_PROMPT_LOCAL_GENERAL,
   SYSTEM_PROMPT_ASSISTED,
   SYSTEM_PROMPT_DEEP_RESEARCH,
 } from "./systemPrompts";
@@ -38,9 +38,13 @@ export function Chat({
   existingEntries,
   initialMessages,
   onMessagesChange,
+  activeContextLabel,
+  activeLoRALabel,
+  onContextClick,
+  onLoRAClick,
+  onStarterSend,
+  autoSendPrompt,
 }: ChatProps) {
-  const { status: systemStatus } = useSystemContext();
-
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (initialMessages && initialMessages.length > 0) {
       return initialMessages.map((m) => ({ role: m.role, content: m.content }));
@@ -201,7 +205,7 @@ export function Chat({
     try {
       const basePrompt =
         executionMode === "local"
-          ? SYSTEM_PROMPT_LOCAL
+          ? (variant === "landing" ? SYSTEM_PROMPT_LOCAL_GENERAL : SYSTEM_PROMPT_LOCAL)
           : executionMode === "assisted_cloud"
             ? SYSTEM_PROMPT_ASSISTED
             : SYSTEM_PROMPT_DEEP_RESEARCH;
@@ -240,12 +244,23 @@ export function Chat({
       setStreaming(false);
     }
   }, [
-    input, isSending, executionMode, providerConfig, runBudget,
+    input, isSending, executionMode, variant, providerConfig, runBudget,
     messages, context, onBuildContext,
     runLocalChat, runAssistedCloud, runDeepResearch,
   ]);
 
   sendMessageRef.current = sendMessage;
+
+  // Auto-send prompt on mount (used by landing page starter chips)
+  useEffect(() => {
+    if (!autoSendPrompt) return;
+    const timer = setTimeout(() => {
+      void sendMessageRef.current?.(autoSendPrompt);
+    }, 80);
+    return () => clearTimeout(timer);
+    // Intentionally run only once on mount — autoSendPrompt is a mount-time prop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -275,70 +290,62 @@ export function Chat({
                 Local-by-default writing assistant with opt-in cloud power
               </p>
               <div className="chat-welcome-chips">
-                <button className="chat-chip" onClick={() => setInput("Help me brainstorm ideas for a mystery novel")}>
+                <button className="chat-chip" onClick={() => onStarterSend
+                  ? onStarterSend("Help me brainstorm ideas for a mystery novel")
+                  : setInput("Help me brainstorm ideas for a mystery novel")}>
                   Brainstorm a mystery novel
                 </button>
-                <button className="chat-chip" onClick={() => setInput("Create a detailed character profile for a protagonist")}>
+                <button className="chat-chip" onClick={() => onStarterSend
+                  ? onStarterSend("Create a detailed character profile for a protagonist")
+                  : setInput("Create a detailed character profile for a protagonist")}>
                   Character profile
                 </button>
-                <button className="chat-chip" onClick={() => setInput("Outline a 3-act structure for a short story")}>
+                <button className="chat-chip" onClick={() => onStarterSend
+                  ? onStarterSend("Outline a 3-act structure for a short story")
+                  : setInput("Outline a 3-act structure for a short story")}>
                   Story outline
                 </button>
-                <button className="chat-chip" onClick={() => setInput("Help me build a fantasy world with unique magic rules")}>
+                <button className="chat-chip" onClick={() => onStarterSend
+                  ? onStarterSend("Help me build a fantasy world with unique magic rules")
+                  : setInput("Help me build a fantasy world with unique magic rules")}>
                   World-building
                 </button>
               </div>
-              <p className="chat-welcome-hint">
-                <span className="chat-model-badge">{systemStatus.model}</span>
-                <span className="chat-mode-badge">{systemStatus.mode}</span>
-                <span className="chat-mode-badge">{executionMode.replace(/_/g, " ")}</span>
-                {" "}— local by default, cloud on explicit approval
-              </p>
             </div>
           </div>
         )}
 
         {messages.map((msg, i) => (
           <div key={i} className={`chat-msg chat-msg-${msg.role}`}>
-            <div className="chat-msg-avatar">{msg.role === "user" ? "You" : "Q"}</div>
-            <div className="chat-msg-body">
-              {msg.role === "assistant" ? (
-                <AssistantMessage
-                  content={msg.content}
-                  messageIndex={i}
-                  questionStates={questionStates}
-                  onDismiss={handleDismissQuestion}
-                  onReply={handleReplyChange}
-                  onSubmitReply={handleSubmitReply}
-                />
-              ) : (
-                <div className="chat-msg-content">{msg.content}</div>
-              )}
-            </div>
+            {msg.role === "assistant" ? (
+              <AssistantMessage
+                content={msg.content}
+                messageIndex={i}
+                questionStates={questionStates}
+                onDismiss={handleDismissQuestion}
+                onReply={handleReplyChange}
+                onSubmitReply={handleSubmitReply}
+              />
+            ) : (
+              <p className="chat-msg-user-text">{msg.content}</p>
+            )}
           </div>
         ))}
 
         {streaming && streamingContent && (
           <div className="chat-msg chat-msg-assistant">
-            <div className="chat-msg-avatar">Q</div>
-            <div className="chat-msg-body">
-              <div className="chat-msg-content">
-                {parseAssistantMessage(streamingContent).vibe || streamingContent}
-                <span className="chat-cursor" />
-              </div>
-            </div>
+            <MarkdownContent streaming>
+              {parseAssistantMessage(streamingContent).vibe || streamingContent}
+            </MarkdownContent>
           </div>
         )}
 
         {streaming && !streamingContent && (
           <div className="chat-msg chat-msg-assistant">
-            <div className="chat-msg-avatar">Q</div>
-            <div className="chat-msg-body">
-              <div className="chat-msg-thinking">
-                <span className="chat-dot" />
-                <span className="chat-dot" />
-                <span className="chat-dot" />
-              </div>
+            <div className="chat-msg-thinking">
+              <span className="chat-dot" />
+              <span className="chat-dot" />
+              <span className="chat-dot" />
             </div>
           </div>
         )}
@@ -347,6 +354,28 @@ export function Chat({
       </div>
 
       <div className="chat-input-bar">
+        {variant === "landing" && (activeContextLabel ?? activeLoRALabel) && (
+          <div className="composer-pills">
+            {activeContextLabel && (
+              <button
+                className="composer-pill"
+                onClick={onContextClick}
+                title="Change context"
+              >
+                Context: {activeContextLabel} ▾
+              </button>
+            )}
+            {activeLoRALabel && (
+              <button
+                className="composer-pill"
+                onClick={onLoRAClick}
+                title="Change LoRA"
+              >
+                LoRA: {activeLoRALabel} ▾
+              </button>
+            )}
+          </div>
+        )}
         <div className="chat-input-wrap">
           <textarea
             ref={textareaRef}

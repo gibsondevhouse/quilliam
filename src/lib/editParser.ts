@@ -233,10 +233,33 @@ export async function* parseEditStream(
       for (const jsonLine of jsonLines) {
         let messageContent = "";
         try {
-          const parsed = JSON.parse(jsonLine) as { message?: { content?: string } };
+          const parsed = JSON.parse(jsonLine) as {
+            message?: { content?: string };
+            done?: boolean;
+            done_reason?: string;
+            error?: string;
+          };
+
+          // Ollama surfaces model/server errors inline in the NDJSON stream.
+          if (parsed.error) {
+            throw new Error(`Ollama: ${parsed.error}`);
+          }
+
+          // Context-length overflow — the model stopped early; emit a notice token
+          // so the user sees what was generated rather than a silent blank message.
+          if (parsed.done && parsed.done_reason === "length") {
+            yield {
+              type: "token",
+              text: "\n\n*(generation stopped: context window full — try a shorter prompt or break the request into smaller parts)*",
+            };
+            return;
+          }
+
           messageContent = parsed.message?.content ?? "";
-        } catch {
-          continue; // malformed chunk
+        } catch (jsonErr) {
+          // Re-throw real errors; skip only genuinely malformed lines
+          if (jsonErr instanceof Error && jsonErr.message.startsWith("Ollama:")) throw jsonErr;
+          continue;
         }
 
         if (!messageContent) continue;
