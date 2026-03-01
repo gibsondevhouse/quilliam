@@ -1,0 +1,517 @@
+/* ============================================================
+   OFF-CANVAS SIDEBAR — ChatGPT-style slide-in panel
+   ============================================================ */
+
+/* ── Trigger button (always top-left when sidebar is closed) ── */
+
+.sidebar-trigger {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 201;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    opacity 0.15s;
+}
+
+.sidebar-trigger:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.sidebar-trigger[data-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Backdrop ── */
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+.sidebar-backdrop[data-visible="true"] {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* ── Sidebar shell ── */
+
+.off-canvas-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  z-index: 200;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  /* Slide out by default */
+  transform: translateX(calc(-1 * var(--sidebar-width)));
+  /* Use visibility to prevent tab-stop bleed while closed */
+  visibility: hidden;
+  /* Close animation: delay visibility change until slide finishes */
+  transition:
+    transform 0.22s ease,
+    visibility 0s linear 0.22s;
+
+  will-change: transform;
+}
+
+.off-canvas-sidebar[data-open="true"] {
+  transform: translateX(0);
+  visibility: visible;
+  /* Open: visibility instant, transform animated */
+  transition:
+    transform 0.22s ease,
+    visibility 0s linear 0s;
+}
+
+/* ── Header ── */
+
+.oc-sidebar-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.oc-sidebar-header-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.oc-sidebar-header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.oc-sidebar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.oc-sidebar-icon-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.oc-sidebar-icon-btn[data-active="true"] {
+  color: var(--accent);
+}
+
+.oc-sidebar-history-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+/* Search row */
+.oc-sidebar-search-row {
+  padding: 4px 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.oc-sidebar-search {
+  flex: 1;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+  min-width: 0;
+  transition: border-color 0.15s;
+}
+
+.oc-sidebar-search::placeholder {
+  color: var(--text-muted);
+}
+
+.oc-sidebar-search:focus {
+  border-color: var(--accent);
+}
+
+.oc-sidebar-kbd-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  line-height: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 5px;
+  flex-shrink: 0;
+}
+
+.oc-sidebar-shortcut-hint {
+  padding: 0 14px 10px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ── Nav links ── */
+
+.oc-sidebar-nav {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.oc-sidebar-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: left;
+  border-radius: 7px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+}
+
+.oc-sidebar-nav-link:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.oc-sidebar-nav-link[data-active="true"] {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.oc-sidebar-nav-icon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── Sections toggle bar ── */
+
+.oc-sidebar-sections-bar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 2px;
+  padding: 8px 8px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.oc-sidebar-section-tab {
+  flex: 1;
+  padding: 5px 8px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-weight: 500;
+  text-align: center;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oc-sidebar-section-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.oc-sidebar-section-tab[data-active="true"] {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ── Scrollable section body ── */
+
+.oc-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.oc-sidebar-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.oc-sidebar-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+/* Section panels — kept in DOM but hidden when inactive */
+.oc-sidebar-panel {
+  padding: 4px 0;
+}
+
+.oc-sidebar-panel[data-hidden="true"] {
+  display: none;
+}
+
+/* ── Library list ── */
+
+.oc-library-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px;
+}
+
+.oc-library-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+  position: relative;
+}
+
+.oc-library-row:hover {
+  background: var(--bg-hover);
+}
+
+.oc-library-row[data-active="true"] {
+  background: var(--bg-active);
+}
+
+/* Thumbnail */
+.oc-library-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  object-fit: cover;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.oc-library-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 5px;
+}
+
+.oc-library-thumb-placeholder {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+/* Text */
+.oc-library-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.oc-library-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.oc-library-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 1px;
+}
+
+/* Context menu button */
+.oc-library-menu-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  line-height: 1;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+  flex-shrink: 0;
+}
+
+.oc-library-row:hover .oc-library-menu-btn,
+.oc-library-menu-btn:focus {
+  opacity: 1;
+}
+
+.oc-library-menu-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-active);
+}
+
+/* Library list actions */
+.oc-library-actions {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.oc-library-add-btn {
+  width: 100%;
+  padding: 7px 12px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.oc-library-add-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Empty state */
+.oc-sidebar-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ── Section label inside panels ── */
+
+.oc-section-bucket-label {
+  padding: 10px 14px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── Footer ── */
+
+.oc-sidebar-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.oc-sidebar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.oc-sidebar-user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.oc-sidebar-username {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.oc-sidebar-plan-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 5px;
+  background: var(--bg-active);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.oc-sidebar-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 767px) {
+  .off-canvas-sidebar {
+    width: min(var(--sidebar-width), 85vw);
+    /* Recalculate based on actual narrow width */
+    transform: translateX(calc(-1 * min(var(--sidebar-width), 85vw)));
+  }
+
+  .off-canvas-sidebar[data-open="true"] {
+    transform: translateX(0);
+  }
+}

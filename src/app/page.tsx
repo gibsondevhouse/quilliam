@@ -6,17 +6,15 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
 import { Chat } from "@/components/Chat";
-import { HomeSidebar } from "@/components/HomeSidebar";
 import { useWorkspaceContext } from "@/lib/context/WorkspaceContext";
 import { useLandingContext } from "@/lib/landing/useLandingContext";
 import { useLoRAs } from "@/lib/landing/useLoRAs";
 import { useGeneralThreads } from "@/lib/landing/useGeneralThreads";
+import { useSidebarDataRegister } from "@/lib/context/SidebarDataContext";
 
 export default function Home() {
-  const router = useRouter();
-  const { tree, addNode, store } = useWorkspaceContext();
+  const { tree, store } = useWorkspaceContext();
 
   const libraries = useMemo(
     () => tree.filter((n) => n.type === "library"),
@@ -33,7 +31,7 @@ export default function Home() {
   const { contextType, activeLibraryId, setContext, activeContextLabel } =
     useLandingContext(libraryNameMap);
 
-  const { loras, activeLoRAId, activeLoRA, setActiveLoRA, createLoRA } = useLoRAs();
+  const { loras, activeLoRAId, activeLoRA, setActiveLoRA } = useLoRAs();
 
   const {
     threads,
@@ -43,7 +41,6 @@ export default function Home() {
     selectThread,
     deleteThread,
     renameThread,
-    togglePin,
     updateThreadMessages,
   } = useGeneralThreads({ store });
 
@@ -93,23 +90,35 @@ export default function Home() {
     [selectThread],
   );
 
-  // ── New library ──
-  const handleNewLibrary = useCallback(() => {
-    const id = addNode(null, "library");
-    localStorage.setItem("quilliam_last_library", id);
-    router.push(`/library/${id}/universe`);
-  }, [addNode, router]);
-
-  // ── Context switching from sidebar ──
+  // ── Context switching ──
   const handleSetContext = useCallback(
     (type: "general" | "library", libraryId?: string) => {
       setContext(type, libraryId);
     },
     [setContext],
   );
+  void handleSetContext; // retained for future: context switcher in sidebar header
 
-  // ── Sidebar context/LoRA pill click handlers (open sidebar tab) ──
-  // For now these are no-ops — pills serve as visual indicators
+  // ── Sidebar new-chat callback (stable ref for sidebar data registration) ──
+  const handleSidebarNewChat = useCallback(() => {
+    void handleNewChat();
+  }, [handleNewChat]);
+
+  // ── Register sidebar data so the global OffCanvasSidebar shows threads/loras ──
+  useSidebarDataRegister({
+    threads,
+    threadBuckets: buckets,
+    activeChatId,
+    loras,
+    activeLoRAId,
+    onNewChat: handleSidebarNewChat,
+    onSelectThread: handleSelectThread,
+    onDeleteThread: deleteThread,
+    onRenameThread: renameThread,
+    onSelectLoRA: setActiveLoRA,
+  });
+
+  // ── Sidebar context/LoRA pill click handlers ──
   const handleContextClick = useCallback(() => {
     // Future: open context popover or focus sidebar
   }, []);
@@ -118,46 +127,24 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="home-page">
-      <HomeSidebar
-        libraries={libraries}
-        threads={threads}
-        threadBuckets={buckets}
-        activeChatId={activeChatId}
-        contextType={contextType}
-        activeLibraryId={activeLibraryId}
-        loras={loras}
-        activeLoRAId={activeLoRAId}
-        onNewChat={() => { void handleNewChat(); }}
-        onSelectThread={handleSelectThread}
-        onRenameThread={renameThread}
-        onDeleteThread={deleteThread}
-        onPinThread={togglePin}
-        onSetContext={handleSetContext}
-        onSelectLoRA={setActiveLoRA}
-        onCreateLoRA={createLoRA}
-        onNewLibrary={handleNewLibrary}
+    <main className="home-main">
+      <Chat
+        key={chatKey}
+        executionMode="local"
+        libraryId={activeLibraryId ?? undefined}
+        variant="landing"
+        chatId={activeChatId ?? undefined}
+        initialMessages={initialMessages}
+        autoSendPrompt={autoSendPrompt}
+        activeContextLabel={activeContextLabel}
+        activeLoRALabel={activeLoRA?.name}
+        onContextClick={handleContextClick}
+        onLoRAClick={handleLoRAClick}
+        onStarterSend={(p) => { void handleStarterSend(p); }}
+        onMessagesChange={(msgs) => {
+          if (activeChatId) updateThreadMessages(activeChatId, msgs);
+        }}
       />
-      <main className="home-main">
-        <Chat
-          key={chatKey}
-          executionMode="local"
-          libraryId={activeLibraryId ?? undefined}
-          variant="landing"
-          chatId={activeChatId ?? undefined}
-          initialMessages={initialMessages}
-          autoSendPrompt={autoSendPrompt}
-          activeContextLabel={activeContextLabel}
-          activeLoRALabel={activeLoRA?.name}
-          onContextClick={handleContextClick}
-          onLoRAClick={handleLoRAClick}
-          onStarterSend={(p) => { void handleStarterSend(p); }}
-          onMessagesChange={(msgs) => {
-            if (activeChatId) updateThreadMessages(activeChatId, msgs);
-          }}
-        />
-      </main>
-    </div>
+    </main>
   );
 }
-

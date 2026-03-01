@@ -7,4 +7,8 @@ export interface SidebarNode {
   children: SidebarNode[];
   isExpanded?: boolean;
   sceneDocId?: string;
+  /** Optional cover image URL for library thumbnails */
+  coverImageUrl?: string;
+  /** Number of chapter/section nodes (for library rows) */
+  chapterCount?: number;
 }

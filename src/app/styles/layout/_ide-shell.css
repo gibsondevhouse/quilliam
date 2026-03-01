@@ -21,6 +21,20 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  /* Off-canvas push: applied when sidebar is pinned on desktop */
+  margin-left: 0;
+  transition: margin-left 0.22s ease;
+}
+
+.ide-main--sidebar-pinned {
+  margin-left: var(--sidebar-width);
+}
+
+@media (max-width: 767px) {
+  .ide-main--sidebar-pinned {
+    /* Pin has no effect on mobile — sidebar always overlays */
+    margin-left: 0;
+  }
 }
 
 .ide-editor-area {
