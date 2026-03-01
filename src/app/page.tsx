@@ -106,6 +106,7 @@ export default function Home() {
 
   // ── Register sidebar data so the global OffCanvasSidebar shows threads/loras ──
   useSidebarDataRegister({
+    activeLibraryId: activeLibraryId ?? null,
     threads,
     threadBuckets: buckets,
     activeChatId,

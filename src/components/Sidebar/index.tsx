@@ -1,30 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { SidebarNode } from "@/lib/navigation";
 import { useSidebar } from "@/lib/context/SidebarContext";
 import { useSidebarData } from "@/lib/context/SidebarDataContext";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { SidebarHeader } from "./SidebarHeader";
-import { SidebarNavLinks } from "./SidebarNavLinks";
+import { DomainNavAccordion } from "./DomainNavAccordion";
 import { SidebarSections } from "./SidebarSections";
 import { SidebarFooter } from "./SidebarFooter";
 
 // ---------------------------------------------------------------------------
-// Props — minimal set; thread/lora data flows in via SidebarDataContext
+// Stable fallbacks
 // ---------------------------------------------------------------------------
 
-export interface OffCanvasSidebarProps {
-  libraries: SidebarNode[];
-  activeLibraryId: string | null;
-  onNewLibrary: () => void;
-  onDeleteLibrary: (id: string) => void;
-  onRenameLibrary: (id: string) => void;
-}
-
-// Stable empty fallbacks so SidebarSections never receives undefined
 const EMPTY_THREADS: never[] = [];
-const EMPTY_LORAS: never[] = [];
 const EMPTY_BUCKETS = { pinned: [], today: [], yesterday: [], last7days: [], older: [] };
 const noop = () => {};
 
@@ -32,13 +21,7 @@ const noop = () => {};
 // Component
 // ---------------------------------------------------------------------------
 
-export function OffCanvasSidebar({
-  libraries,
-  activeLibraryId,
-  onNewLibrary,
-  onDeleteLibrary,
-  onRenameLibrary,
-}: OffCanvasSidebarProps) {
+export function OffCanvasSidebar() {
   const { isOpen, isPinned, close } = useSidebar();
   const pageData = useSidebarData();
 
@@ -62,23 +45,16 @@ export function OffCanvasSidebar({
   }, [isOpen, close]);
 
   // Resolve last-used library id for nav links
-  const lastLibraryId =
-    activeLibraryId ??
-    (typeof window !== "undefined"
-      ? localStorage.getItem("quilliam_last_library")
-      : null);
+  // (DomainNavAccordion reads this itself via useSidebarData + localStorage)
 
   // Unpack context data with stable fallbacks
   const threads = pageData?.threads ?? EMPTY_THREADS;
   const threadBuckets = pageData?.threadBuckets ?? EMPTY_BUCKETS;
   const activeChatId = pageData?.activeChatId ?? null;
-  const loras = pageData?.loras ?? EMPTY_LORAS;
-  const activeLoRAId = pageData?.activeLoRAId ?? "";
   const onNewChat = pageData?.onNewChat ?? noop;
   const onSelectThread = pageData?.onSelectThread ?? noop;
   const onDeleteThread = pageData?.onDeleteThread ?? noop;
   const onRenameThread = pageData?.onRenameThread ?? noop;
-  const onSelectLoRA = pageData?.onSelectLoRA ?? noop;
 
   return (
     <nav
@@ -96,26 +72,18 @@ export function OffCanvasSidebar({
         onSearchChange={setSearchQuery}
       />
 
-      {/* 2. Primary nav links */}
-      <SidebarNavLinks lastLibraryId={lastLibraryId} />
+      {/* 2. Domain nav accordion */}
+      <DomainNavAccordion />
 
-      {/* 3. Sections: Libraries | Your chats | Templates */}
+      {/* 3. Chats section */}
       <SidebarSections
-        libraries={libraries}
-        activeLibraryId={activeLibraryId}
-        onNewLibrary={onNewLibrary}
-        onDeleteLibrary={onDeleteLibrary}
-        onRenameLibrary={onRenameLibrary}
         threads={threads}
         threadBuckets={threadBuckets}
         activeChatId={activeChatId}
         onSelectThread={onSelectThread}
         onDeleteThread={onDeleteThread}
-        loras={loras}
-        activeLoRAId={activeLoRAId}
-        onSelectLoRA={onSelectLoRA}
-        searchQuery={searchQuery}
         onRenameThread={onRenameThread}
+        searchQuery={searchQuery}
       />
 
       {/* 4. Footer: avatar + plan badge */}

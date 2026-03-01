@@ -3,25 +3,21 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
+// router reserved for future library creation actions in the sidebar
 import { SystemStatus, type StartupStatus } from "@/components/SystemStatus";
 import { SystemContext } from "@/lib/context/SystemContext";
 import { WorkspaceContext } from "@/lib/context/WorkspaceContext";
-import type { NodeType } from "@/lib/rag/hierarchy";
-import { EDITABLE_TYPES } from "@/lib/rag/hierarchy";
-import { checkStorageHealth, createRAGStore, getCorpusStats } from "@/lib/rag/db";
 import type { RAGStore } from "@/lib/rag/store";
-import { findAncestorOfType, findLibraryIdForNode } from "@/lib/treeUtils";
+import { checkStorageHealth, createRAGStore, getCorpusStats } from "@/lib/rag/db";
 import { useLibraryTree } from "@/lib/context/useLibraryTree";
 import { SidebarProvider, useSidebar } from "@/lib/context/SidebarContext";
 import { SidebarDataProvider } from "@/lib/context/SidebarDataContext";
 import { OffCanvasSidebar } from "@/components/Sidebar";
 import { SidebarTrigger } from "@/components/Sidebar/SidebarTrigger";
 import { SidebarBackdrop } from "@/components/Sidebar/SidebarBackdrop";
-import type { SidebarNode } from "@/lib/navigation";
 
 /* ------------------------------------------------------------------
    SidebarShell — inner component that reads useSidebar() to apply
@@ -29,21 +25,9 @@ import type { SidebarNode } from "@/lib/navigation";
    ------------------------------------------------------------------ */
 interface SidebarShellProps {
   children: React.ReactNode;
-  libraries: SidebarNode[];
-  activeLibraryId: string | null;
-  onNewLibrary: () => void;
-  onDeleteLibrary: (id: string) => void;
-  onRenameLibrary: (id: string) => void;
 }
 
-function SidebarShell({
-  children,
-  libraries,
-  activeLibraryId,
-  onNewLibrary,
-  onDeleteLibrary,
-  onRenameLibrary,
-}: SidebarShellProps) {
+function SidebarShell({ children }: SidebarShellProps) {
   const { isPinned } = useSidebar();
 
   return (
@@ -51,13 +35,7 @@ function SidebarShell({
       {/* Fixed-position sidebar layer */}
       <SidebarTrigger />
       <SidebarBackdrop />
-      <OffCanvasSidebar
-        libraries={libraries}
-        activeLibraryId={activeLibraryId}
-        onNewLibrary={onNewLibrary}
-        onDeleteLibrary={onDeleteLibrary}
-        onRenameLibrary={onRenameLibrary}
-      />
+      <OffCanvasSidebar />
 
       {/* Main content area — shifts right when sidebar is pinned */}
       <div className={`ide-main${isPinned ? " ide-main--sidebar-pinned" : ""}`}>
@@ -71,8 +49,9 @@ function SidebarShell({
    ClientShell
    ------------------------------------------------------------------ */
 export function ClientShell({ children }: { children: React.ReactNode }) {
+  // router available for future library creation / navigation actions
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const router = useRouter();
-  const pathname = usePathname();
 
   const [systemStatus, setSystemStatus] = useState<StartupStatus | null>(null);
   // storeState is exposed via WorkspaceContext as `store` and drives useLibraryTree.
@@ -153,74 +132,8 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     if (storeState) void loadFromStore();
   }, [storeState, loadFromStore]);
 
-  /* ---- Add child from tree ---- */
-  const handleAddChild = useCallback((parentId: string | null, childType: NodeType) => {
-    const newId = addNode(parentId, childType);
-    if (childType === "library") {
-      localStorage.setItem("quilliam_last_library", newId);
-      router.push(`/library/${newId}/universe`);
-    } else {
-      // For other edit types, navigate into the library
-      const libId = parentId
-        ? findLibraryIdForNode(ragNodes, parentId) ?? parentId
-        : null;
-      if (!libId) return;
-
-      if (childType === "book") {
-        router.push(`/library/${libId}/books/${newId}`);
-        return;
-      }
-
-      if (childType === "section") {
-        const book = parentId ? findAncestorOfType(ragNodes, parentId, "book") : null;
-        if (book) {
-          router.push(`/library/${libId}/books/${book.id}/chapters`);
-        } else {
-          router.push(`/library/${libId}/chapters`);
-        }
-        return;
-      }
-
-      if ((EDITABLE_TYPES as string[]).includes(childType)) {
-        router.push(`/library/${libId}/chapters/${newId}`);
-      }
-    }
-  }, [addNode, router, ragNodes]);
-
   /* ---- Derive current library from pathname for sidebar highlighting ---- */
-  const activeLibraryId = useMemo(() => {
-    const match = pathname?.match(/^\/library\/([^/]+)/);
-    return match ? match[1] : null;
-  }, [pathname]);
-
-  /* ---- Libraries list with chapter counts ---- */
-  const libraries = useMemo(() => {
-    return tree
-      .filter((n) => n.type === "library")
-      .map((lib) => ({
-        ...lib,
-        chapterCount: countDescendantsByType(lib, "section"),
-      }));
-  }, [tree]);
-
-  /* ---- New library handler ---- */
-  const handleNewLibrary = useCallback(() => {
-    handleAddChild(null, "library");
-  }, [handleAddChild]);
-
-  /* ---- Rename library handler ---- */
-  const handleRenameLibrary = useCallback(
-    (id: string) => {
-      // Trigger inline rename in tree — pass empty string initially;
-      // the tree node's rename UI handles the actual new title.
-      // For now, use a prompt as the simplest cross-context solution.
-      const node = ragNodes[id];
-      if (!node) return;
-      const newTitle = window.prompt("Rename library", node.title);
-      if (newTitle && newTitle.trim()) renameNode(id, newTitle.trim());
-    },
-    [ragNodes, renameNode],
-  );
+  // (handled inside DomainNavAccordion via usePathname + localStorage)
 
   if (!systemStatus) {
     return (
@@ -247,13 +160,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
               putRagNode,
             }}
           >
-            <SidebarShell
-              libraries={libraries}
-              activeLibraryId={activeLibraryId}
-              onNewLibrary={handleNewLibrary}
-              onDeleteLibrary={deleteNode}
-              onRenameLibrary={handleRenameLibrary}
-            >
+            <SidebarShell>
               {children}
             </SidebarShell>
           </WorkspaceContext.Provider>
@@ -266,14 +173,4 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 /* ------------------------------------------------------------------
    Helpers
    ------------------------------------------------------------------ */
-
-/** Count descendants of a given type (recursive). */
-function countDescendantsByType(node: SidebarNode, type: string): number {
-  let count = 0;
-  for (const child of node.children) {
-    if (child.type === type) count++;
-    count += countDescendantsByType(child, type);
-  }
-  return count;
-}
 

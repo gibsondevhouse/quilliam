@@ -7,8 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useParams, useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { LibraryContext, type LibraryContextValue } from "@/lib/context/LibraryContext";
 import { useWorkspaceContext } from "@/lib/context/WorkspaceContext";
 import { StoreGate } from "@/lib/context/StoreGate";
@@ -45,69 +44,7 @@ import { applyEntryPatch } from "@/lib/domain/patch";
 /* ----------------------------------------------------------------
    Library sub-nav link
    ---------------------------------------------------------------- */
-const SIDEBAR_GROUPS = [
-  {
-    label: "Universe Core",
-    items: [
-      { label: "Overview", path: "universe" },
-      { label: "Master Timeline", path: "master-timeline" },
-      { label: "Cosmology", path: "cosmology" },
-      { label: "Magic/Tech Systems", path: "magic-systems" },
-      { label: "Rules of Reality", path: "rules" },
-    ],
-  },
-  {
-    label: "World Structures",
-    items: [
-      { label: "Regions & Locations", path: "locations" },
-      { label: "Cultures", path: "cultures" },
-      { label: "Religions", path: "religions" },
-      { label: "Languages", path: "languages" },
-      { label: "Economics", path: "economics" },
-    ],
-  },
-  {
-    label: "Power Structures",
-    items: [
-      { label: "Kingdoms & Empires", path: "organizations" },
-      { label: "Factions & Orders", path: "factions" },
-      { label: "Conflicts", path: "conflicts" },
-    ],
-  },
-  {
-    label: "Cast & Lineages",
-    items: [
-      { label: "Characters", path: "characters" },
-      { label: "Lineages", path: "lineages" },
-      { label: "Relationship Web", path: "relationship-web" },
-    ],
-  },
-  {
-    label: "Artifacts & Media",
-    items: [
-      { label: "Items & Relics", path: "items" },
-      { label: "Maps", path: "maps" },
-      { label: "Media Library", path: "media" },
-    ],
-  },
-  {
-    label: "Manuscripts",
-    items: [
-      { label: "Books", path: "books" },
-      { label: "Scenes", path: "scenes" },
-    ],
-  },
-  {
-    label: "Intelligence",
-    items: [
-      { label: "Suggestions", path: "suggestions" },
-      { label: "Continuity Issues", path: "continuity-issues" },
-      { label: "Analytics", path: "analytics" },
-      { label: "Branch Diff", path: "branches" },
-      { label: "Change Log", path: "change-log" },
-    ],
-  },
-] as const;
+/* Navigation handled by global off-canvas sidebar — no local SIDEBAR_GROUPS import needed */
 
 /* ----------------------------------------------------------------
    Library Layout
@@ -116,7 +53,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
   const params = useParams<{ libraryId: string }>();
   const libraryId = params.libraryId;
   const router = useRouter();
-  const pathname = usePathname();
 
   const { store, ragNodes, putRagNode, addNode, deleteNode } = useWorkspaceContext();
   const { status: systemStatus } = useSystemContext();
@@ -841,22 +777,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
     chatPanelWidthRef.current = chatPanelWidth;
   }, [chatPanelWidth, chatPanelWidthRef]);
 
-  /* ---- Active sub-nav segment ---- */
-  const activeSegment = useMemo(() => {
-    const match = pathname?.match(/^\/library\/[^/]+\/([^/]+)/);
-    return match ? match[1] : "universe";
-  }, [pathname]);
-
-  /* ---- Sidebar collapsed groups ---- */
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const toggleGroup = useCallback((label: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
-  }, []);
 
   /* ---- Chat context for AI ---- */
   const chatContext = useMemo(() => {
@@ -1015,55 +935,6 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
 
         {/* Body: sidebar + content + optional panels */}
         <div className="library-body">
-          {/* Left sidebar nav */}
-          <nav className="library-sidebar">
-            {/* Library switcher link */}
-            <div className="library-sidebar-switcher">
-              <Link href="/" className="library-sidebar-home-link" title="All Libraries">
-                ←&nbsp;All Libraries
-              </Link>
-              <Link
-                href={`/library/${libraryId}/settings`}
-                className={`library-sidebar-item${activeSegment === "settings" ? " active" : ""}`}
-                title="Library settings, migration, and export"
-              >
-                Settings
-              </Link>
-            </div>
-            {SIDEBAR_GROUPS.map((group) => {
-              const isCollapsed = collapsedGroups.has(group.label);
-              return (
-                <div key={group.label} className="library-sidebar-group">
-                  <button
-                    className="library-sidebar-group-header"
-                    onClick={() => toggleGroup(group.label)}
-                    type="button"
-                  >
-                    <svg
-                      className={`library-sidebar-chevron${isCollapsed ? "" : " expanded"}`}
-                      width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                    >
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                    <span>{group.label}</span>
-                  </button>
-                  {!isCollapsed && (
-                    <div className="library-sidebar-group-items">
-                      {group.items.map((item) => (
-                        <Link
-                          key={item.path}
-                          href={`/library/${libraryId}/${item.path}`}
-                          className={`library-sidebar-item${activeSegment === item.path ? " active" : ""}`}
-                        >
-                          {item.label}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
           {/* Left Build Feed panel */}
           {buildFeedOpen && (
             <div className="library-build-feed-panel">
